@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>PDF 翻譯旁註工具</title>
+</head>
+<body>
+  <h2>上傳 PDF</h2>
+  <form action="/upload" method="post" enctype="multipart/form-data">
+    <input type="file" name="pdf" accept="application/pdf" required>
+    <button type="submit">上傳</button>
+  </form>
+
+  <h3>歷史文件</h3>
+  <ul>
+    {% for d in docs %}
+      <li>
+        <a href="/doc/{{d.id}}">Doc {{d.id}} - {{d.filename}}</a>
+      </li>
+    {% endfor %}
+  </ul>
+</body>
+</html>

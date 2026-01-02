@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>編輯譯文圖層</title>
+  <style>
+    #wrap { display:flex; gap:12px; }
+    #left { width: 78%; }
+    #right { width: 22%; }
+    #toolbar { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+    canvas { border:1px solid #ddd; }
+    #pdfCanvas { display:block; }
+    #layerCanvas { position:absolute; left:0; top:0; }
+    #stage { position:relative; display:inline-block; }
+    .small { font-size:12px; color:#666; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/6.0.2/fabric.min.js"></script>
+</head>
+<body>
+  <h2>Doc {{doc_id}}</h2>
+
+  <div id="toolbar">
+    <button id="btnParse">解析 + 翻譯（同步）</button>
+    <button id="btnSave">儲存本頁編輯</button>
+    <button id="btnExport">匯出 PDF</button>
+
+    <label>頁碼：
+      <select id="pageSelect"></select>
+    </label>
+
+    <label>字級：
+      <input id="fontSize" type="range" min="8" max="40" value="14">
+    </label>
+
+    <button id="btnDelete">刪除選取</button>
+    <span class="small">提示：選取譯文框後可直接打字編輯、拖曳移動</span>
+  </div>
+
+  <div id="wrap">
+    <div id="left">
+      <div id="stage">
+        <canvas id="pdfCanvas"></canvas>
+        <canvas id="layerCanvas"></canvas>
+      </div>
+    </div>
+    <div id="right">
+      <div class="small">匯出完成後可下載：</div>
+      <a id="downloadLink" href="#" style="display:none;">下載翻譯 PDF</a>
+      <hr>
+      <div class="small">原文/譯文會以區塊為單位放在旁邊（預設：原文右側）。</div>
+    </div>
+  </div>
+
+  <script>
+    window.DOC_ID = {{doc_id}};
+  </script>
+  <script src="/static/editor.js"></script>
+</body>
+</html>
