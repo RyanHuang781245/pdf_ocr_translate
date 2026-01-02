@@ -1,7 +1,15 @@
-const pdfjsLib = window.pdfjsLib;
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js";
+async function getPdfjsLib() {
+  if (window.pdfjsLib) {
+    return window.pdfjsLib;
+  }
+  try {
+    return await import(
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"
+    );
+  } catch (err) {
+    throw new Error("PDF.js 載入失敗，請確認網路連線或 CDN 可用。");
+  }
+}
 
 let pdfDoc = null;
 let currentPage = 1;
@@ -31,7 +39,7 @@ async function loadMeta() {
   sel.value = "1";
 }
 
-async function loadPdf() {
+async function loadPdf(pdfjsLib) {
   pdfDoc = await pdfjsLib.getDocument(`/api/doc/${DOC_ID}/pdf`).promise;
 }
 
@@ -176,8 +184,11 @@ function attachUI() {
 }
 
 (async function main() {
+  const pdfjsLib = await getPdfjsLib();
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js";
   await loadMeta();
-  await loadPdf();
+  await loadPdf(pdfjsLib);
   attachUI();
   await renderPage(1);
 })();
