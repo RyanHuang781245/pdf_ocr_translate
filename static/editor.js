@@ -186,7 +186,7 @@ function attachUI() {
 (async function main() {
   const pdfjsLib = await getPdfjsLib();
   pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js";
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
   await loadMeta();
   await loadPdf(pdfjsLib);
   attachUI();
