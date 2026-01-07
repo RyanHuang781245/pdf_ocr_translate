@@ -242,6 +242,9 @@ def upload() -> str:
     start_page = int(request.form.get("start", 1))
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
+    enable_translate = request.form.get("translate") == "on"
+    translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
+    translate_model = request.form.get("model", "gpt-4o-mini").strip() or "gpt-4o-mini"
 
     run_pipeline(
         pdf_path=pdf_path,
@@ -252,7 +255,9 @@ def upload() -> str:
         min_score=0.0,
         draw_boxes=True,
         draw_text=True,
-        enable_translate=False,
+        enable_translate=enable_translate,
+        translate_target_lang=translate_target_lang,
+        translate_model=translate_model,
     )
 
     return redirect(url_for("editor", job_id=job_id))

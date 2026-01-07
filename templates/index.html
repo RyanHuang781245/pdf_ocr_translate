@@ -35,11 +35,26 @@
               <input type="number" name="end" placeholder="optional" min="1" />
             </label>
           </div>
+          <div class="form-grid">
+            <label>
+              <span>Enable GPT translation</span>
+              <input type="checkbox" name="translate" />
+            </label>
+            <label>
+              <span>Target language</span>
+              <input type="text" name="target_lang" value="en" />
+            </label>
+            <label>
+              <span>OpenAI model</span>
+              <input type="text" name="model" value="gpt-4o-mini" />
+            </label>
+          </div>
           <button class="primary" type="submit">Run pipeline</button>
         </form>
         <p class="hint">
           The pipeline runs locally and writes outputs into the <code>out</code> folder.
         </p>
+        <p class="hint">Translation requires <code>OPENAI_API_KEY</code> in your environment.</p>
       </section>
     </main>
     <div id="loadingOverlay" class="loading-overlay" hidden>

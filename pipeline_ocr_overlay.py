@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import time
 from pathlib import Path
-from typing import Any, Tuple, List
+from typing import Any, Tuple, List, Callable
 
 import fitz  # PyMuPDF
 import numpy as np
@@ -13,9 +15,24 @@ from paddleocr import PaddleOCR
 
 
 # -----------------------------
+# Pipeline control
+# -----------------------------
+class PipelineCancelled(Exception):
+    pass
+
+
+# -----------------------------
 # Step 1) PDF -> PNG
 # -----------------------------
-def pdf_to_pngs(pdf_path: Path, out_dir: Path, dpi: int, start_page: int, end_page: int | None) -> List[Path]:
+def pdf_to_pngs(
+    pdf_path: Path,
+    out_dir: Path,
+    dpi: int,
+    start_page: int,
+    end_page: int | None,
+    progress_cb: Callable[[str, int, int, str], None] | None = None,
+    cancel_event: Any | None = None,
+) -> List[Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     doc = fitz.open(pdf_path)
@@ -35,12 +52,18 @@ def pdf_to_pngs(pdf_path: Path, out_dir: Path, dpi: int, start_page: int, end_pa
     outputs: List[Path] = []
     stem = pdf_path.stem
 
-    for page_no in range(start_page, end_page + 1):
+    total_pages = end_page - start_page + 1
+    for idx, page_no in enumerate(range(start_page, end_page + 1), start=1):
+        if cancel_event is not None and cancel_event.is_set():
+            doc.close()
+            raise PipelineCancelled("Cancelled during PDF render.")
         page = doc.load_page(page_no - 1)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         out_path = out_dir / f"{stem}_p{page_no:04d}.png"
         pix.save(out_path.as_posix())
         outputs.append(out_path)
+        if progress_cb:
+            progress_cb("render", idx, total_pages, f"Rendering page {idx}/{total_pages}")
 
     doc.close()
     return outputs
@@ -86,6 +109,70 @@ def run_paddleocr_official_on_folder(
 
     return json_paths
 
+
+# -----------------------------
+# Step 2 alt) PaddleOCR per-image (progress + cancel)
+# -----------------------------
+def run_paddleocr_on_images(
+    images: list[Path],
+    json_out_dir: Path,
+    progress_cb: Callable[[str, int, int, str], None] | None = None,
+    cancel_event: Any | None = None,
+) -> List[Path]:
+    json_out_dir.mkdir(parents=True, exist_ok=True)
+
+    ocr = PaddleOCR(
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False,
+    )
+
+    json_paths: list[Path] = []
+    total = len(images)
+    for idx, img_path in enumerate(images, start=1):
+        if cancel_event is not None and cancel_event.is_set():
+            raise PipelineCancelled("Cancelled during OCR.")
+
+        result = ocr.ocr(str(img_path), cls=False)
+
+        rec_polys: list[list[list[float]]] = []
+        rec_texts: list[str] = []
+        rec_scores: list[float] = []
+
+        for item in result or []:
+            if not isinstance(item, (list, tuple)) or len(item) < 2:
+                continue
+            poly = item[0]
+            rec = item[1]
+            if not isinstance(poly, (list, tuple)) or len(poly) < 4:
+                continue
+            if not isinstance(rec, (list, tuple)) or len(rec) < 2:
+                continue
+            text = rec[0]
+            score = rec[1]
+            rec_polys.append([[float(p[0]), float(p[1])] for p in poly[:4]])
+            rec_texts.append(str(text))
+            try:
+                rec_scores.append(float(score))
+            except Exception:
+                rec_scores.append(0.0)
+
+        data = {
+            "input_path": str(img_path),
+            "rec_polys": rec_polys,
+            "rec_texts": rec_texts,
+            "rec_scores": rec_scores,
+        }
+        out_path = json_out_dir / f"{img_path.stem}_res.json"
+        out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        json_paths.append(out_path)
+
+        if progress_cb:
+            progress_cb("ocr", idx, total, f"OCR page {idx}/{total}")
+
+    if not json_paths:
+        raise RuntimeError(f"找不到 OCR 輸出的 json：{json_out_dir}")
+    return json_paths
 
 # -----------------------------
 # Step 2.5) Normalize official json -> {input_path, rec_polys, rec_texts, rec_scores}
@@ -213,17 +300,113 @@ def normalize_official_json_to_rec_format(official_json_path: Path, fallback_inp
 
 
 # -----------------------------
-# Optional translation (placeholder)
+# Optional translation (OpenAI GPT)
 # -----------------------------
-def translate_texts_with_openai(texts: list[str], enabled: bool = False) -> list[str]:
+def translate_texts_with_openai(
+    texts: list[str],
+    enabled: bool = False,
+    target_lang: str = "en",
+    source_lang: str = "auto",
+    model: str = "gpt-4o-mini",
+    batch_size: int = 40,
+    max_retries: int = 3,
+    cache: dict[str, str] | None = None,
+    cancel_event: Any | None = None,
+) -> list[str]:
     """
-    Placeholder for OpenAI GPT translation.
+    OpenAI GPT translation (line-preserving).
     Keep disabled by default to avoid API usage during pipeline testing.
     """
     if not enabled:
         return list(texts)
-    # TODO: Implement OpenAI API call when ready.
-    return list(texts)
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set.")
+
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        raise RuntimeError("openai package is required for translation.") from exc
+
+    client = OpenAI(api_key=api_key)
+    cache = cache if cache is not None else {}
+
+    def normalize_line(text: str) -> str:
+        return " ".join(str(text).split()).strip()
+
+    def chunk_list(items: list[str], size: int) -> list[list[str]]:
+        return [items[i : i + size] for i in range(0, len(items), size)]
+
+    def translate_one(line: str) -> str:
+        if source_lang == "auto":
+            instructions = f"Translate the user's text to {target_lang}. Output only the translation."
+        else:
+            instructions = f"Translate the user's text from {source_lang} to {target_lang}. Output only the translation."
+        resp = client.responses.create(
+            model=model,
+            instructions=instructions,
+            input=line,
+        )
+        return (resp.output_text or "").strip()
+
+    def translate_batch(lines: list[str]) -> list[str]:
+        if not lines:
+            return []
+        if source_lang == "auto":
+            instructions = (
+                f"Translate each line to {target_lang}. "
+                "Return ONLY the translations, one per line, preserving line count."
+            )
+        else:
+            instructions = (
+                f"Translate each line from {source_lang} to {target_lang}. "
+                "Return ONLY the translations, one per line, preserving line count."
+            )
+        joined = "\n".join(lines)
+
+        last_err: Exception | None = None
+        for attempt in range(1, max_retries + 1):
+            if cancel_event is not None and cancel_event.is_set():
+                raise PipelineCancelled("Cancelled during translation.")
+            try:
+                resp = client.responses.create(
+                    model=model,
+                    instructions=instructions,
+                    input=joined,
+                )
+                output = (resp.output_text or "").strip()
+                out_lines = output.splitlines()
+                if len(out_lines) != len(lines):
+                    return [translate_one(line) for line in lines]
+                return out_lines
+            except Exception as exc:
+                last_err = exc
+                time.sleep(0.5 * attempt)
+        raise RuntimeError(f"OpenAI translation failed: {last_err}") from last_err
+
+    uniq: list[str] = []
+    for text in texts:
+        key = normalize_line(text)
+        if not key:
+            continue
+        if key in cache:
+            continue
+        cache[key] = ""
+        uniq.append(key)
+
+    for batch in chunk_list(uniq, batch_size):
+        if cancel_event is not None and cancel_event.is_set():
+            raise PipelineCancelled("Cancelled during translation.")
+        translated = translate_batch(batch)
+        for src, dst in zip(batch, translated):
+            cache[src] = (dst or "").strip()
+
+    out: list[str] = []
+    for text in texts:
+        key = normalize_line(text)
+        out.append(cache.get(key, "") if key else "")
+    return out
 
 
 # -----------------------------
@@ -385,16 +568,44 @@ def run_pipeline(
     draw_boxes: bool = True,
     draw_text: bool = True,
     enable_translate: bool = False,
+    translate_target_lang: str = "en",
+    translate_source_lang: str = "auto",
+    translate_model: str = "gpt-4o-mini",
+    translate_batch_size: int = 40,
+    translate_max_retries: int = 3,
+    progress_cb: Callable[[str, int, int, str], None] | None = None,
+    cancel_event: Any | None = None,
+    use_per_image_ocr: bool = False,
 ) -> dict[str, Any]:
     img_dir = out_root / "images"
     official_json_dir = out_root / "official_json"
     norm_json_dir = out_root / "ocr_json"
 
     # 1) PDF -> PNG
-    png_paths = pdf_to_pngs(pdf_path, img_dir, dpi, start_page, end_page)
+    png_paths = pdf_to_pngs(
+        pdf_path,
+        img_dir,
+        dpi,
+        start_page,
+        end_page,
+        progress_cb=progress_cb,
+        cancel_event=cancel_event,
+    )
 
     # 2) official demo style OCR
-    official_json_paths = run_paddleocr_official_on_folder(img_dir, official_json_dir)
+    if cancel_event is not None and cancel_event.is_set():
+        raise PipelineCancelled("Cancelled before OCR.")
+    if use_per_image_ocr or progress_cb or cancel_event is not None:
+        official_json_paths = run_paddleocr_on_images(
+            png_paths,
+            official_json_dir,
+            progress_cb=progress_cb,
+            cancel_event=cancel_event,
+        )
+    else:
+        official_json_paths = run_paddleocr_official_on_folder(img_dir, official_json_dir)
+        if progress_cb:
+            progress_cb("ocr", len(png_paths), len(png_paths), "OCR complete")
 
     # 2.5) normalize JSON + add per-page json
     norm_json_dir.mkdir(parents=True, exist_ok=True)
@@ -407,7 +618,11 @@ def run_pipeline(
             continue
         png_by_page[page_no_1based - 1] = p
 
-    for oj in official_json_paths:
+    total_pages = len(official_json_paths)
+    translate_cache: dict[str, str] = {}
+    for idx, oj in enumerate(official_json_paths, start=1):
+        if cancel_event is not None and cancel_event.is_set():
+            raise PipelineCancelled("Cancelled during normalization.")
         fallback = None
         m = re.search(r"_p(\d{4,})", oj.stem, re.IGNORECASE)
         if m:
@@ -430,7 +645,19 @@ def run_pipeline(
         ocr_data["page_index_0based"] = page_idx_0based
         ocr_data["page_no_1based"] = page_idx_0based + 1
 
-        edit_texts = translate_texts_with_openai(ocr_data.get("rec_texts", []), enabled=enable_translate)
+        if progress_cb and enable_translate:
+            progress_cb("translate", idx, total_pages, f"Translate page {idx}/{total_pages}")
+        edit_texts = translate_texts_with_openai(
+            ocr_data.get("rec_texts", []),
+            enabled=enable_translate,
+            target_lang=translate_target_lang,
+            source_lang=translate_source_lang,
+            model=translate_model,
+            batch_size=translate_batch_size,
+            max_retries=translate_max_retries,
+            cache=translate_cache,
+            cancel_event=cancel_event,
+        )
         ocr_data["edit_texts"] = list(edit_texts)
 
         base_json = norm_json_dir / f"{pdf_path.stem}_p{page_idx_0based+1:04d}_res.json"
@@ -440,9 +667,13 @@ def run_pipeline(
         with_coords_json = norm_json_dir / f"{pdf_path.stem}_p{page_idx_0based+1:04d}_res_with_pdf_coords.json"
         with_coords_json.write_text(json.dumps(with_coords, ensure_ascii=False, indent=2), encoding="utf-8")
         per_page_with_coords_jsons.append(with_coords_json)
+        if progress_cb:
+            progress_cb("normalize", idx, total_pages, f"Normalize page {idx}/{total_pages}")
 
     per_page_with_coords_jsons = sorted(per_page_with_coords_jsons)
     debug_pdf = out_root / "overlay_debug.pdf"
+    if progress_cb:
+        progress_cb("overlay", 0, 1, "Building overlay PDF")
     overlay_debug_pdf(
         pdf_path=pdf_path,
         per_page_json_paths=per_page_with_coords_jsons,
@@ -451,6 +682,8 @@ def run_pipeline(
         draw_text=draw_text,
         min_score=min_score,
     )
+    if progress_cb:
+        progress_cb("overlay", 1, 1, "Overlay PDF ready")
 
     return {
         "images_dir": img_dir,
