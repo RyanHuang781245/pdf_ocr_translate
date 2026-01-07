@@ -213,6 +213,20 @@ def normalize_official_json_to_rec_format(official_json_path: Path, fallback_inp
 
 
 # -----------------------------
+# Optional translation (placeholder)
+# -----------------------------
+def translate_texts_with_openai(texts: list[str], enabled: bool = False) -> list[str]:
+    """
+    Placeholder for OpenAI GPT translation.
+    Keep disabled by default to avoid API usage during pipeline testing.
+    """
+    if not enabled:
+        return list(texts)
+    # TODO: Implement OpenAI API call when ready.
+    return list(texts)
+
+
+# -----------------------------
 # Step 3) image(px) -> PyMuPDF page(pt) coord (no y-flip)
 # -----------------------------
 def get_pdf_page_size_pt(pdf_path: Path, page_index_0based: int) -> Tuple[float, float]:
@@ -361,6 +375,92 @@ def infer_page_no_1based_from_filename(png_path: Path) -> int | None:
     return int(m.group(1))
 
 
+def run_pipeline(
+    pdf_path: Path,
+    out_root: Path,
+    dpi: int = 300,
+    start_page: int = 1,
+    end_page: int | None = None,
+    min_score: float = 0.0,
+    draw_boxes: bool = True,
+    draw_text: bool = True,
+    enable_translate: bool = False,
+) -> dict[str, Any]:
+    img_dir = out_root / "images"
+    official_json_dir = out_root / "official_json"
+    norm_json_dir = out_root / "ocr_json"
+
+    # 1) PDF -> PNG
+    png_paths = pdf_to_pngs(pdf_path, img_dir, dpi, start_page, end_page)
+
+    # 2) official demo style OCR
+    official_json_paths = run_paddleocr_official_on_folder(img_dir, official_json_dir)
+
+    # 2.5) normalize JSON + add per-page json
+    norm_json_dir.mkdir(parents=True, exist_ok=True)
+    per_page_with_coords_jsons: list[Path] = []
+
+    png_by_page: dict[int, Path] = {}
+    for p in png_paths:
+        page_no_1based = infer_page_no_1based_from_filename(p)
+        if page_no_1based is None:
+            continue
+        png_by_page[page_no_1based - 1] = p
+
+    for oj in official_json_paths:
+        fallback = None
+        m = re.search(r"_p(\d{4,})", oj.stem, re.IGNORECASE)
+        if m:
+            page_no_1based = int(m.group(1))
+            fallback_png = png_by_page.get(page_no_1based - 1)
+            if fallback_png:
+                fallback = str(fallback_png)
+
+        ocr_data = normalize_official_json_to_rec_format(oj, fallback_input_path=fallback)
+
+        page_idx_0based = None
+        ip = Path(ocr_data["input_path"]).name
+        m2 = re.search(r"_p(\d{4,})\.png$", ip, re.IGNORECASE)
+        if m2:
+            page_idx_0based = int(m2.group(1)) - 1
+
+        if page_idx_0based is None:
+            continue
+
+        ocr_data["page_index_0based"] = page_idx_0based
+        ocr_data["page_no_1based"] = page_idx_0based + 1
+
+        edit_texts = translate_texts_with_openai(ocr_data.get("rec_texts", []), enabled=enable_translate)
+        ocr_data["edit_texts"] = list(edit_texts)
+
+        base_json = norm_json_dir / f"{pdf_path.stem}_p{page_idx_0based+1:04d}_res.json"
+        base_json.write_text(json.dumps(ocr_data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        with_coords = add_pdf_coords_to_json(pdf_path, ocr_data, page_idx_0based)
+        with_coords_json = norm_json_dir / f"{pdf_path.stem}_p{page_idx_0based+1:04d}_res_with_pdf_coords.json"
+        with_coords_json.write_text(json.dumps(with_coords, ensure_ascii=False, indent=2), encoding="utf-8")
+        per_page_with_coords_jsons.append(with_coords_json)
+
+    per_page_with_coords_jsons = sorted(per_page_with_coords_jsons)
+    debug_pdf = out_root / "overlay_debug.pdf"
+    overlay_debug_pdf(
+        pdf_path=pdf_path,
+        per_page_json_paths=per_page_with_coords_jsons,
+        out_pdf_path=debug_pdf,
+        draw_boxes=draw_boxes,
+        draw_text=draw_text,
+        min_score=min_score,
+    )
+
+    return {
+        "images_dir": img_dir,
+        "official_json_dir": official_json_dir,
+        "norm_json_dir": norm_json_dir,
+        "debug_pdf": debug_pdf,
+        "per_page_jsons": per_page_with_coords_jsons,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="PDF→PNG→(官方 PaddleOCR predict)→座標換算→Overlay Debug PDF")
     parser.add_argument("--pdf", required=True, help="原始 PDF 路徑")
@@ -376,82 +476,23 @@ def main() -> None:
     pdf_path = Path(args.pdf)
     out_root = Path(args.out)
 
-    img_dir = out_root / "images"
-    official_json_dir = out_root / "official_json"
-    norm_json_dir = out_root / "ocr_json"
-
-    # 1) PDF -> PNG
-    png_paths = pdf_to_pngs(pdf_path, img_dir, args.dpi, args.start, args.end)
-
-    # 2) 官方 demo style OCR：對資料夾 predict，並 save_to_json
-    official_json_paths = run_paddleocr_official_on_folder(img_dir, official_json_dir)
-
-    # 2.5) 將官方 json 正規化成你後續用的 rec_* 結構，並建立 per-page json（單頁一個）
-    norm_json_dir.mkdir(parents=True, exist_ok=True)
-    per_page_with_coords_jsons: list[Path] = []
-
-    # 讓 png 檔名與頁碼對應（以你的 pdf_to_pngs 命名規則）
-    png_by_page: dict[int, Path] = {}
-    for p in png_paths:
-        page_no_1based = infer_page_no_1based_from_filename(p)
-        if page_no_1based is None:
-            continue
-        png_by_page[page_no_1based - 1] = p  # key = 0-based page index
-
-    # 依檔名排序處理 json（若官方 json 名稱不同，也不影響；我們用內容的 input_path / fallback 推測）
-    for oj in official_json_paths:
-        # 先猜測 input_path：用「同頁 png」當 fallback（若官方 json 沒寫 input_path）
-        # 這裡用檔名中含 p0001 的規則推測，推不到就不給 fallback
-        fallback = None
-        m = re.search(r"_p(\d{4,})", oj.stem, re.IGNORECASE)
-        if m:
-            page_no_1based = int(m.group(1))
-            fallback_png = png_by_page.get(page_no_1based - 1)
-            if fallback_png:
-                fallback = str(fallback_png)
-
-        ocr_data = normalize_official_json_to_rec_format(oj, fallback_input_path=fallback)
-
-        # 決定頁碼：優先用 input_path 檔名的 p0001
-        page_idx_0based = None
-        ip = Path(ocr_data["input_path"]).name
-        m2 = re.search(r"_p(\d{4,})\.png$", ip, re.IGNORECASE)
-        if m2:
-            page_idx_0based = int(m2.group(1)) - 1
-
-        if page_idx_0based is None:
-            # 若推不到頁碼，就跳過（避免誤畫到錯頁）
-            continue
-
-        ocr_data["page_index_0based"] = page_idx_0based
-        ocr_data["page_no_1based"] = page_idx_0based + 1
-
-        base_json = norm_json_dir / f"{pdf_path.stem}_p{page_idx_0based+1:04d}_res.json"
-        base_json.write_text(json.dumps(ocr_data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        # 3) 加入 pdf 座標（PyMuPDF 座標系，不翻 y）
-        with_coords = add_pdf_coords_to_json(pdf_path, ocr_data, page_idx_0based)
-        with_coords_json = norm_json_dir / f"{pdf_path.stem}_p{page_idx_0based+1:04d}_res_with_pdf_coords.json"
-        with_coords_json.write_text(json.dumps(with_coords, ensure_ascii=False, indent=2), encoding="utf-8")
-        per_page_with_coords_jsons.append(with_coords_json)
-
-    # 4) Overlay debug PDF（整份輸出）
-    per_page_with_coords_jsons = sorted(per_page_with_coords_jsons)
-    debug_pdf = out_root / "overlay_debug.pdf"
-    overlay_debug_pdf(
+    result = run_pipeline(
         pdf_path=pdf_path,
-        per_page_json_paths=per_page_with_coords_jsons,
-        out_pdf_path=debug_pdf,
+        out_root=out_root,
+        dpi=args.dpi,
+        start_page=args.start,
+        end_page=args.end,
+        min_score=args.min_score,
         draw_boxes=not args.no_box,
         draw_text=not args.no_text,
-        min_score=args.min_score,
+        enable_translate=False,
     )
 
     print("Done.")
-    print(f"- Images:        {img_dir.resolve()}")
-    print(f"- Official JSON: {official_json_dir.resolve()}")
-    print(f"- Normalized:    {norm_json_dir.resolve()}")
-    print(f"- Debug PDF:     {debug_pdf.resolve()}")
+    print(f"- Images:        {result['images_dir'].resolve()}")
+    print(f"- Official JSON: {result['official_json_dir'].resolve()}")
+    print(f"- Normalized:    {result['norm_json_dir'].resolve()}")
+    print(f"- Debug PDF:     {result['debug_pdf'].resolve()}")
 
 
 if __name__ == "__main__":

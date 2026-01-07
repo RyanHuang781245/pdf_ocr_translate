@@ -1,10 +1,10 @@
 *.pdf
 output/
+out/
 .env
 *png
 *.jpg
 *.jpeg
-output2/
-pdf2img_outputs/
+__pycache__/
 test.ipynb
 paddleocr_demo.py
