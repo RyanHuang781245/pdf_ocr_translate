@@ -2,6 +2,9 @@ const state = {
   pages: [],
   selected: null,
   dragging: null,
+  selectedBoxes: new Set(),
+  selecting: null,
+  lastShiftKey: false,
 };
 
 let controlsBound = false;
@@ -11,6 +14,7 @@ const fontSizeEl = document.getElementById("fontSize");
 const fontColorEl = document.getElementById("fontColor");
 const deleteBtn = document.getElementById("deleteBox");
 const saveBtn = document.getElementById("saveBtn");
+const downloadBtn = document.getElementById("downloadBtn");
 const pagesEl = document.getElementById("pages");
 const editedLink = document.getElementById("editedPdfLink");
 
@@ -20,12 +24,106 @@ function setStatus(message) {
   }
 }
 
+function boxKey(pageIdx, boxIdx) {
+  return `${pageIdx}:${boxIdx}`;
+}
+
+function getSelectedBoxes() {
+  const items = [];
+  state.selectedBoxes.forEach((key) => {
+    const [pageIdx, boxIdx] = key.split(":").map((value) => Number.parseInt(value, 10));
+    const page = state.pages[pageIdx];
+    const box = page?.boxes[boxIdx];
+    if (!page || !box || box.deleted) return;
+    items.push({ pageIdx, boxIdx, page, box });
+  });
+  return items;
+}
+
+function applySelectionClasses() {
+  state.pages.forEach((page, pageIdx) => {
+    page.boxes.forEach((box, boxIdx) => {
+      if (!box.element) return;
+      box.element.classList.toggle("selected", state.selectedBoxes.has(boxKey(pageIdx, boxIdx)));
+    });
+  });
+}
+
+function syncInspectorFromBox(box) {
+  if (!box) return;
+  if (fontSizeEl) fontSizeEl.value = Math.round(box.fontSize).toString();
+  if (fontColorEl) fontColorEl.value = box.color;
+}
+
+function clearSelection() {
+  state.selected = null;
+  state.selectedBoxes.clear();
+  applySelectionClasses();
+}
+
+function setSelection(pageIdx, boxIdx, additive = false) {
+  const page = state.pages[pageIdx];
+  const box = page?.boxes[boxIdx];
+  if (!page || !box || box.deleted) {
+    if (!additive) {
+      clearSelection();
+    }
+    return;
+  }
+  const key = boxKey(pageIdx, boxIdx);
+  if (!additive) {
+    state.selectedBoxes.clear();
+  }
+  if (additive && state.selectedBoxes.has(key)) {
+    state.selectedBoxes.delete(key);
+  } else {
+    state.selectedBoxes.add(key);
+  }
+
+  const selectedList = getSelectedBoxes();
+  if (!selectedList.length) {
+    state.selected = null;
+    applySelectionClasses();
+    return;
+  }
+
+  const primary = selectedList.find((item) => item.pageIdx === pageIdx && item.boxIdx === boxIdx) || selectedList[0];
+  state.selected = { pageIdx: primary.pageIdx, boxIdx: primary.boxIdx };
+  applySelectionClasses();
+  syncInspectorFromBox(primary.box);
+}
+
+function boxesIntersect(a, b) {
+  return a.x <= b.x + b.w && a.x + a.w >= b.x && a.y <= b.y + b.h && a.y + a.h >= b.y;
+}
+
+function deleteSelectedBoxes() {
+  const selected = getSelectedBoxes();
+  if (!selected.length) return;
+  selected.forEach(({ page, box }) => {
+    box.deleted = true;
+    updateBoxElement(page, box);
+  });
+  clearSelection();
+  setStatus("Box deleted.");
+}
+
 function updateEditedLink(url) {
   if (!editedLink) return;
   if (url) {
     editedLink.href = url;
     editedLink.style.display = "inline-flex";
   }
+}
+
+function triggerDownload(url) {
+  if (!url) return;
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "edited.pdf";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
 }
 
 function polyToBbox(poly) {
@@ -99,59 +197,82 @@ function updatePageLayout(page) {
   page.boxes.forEach((box) => updateBoxElement(page, box));
 }
 
-function selectBox(pageIdx, boxIndex) {
-  if (state.selected) {
-    const prev = state.selected;
-    const prevPage = state.pages[prev.pageIdx];
-    const prevBox = prevPage?.boxes[prev.boxIndex];
-    if (prevBox?.element) {
-      prevBox.element.classList.remove("selected");
-    }
-  }
-
-  const page = state.pages[pageIdx];
-  const box = page?.boxes[boxIndex];
-  if (!page || !box) {
-    state.selected = null;
-    return;
-  }
-  state.selected = { pageIdx, boxIndex };
-  if (box.element) {
-    box.element.classList.add("selected");
-  }
-  if (fontSizeEl) fontSizeEl.value = Math.round(box.fontSize).toString();
-  if (fontColorEl) fontColorEl.value = box.color;
+function selectBox(pageIdx, boxIdx, additive = false) {
+  setSelection(pageIdx, boxIdx, additive);
 }
 
-function onDragStart(event, pageIdx, boxIndex) {
+function buildDragGroup(pageIdx, boxIdx) {
+  const selected = getSelectedBoxes().filter((item) => item.pageIdx === pageIdx);
+  const key = boxKey(pageIdx, boxIdx);
+  if (!state.selectedBoxes.has(key)) {
+    state.selectedBoxes.add(key);
+  }
+  if (!selected.length) {
+    const page = state.pages[pageIdx];
+    const box = page?.boxes[boxIdx];
+    if (!page || !box) return [];
+    return [{ pageIdx, boxIdx, originX: box.bbox.x, originY: box.bbox.y }];
+  }
+  return selected.map((item) => ({
+    pageIdx: item.pageIdx,
+    boxIdx: item.boxIdx,
+    originX: item.box.bbox.x,
+    originY: item.box.bbox.y,
+  }));
+}
+
+function onDragStart(event, pageIdx, boxIndex, groupMode = false) {
   if (event.button !== 0) return;
   const page = state.pages[pageIdx];
   const box = page?.boxes[boxIndex];
   if (!page || !box || box.deleted) return;
-  selectBox(pageIdx, boxIndex);
+  const key = boxKey(pageIdx, boxIndex);
+  const selectedOnPage = getSelectedBoxes().filter((item) => item.pageIdx === pageIdx);
+  const shouldGroup = groupMode || (selectedOnPage.length > 1 && state.selectedBoxes.has(key));
+
+  if (shouldGroup) {
+    const key = boxKey(pageIdx, boxIndex);
+    if (!state.selectedBoxes.has(key)) {
+      state.selectedBoxes.add(key);
+      applySelectionClasses();
+    }
+    state.selected = { pageIdx, boxIdx: boxIndex };
+    syncInspectorFromBox(box);
+  } else {
+    selectBox(pageIdx, boxIndex);
+  }
+  const group = shouldGroup ? buildDragGroup(pageIdx, boxIndex) : [{ pageIdx, boxIdx: boxIndex, originX: box.bbox.x, originY: box.bbox.y }];
   state.dragging = {
     pageIdx,
     boxIndex,
     startX: event.clientX,
     startY: event.clientY,
-    originX: box.bbox.x,
-    originY: box.bbox.y,
+    groupMode: shouldGroup,
+    group,
   };
   box.element.setPointerCapture(event.pointerId);
 }
 
 function onDragMove(event) {
   if (!state.dragging) return;
-  const { pageIdx, boxIndex, startX, startY, originX, originY } = state.dragging;
+  const { pageIdx, startX, startY, group } = state.dragging;
   const page = state.pages[pageIdx];
-  const box = page?.boxes[boxIndex];
-  if (!page || !box) return;
+  if (!page) return;
   const scale = page.scale || 1;
   const dx = (event.clientX - startX) / scale;
   const dy = (event.clientY - startY) / scale;
-  box.bbox.x = Math.max(0, originX + dx);
-  box.bbox.y = Math.max(0, originY + dy);
-  updateBoxElement(page, box);
+
+  if (group && group.length) {
+    group.forEach((item) => {
+      const targetPage = state.pages[item.pageIdx];
+      const targetBox = targetPage?.boxes[item.boxIdx];
+      if (!targetPage || !targetBox) return;
+      targetBox.bbox.x = Math.max(0, item.originX + dx);
+      targetBox.bbox.y = Math.max(0, item.originY + dy);
+      updateBoxElement(targetPage, targetBox);
+    });
+    return;
+  }
 }
 
 function onDragEnd(event) {
@@ -163,6 +284,100 @@ function onDragEnd(event) {
     box.element.releasePointerCapture(event.pointerId);
   }
   state.dragging = null;
+}
+
+function startRangeSelection(event, pageIdx) {
+  if (event.button !== 0) return;
+  if (event.target.closest(".text-box")) return;
+  const page = state.pages[pageIdx];
+  if (!page || !page.overlay) return;
+  const bounds = page.overlay.getBoundingClientRect();
+  const startX = event.clientX - bounds.left;
+  const startY = event.clientY - bounds.top;
+  const rectEl = page.selectionRect;
+  if (!rectEl) return;
+  const additive = event.shiftKey;
+
+  rectEl.style.display = "block";
+  rectEl.style.left = `${startX}px`;
+  rectEl.style.top = `${startY}px`;
+  rectEl.style.width = "0px";
+  rectEl.style.height = "0px";
+
+  state.selecting = {
+    pageIdx,
+    startX,
+    startY,
+    bounds,
+    rectEl,
+    captureEl: event.currentTarget,
+    pointerId: event.pointerId,
+    additive,
+  };
+  event.currentTarget.setPointerCapture(event.pointerId);
+  if (!additive) {
+    clearSelection();
+  }
+}
+
+function updateRangeSelection(event) {
+  if (!state.selecting) return;
+  const { startX, startY, bounds, rectEl } = state.selecting;
+  const currentX = event.clientX - bounds.left;
+  const currentY = event.clientY - bounds.top;
+  const left = Math.min(startX, currentX);
+  const top = Math.min(startY, currentY);
+  const width = Math.abs(currentX - startX);
+  const height = Math.abs(currentY - startY);
+  rectEl.style.left = `${left}px`;
+  rectEl.style.top = `${top}px`;
+  rectEl.style.width = `${width}px`;
+  rectEl.style.height = `${height}px`;
+  state.selecting.rect = { left, top, width, height };
+}
+
+function endRangeSelection(event) {
+  if (!state.selecting) return;
+  const { pageIdx, rect, rectEl, captureEl, pointerId, additive } = state.selecting;
+  rectEl.style.display = "none";
+  if (captureEl) {
+    captureEl.releasePointerCapture(pointerId);
+  }
+  state.selecting = null;
+
+  if (!rect || rect.width < 4 || rect.height < 4) {
+    if (!additive) {
+      clearSelection();
+    }
+    return;
+  }
+
+  const page = state.pages[pageIdx];
+  if (!page) return;
+  const scale = page.scale || 1;
+  const selectionBox = {
+    x: rect.left / scale,
+    y: rect.top / scale,
+    w: rect.width / scale,
+    h: rect.height / scale,
+  };
+
+  page.boxes.forEach((box, boxIdx) => {
+    if (box.deleted) return;
+    if (boxesIntersect(box.bbox, selectionBox)) {
+      state.selectedBoxes.add(boxKey(pageIdx, boxIdx));
+    }
+  });
+
+  const selectedList = getSelectedBoxes();
+  if (selectedList.length) {
+    const primary = selectedList[0];
+    state.selected = { pageIdx: primary.pageIdx, boxIdx: primary.boxIdx };
+    syncInspectorFromBox(primary.box);
+  } else {
+    state.selected = null;
+  }
+  applySelectionClasses();
 }
 
 function renderPages() {
@@ -181,9 +396,16 @@ function renderPages() {
     const img = document.createElement("img");
     img.src = page.imageUrl;
     img.alt = `Page ${page.pageIndex + 1}`;
+    img.draggable = false;
+    img.addEventListener("dragstart", (event) => event.preventDefault());
 
     const overlay = document.createElement("div");
     overlay.className = "overlay";
+
+    const selectionRect = document.createElement("div");
+    selectionRect.className = "selection-rect";
+    selectionRect.style.display = "none";
+    overlay.appendChild(selectionRect);
 
     img.addEventListener("load", () => {
       updatePageLayout(page);
@@ -201,6 +423,12 @@ function renderPages() {
     page.element = pageEl;
     page.overlay = overlay;
     page.image = img;
+    page.selectionRect = selectionRect;
+
+    wrap.addEventListener("pointerdown", (event) => startRangeSelection(event, pageIdx));
+    wrap.addEventListener("pointermove", updateRangeSelection);
+    wrap.addEventListener("pointerup", endRangeSelection);
+    wrap.addEventListener("pointercancel", endRangeSelection);
 
     page.boxes.forEach((box, index) => {
       const boxEl = document.createElement("div");
@@ -218,8 +446,18 @@ function renderPages() {
       overlay.appendChild(boxEl);
 
       boxEl.addEventListener("pointerdown", (event) => {
+        state.lastShiftKey = event.shiftKey;
         if (event.target.closest(".text")) {
-          selectBox(pageIdx, index);
+          selectBox(pageIdx, index, event.shiftKey);
+          return;
+        }
+        if (event.shiftKey) {
+          const key = boxKey(pageIdx, index);
+          if (!state.selectedBoxes.has(key)) {
+            state.selectedBoxes.add(key);
+            applySelectionClasses();
+          }
+          onDragStart(event, pageIdx, index, true);
           return;
         }
         onDragStart(event, pageIdx, index);
@@ -228,7 +466,10 @@ function renderPages() {
       boxEl.addEventListener("pointerup", onDragEnd);
       boxEl.addEventListener("pointercancel", onDragEnd);
 
-      textEl.addEventListener("focus", () => selectBox(pageIdx, index));
+      textEl.addEventListener("focus", () => {
+        selectBox(pageIdx, index, state.lastShiftKey);
+        state.lastShiftKey = false;
+      });
       textEl.addEventListener("input", () => {
         const sanitized = textEl.textContent.replace(/\n+/g, " ").trim();
         box.text = sanitized;
@@ -259,13 +500,16 @@ function buildSavePayload() {
   };
 }
 
-async function saveEdits() {
+async function saveEdits(shouldDownload = false) {
   const jobId = document.body.dataset.jobId;
   if (!jobId) return;
   const originalText = saveBtn ? saveBtn.textContent : null;
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving...";
+  }
+  if (downloadBtn) {
+    downloadBtn.disabled = true;
   }
   setStatus("Saving edits...");
   try {
@@ -279,6 +523,9 @@ async function saveEdits() {
     if (res.ok) {
       if (body.edited_pdf_url) {
         updateEditedLink(body.edited_pdf_url);
+        if (shouldDownload) {
+          triggerDownload(body.edited_pdf_url);
+        }
       }
       setStatus("Edits saved.");
     } else {
@@ -291,6 +538,9 @@ async function saveEdits() {
       saveBtn.disabled = false;
       saveBtn.textContent = originalText || "Save edits";
     }
+    if (downloadBtn) {
+      downloadBtn.disabled = false;
+    }
   }
 }
 
@@ -299,35 +549,31 @@ function bindControls() {
   controlsBound = true;
   if (fontSizeEl) {
     fontSizeEl.addEventListener("input", () => {
-      if (!state.selected) return;
-      const page = state.pages[state.selected.pageIdx];
-      const box = page?.boxes[state.selected.boxIndex];
-      if (!box) return;
-      box.fontSize = Number(fontSizeEl.value);
-      updateBoxElement(page, box);
+      const selected = getSelectedBoxes();
+      if (!selected.length) return;
+      const value = Number(fontSizeEl.value);
+      selected.forEach(({ page, box }) => {
+        box.fontSize = value;
+        updateBoxElement(page, box);
+      });
     });
   }
 
   if (fontColorEl) {
     fontColorEl.addEventListener("input", () => {
-      if (!state.selected) return;
-      const page = state.pages[state.selected.pageIdx];
-      const box = page?.boxes[state.selected.boxIndex];
-      if (!box) return;
-      box.color = fontColorEl.value;
-      updateBoxElement(page, box);
+      const selected = getSelectedBoxes();
+      if (!selected.length) return;
+      const value = fontColorEl.value;
+      selected.forEach(({ page, box }) => {
+        box.color = value;
+        updateBoxElement(page, box);
+      });
     });
   }
 
   if (deleteBtn) {
     deleteBtn.addEventListener("click", () => {
-      if (!state.selected) return;
-      const page = state.pages[state.selected.pageIdx];
-      const box = page?.boxes[state.selected.boxIndex];
-      if (!box) return;
-      box.deleted = true;
-      updateBoxElement(page, box);
-      setStatus("Box deleted.");
+      deleteSelectedBoxes();
     });
   }
 
@@ -337,6 +583,22 @@ function bindControls() {
       saveEdits();
     });
   }
+
+  if (downloadBtn) {
+    downloadBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      saveEdits(true);
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Delete") return;
+    const target = event.target;
+    if (target && (target.isContentEditable || ["INPUT", "TEXTAREA"].includes(target.tagName))) {
+      return;
+    }
+    deleteSelectedBoxes();
+  });
 }
 
 async function init() {

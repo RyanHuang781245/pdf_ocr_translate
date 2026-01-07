@@ -17,6 +17,16 @@ OUT_ROOT = BASE_DIR / "out"
 JOB_ROOT = OUT_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
 ALLOWED_EXTENSIONS = {".pdf"}
+FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\msjh.ttf",
+    r"C:\Windows\Fonts\msjhbd.ttf",
+    r"C:\Windows\Fonts\msjhl.ttf",
+    r"C:\Windows\Fonts\msjh.ttc",
+    r"C:\Windows\Fonts\msjhbd.ttc",
+    r"C:\Windows\Fonts\msjhl.ttc",
+    r"C:\Windows\Fonts\mingliu.ttc",
+    r"C:\Windows\Fonts\simsun.ttc",
+]
 app = Flask(__name__)
 
 
@@ -72,6 +82,13 @@ def _hex_to_rgb(value: str | None, default: tuple[float, float, float] = (0.1, 0
         return default
 
 
+def _resolve_fontfile() -> str | None:
+    for candidate in FONT_CANDIDATES:
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
 def _load_page_transforms(job_dir: Path) -> dict[int, tuple[float, float, float, float]]:
     json_dir = job_dir / "ocr_json"
     mapping: dict[int, tuple[float, float, float, float]] = {}
@@ -97,6 +114,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
 
     pages_by_index = {int(p.get("page_index_0based", 0)): p for p in edits.get("pages", []) if isinstance(p, dict)}
 
+    fontfile = _resolve_fontfile()
     doc = fitz.open(pdf_path)
     for page_idx in range(doc.page_count):
         page = doc.load_page(page_idx)
@@ -117,12 +135,16 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
             if not isinstance(box, dict) or box.get("deleted"):
                 continue
             bbox = box.get("bbox")
-            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            if isinstance(bbox, dict):
+                x = float(bbox.get("x", 0.0))
+                y = float(bbox.get("y", 0.0))
+                w = float(bbox.get("w", 0.0))
+                h = float(bbox.get("h", 0.0))
+            elif isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                x, y, w, h = [float(v) for v in bbox]
+            else:
                 continue
             text = str(box.get("text", "")).strip()
-            if not text:
-                continue
-            x, y, w, h = [float(v) for v in bbox]
             rect = fitz.Rect(x * sx, y * sy, (x + w) * sx, (y + h) * sy)
             if rect.is_empty:
                 continue
@@ -131,17 +153,30 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
             font_size_pt = font_size_px * sy if font_size_px > 0 else max(5.0, rect.height * 0.7)
             color = _hex_to_rgb(box.get("color"))
 
+            if not text:
+                continue
+
             ok = False
             current = font_size_pt
             for _ in range(20):
-                rc = shape.insert_textbox(
-                    rect,
-                    text,
-                    fontname="helv",
-                    fontsize=current,
-                    color=color,
-                    align=0,
-                )
+                if fontfile:
+                    rc = shape.insert_textbox(
+                        rect,
+                        text,
+                        fontfile=fontfile,
+                        fontsize=current,
+                        color=color,
+                        align=0,
+                    )
+                else:
+                    rc = shape.insert_textbox(
+                        rect,
+                        text,
+                        fontname="helv",
+                        fontsize=current,
+                        color=color,
+                        align=0,
+                    )
                 if rc >= 0:
                     ok = True
                     break
@@ -150,14 +185,24 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                     break
 
             if not ok:
-                shape.insert_textbox(
-                    rect,
-                    text,
-                    fontname="helv",
-                    fontsize=max(4.0, current),
-                    color=color,
-                    align=0,
-                )
+                if fontfile:
+                    shape.insert_textbox(
+                        rect,
+                        text,
+                        fontfile=fontfile,
+                        fontsize=max(4.0, current),
+                        color=color,
+                        align=0,
+                    )
+                else:
+                    shape.insert_textbox(
+                        rect,
+                        text,
+                        fontname="helv",
+                        fontsize=max(4.0, current),
+                        color=color,
+                        align=0,
+                    )
 
         shape.commit()
 

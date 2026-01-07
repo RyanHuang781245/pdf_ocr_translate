@@ -252,12 +252,16 @@ button.primary:hover {
   height: auto;
   display: block;
   border-radius: 12px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .overlay {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 2;
 }
 
 .text-box {
@@ -283,6 +287,15 @@ button.primary:hover {
   outline: 2px solid var(--accent);
   border-color: var(--accent);
   background: rgba(255, 255, 255, 0.8);
+}
+
+.selection-rect {
+  position: absolute;
+  border: 2px dashed rgba(209, 102, 43, 0.8);
+  background: rgba(209, 102, 43, 0.12);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 5;
 }
 
 .text-box.is-deleted {
