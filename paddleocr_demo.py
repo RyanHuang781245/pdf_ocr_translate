@@ -7,7 +7,7 @@ ocr = PaddleOCR(
 
 # 對範例圖片執行 OCR 推論
 result = ocr.predict(
-    input="UOC-PQR-16013_v2.pdf")
+    input="test_page_0.png")
     
 # 將結果視覺化並儲存為 JSON
 for res in result:

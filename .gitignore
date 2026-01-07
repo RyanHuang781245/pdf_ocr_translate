@@ -4,3 +4,5 @@ output/
 *png
 *.jpg
 *.jpeg
+test.ipynb
+paddleocr_demo.py
