@@ -4,5 +4,7 @@ output/
 *png
 *.jpg
 *.jpeg
+output2/
+pdf2img_outputs/
 test.ipynb
 paddleocr_demo.py
