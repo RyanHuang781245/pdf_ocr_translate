@@ -42,5 +42,26 @@
         </p>
       </section>
     </main>
+    <div id="loadingOverlay" class="loading-overlay" hidden>
+      <div class="loading-card">
+        <div class="spinner"></div>
+        <p>OCR is running. Please wait...</p>
+      </div>
+    </div>
+    <script>
+      const form = document.querySelector("form");
+      const overlay = document.getElementById("loadingOverlay");
+      if (form && overlay) {
+        form.addEventListener("submit", () => {
+          overlay.hidden = false;
+          document.body.classList.add("is-loading");
+          const button = form.querySelector('button[type="submit"]');
+          if (button) {
+            button.disabled = true;
+            button.textContent = "Processing...";
+          }
+        });
+      }
+    </script>
   </body>
 </html>
