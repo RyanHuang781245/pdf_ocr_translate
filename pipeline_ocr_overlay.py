@@ -6,12 +6,16 @@ import os
 import re
 import time
 from pathlib import Path
-from typing import Any, Tuple, List, Callable
+from typing import Any, Callable, List, Tuple
 
 import fitz  # PyMuPDF
-import numpy as np
 from PIL import Image
-from paddleocr import PaddleOCR
+from paddleocr import PPStructureV3
+
+# -----------------------------
+# Font (Windows CJK default)
+# -----------------------------
+DEFAULT_FONTFILE = r"C:\Windows\Fonts\msjh.ttc"
 
 
 # -----------------------------
@@ -39,12 +43,12 @@ def pdf_to_pngs(
     total = doc.page_count
 
     if start_page < 1 or start_page > total:
-        raise ValueError(f"start_page 超出範圍：1~{total}")
+        raise ValueError(f"start_page out of range: 1~{total}")
 
     if end_page is None:
         end_page = total
     if end_page < start_page or end_page > total:
-        raise ValueError(f"end_page 超出範圍：{start_page}~{total}")
+        raise ValueError(f"end_page out of range: {start_page}~{total}")
 
     scale = dpi / 72.0
     mat = fitz.Matrix(scale, scale)
@@ -70,113 +74,213 @@ def pdf_to_pngs(
 
 
 # -----------------------------
-# Step 2) PaddleOCR (official demo style)
-#    ocr.predict(input=folder) + res.save_to_json(out_folder)
+# Step 2) PPStructureV3 -> JSON
 # -----------------------------
-def run_paddleocr_official_on_folder(
-    images_dir: Path,
-    json_out_dir: Path,
-) -> List[Path]:
-    """
-    依照官方 demo 寫法：
-    - ocr = PaddleOCR(use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False)
-    - result = ocr.predict(input="pdf2img_outputs")
-    - for res in result: res.save_to_json("output3")
-
-    這裡將 input 指向 images_dir，並把 json 存到 json_out_dir。
-    回傳：產生的 json 檔路徑清單（盡量依檔名排序）
-    """
-    json_out_dir.mkdir(parents=True, exist_ok=True)
-
-    ocr = PaddleOCR(
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=False,
-    )
-
-    result = ocr.predict(input=str(images_dir))
-
-    # 官方 API 會把每張圖結果存成一個 json（檔名通常跟圖片相關）
-    # 我們先讓它寫出來，再去掃描 json_out_dir 取得清單
-    for res in result:
-        # 你也可以保留 res.print() 方便看 console
-        # res.print()
-        res.save_to_json(str(json_out_dir))
-
-    json_paths = sorted(json_out_dir.glob("*.json"))
-    if not json_paths:
-        raise RuntimeError(f"找不到官方輸出的 json：{json_out_dir}")
-
-    return json_paths
-
-
-# -----------------------------
-# Step 2 alt) PaddleOCR per-image (progress + cancel)
-# -----------------------------
-def run_paddleocr_on_images(
+def run_ppstructurev3_predict(
     images: list[Path],
     json_out_dir: Path,
     progress_cb: Callable[[str, int, int, str], None] | None = None,
     cancel_event: Any | None = None,
-) -> List[Path]:
+) -> list[Path]:
     json_out_dir.mkdir(parents=True, exist_ok=True)
 
-    ocr = PaddleOCR(
+    pipeline = PPStructureV3(
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
-        use_textline_orientation=False,
     )
 
-    json_paths: list[Path] = []
+    out_jsons: list[Path] = []
     total = len(images)
     for idx, img_path in enumerate(images, start=1):
         if cancel_event is not None and cancel_event.is_set():
             raise PipelineCancelled("Cancelled during OCR.")
 
-        result = ocr.ocr(str(img_path), cls=False)
+        output = pipeline.predict(input=str(img_path))
+        for res in output:
+            res.save_to_json(save_path=str(json_out_dir))
 
-        rec_polys: list[list[list[float]]] = []
-        rec_texts: list[str] = []
-        rec_scores: list[float] = []
-
-        for item in result or []:
-            if not isinstance(item, (list, tuple)) or len(item) < 2:
-                continue
-            poly = item[0]
-            rec = item[1]
-            if not isinstance(poly, (list, tuple)) or len(poly) < 4:
-                continue
-            if not isinstance(rec, (list, tuple)) or len(rec) < 2:
-                continue
-            text = rec[0]
-            score = rec[1]
-            rec_polys.append([[float(p[0]), float(p[1])] for p in poly[:4]])
-            rec_texts.append(str(text))
-            try:
-                rec_scores.append(float(score))
-            except Exception:
-                rec_scores.append(0.0)
-
-        data = {
-            "input_path": str(img_path),
-            "rec_polys": rec_polys,
-            "rec_texts": rec_texts,
-            "rec_scores": rec_scores,
-        }
-        out_path = json_out_dir / f"{img_path.stem}_res.json"
-        out_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        json_paths.append(out_path)
+        guess = json_out_dir / f"{img_path.stem}.json"
+        if guess.exists():
+            out_jsons.append(guess)
+        else:
+            candidates = sorted(json_out_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if candidates:
+                out_jsons.append(candidates[0])
 
         if progress_cb:
             progress_cb("ocr", idx, total, f"OCR page {idx}/{total}")
 
-    if not json_paths:
-        raise RuntimeError(f"找不到 OCR 輸出的 json：{json_out_dir}")
-    return json_paths
+    uniq: list[Path] = []
+    seen = set()
+    for p in out_jsons:
+        k = p.resolve().as_posix()
+        if k not in seen:
+            uniq.append(p)
+            seen.add(k)
+
+    if not uniq:
+        raise RuntimeError(f"No PPStructure JSON output: {json_out_dir}")
+    return uniq
+
 
 # -----------------------------
-# Step 2.5) Normalize official json -> {input_path, rec_polys, rec_texts, rec_scores}
+# Helpers from PPStructure flow
 # -----------------------------
+def poly_to_bbox(poly: list[list[float]]) -> list[float]:
+    xs = [p[0] for p in poly]
+    ys = [p[1] for p in poly]
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
+def bbox_center(bbox: list[float] | tuple[float, float, float, float]) -> tuple[float, float]:
+    x1, y1, x2, y2 = bbox
+    return (x1 + x2) / 2.0, (y1 + y2) / 2.0
+
+
+def point_in_bbox(px: float, py: float, bbox: list[float]) -> bool:
+    x1, y1, x2, y2 = bbox
+    return x1 <= px <= x2 and y1 <= py <= y2
+
+
+def load_table_bboxes_from_parsing(data: dict) -> list[dict]:
+    tables = []
+    for blk in data.get("parsing_res_list", []):
+        if blk.get("block_label") == "table" and isinstance(blk.get("block_bbox"), list) and len(blk["block_bbox"]) == 4:
+            tables.append(
+                {
+                    "bbox": blk["block_bbox"],
+                    "content": blk.get("block_content"),
+                    "block_id": blk.get("block_id"),
+                }
+            )
+    return tables
+
+
+def load_table_bboxes_fallback_layout(data: dict) -> list[dict]:
+    tables = []
+    layout = data.get("layout_det_res", {})
+    for it in layout.get("boxes", []):
+        if it.get("label") == "table" and isinstance(it.get("coordinate"), list) and len(it["coordinate"]) == 4:
+            x1, y1, x2, y2 = it["coordinate"]
+            tables.append({"bbox": [float(x1), float(y1), float(x2), float(y2)], "content": None, "block_id": None})
+    return tables
+
+
+def normalize_paragraph_text(s: str) -> str:
+    s = (s or "").replace("\r\n", "\n").replace("\r", "\n")
+    s = " ".join([line.strip() for line in s.split("\n") if line.strip()])
+    s = " ".join(s.split())
+    return s.strip()
+
+
+def infer_page_index_from_input_path(input_path: str) -> int | None:
+    name = Path(input_path).name
+    m = re.search(r"_p(\d{4,})\.(png|jpg|jpeg|webp)$", name, re.IGNORECASE)
+    if not m:
+        return None
+    return int(m.group(1)) - 1
+
+
+def infer_page_index_from_stem(stem: str) -> int | None:
+    m = re.search(r"_p(\d{4,})$", stem, re.IGNORECASE)
+    if not m:
+        return None
+    return int(m.group(1)) - 1
+
+
+def resolve_image_path(input_path: str, json_path: Path, images_dir: Path) -> Path:
+    p = Path(input_path)
+    if p.exists():
+        return p
+    p2 = (json_path.parent / input_path).resolve()
+    if p2.exists():
+        return p2
+    p3 = images_dir / Path(input_path).name
+    if p3.exists():
+        return p3
+    return p
+
+
+def bbox_to_poly(bb_px: list[float]) -> list[list[float]]:
+    x1, y1, x2, y2 = bb_px
+    return [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+
+
+def px_bbox_to_rect(px_bb: list[float], img_w_px: int, img_h_px: int, page: fitz.Page) -> fitz.Rect:
+    page_w_pt, page_h_pt = float(page.rect.width), float(page.rect.height)
+    sx = page_w_pt / img_w_px
+    sy = page_h_pt / img_h_px
+    x1, y1, x2, y2 = px_bb
+    return fitz.Rect(x1 * sx, y1 * sy, x2 * sx, y2 * sy)
+
+
+# -----------------------------
+# Paragraph: autowrap + shrink-to-fit
+# -----------------------------
+def insert_paragraph_autowrap_shrink(
+    page: fitz.Page,
+    rect: fitz.Rect,
+    text: str,
+    fontfile: str | None,
+    max_fs: float,
+    min_fs: float,
+    align: int = 0,
+    clip_ellipsis: bool = False,
+) -> dict[str, Any]:
+    clean = normalize_paragraph_text(text)
+    if not clean:
+        return {"ok": True, "fontsize": max_fs, "rc": 0.0, "clipped": False}
+
+    def _insert_box(content: str, fontsize: float) -> float:
+        if fontfile:
+            return page.insert_textbox(
+                rect,
+                content,
+                fontfile=fontfile,
+                fontsize=fontsize,
+                color=(0, 0, 1),
+                align=align,
+                overlay=True,
+            )
+        return page.insert_textbox(
+            rect,
+            content,
+            fontname="helv",
+            fontsize=fontsize,
+            color=(0, 0, 1),
+            align=align,
+            overlay=True,
+        )
+
+    fs = max_fs
+    while fs >= min_fs:
+        rc = _insert_box(clean, fs)
+        if rc >= 0:
+            return {"ok": True, "fontsize": fs, "rc": rc, "clipped": False}
+        fs -= 0.8
+
+    if clip_ellipsis:
+        words = clean.split()
+        lo, hi = 0, len(words)
+        best = ""
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            cand = " ".join(words[:mid]) + ("..." if mid < len(words) else "")
+            rc = _insert_box(cand, min_fs)
+            if rc >= 0:
+                best = cand
+                lo = mid + 1
+            else:
+                hi = mid - 1
+
+        if best:
+            rc = _insert_box(best, min_fs)
+            return {"ok": True, "fontsize": min_fs, "rc": rc, "clipped": True}
+
+    rc = _insert_box(clean, min_fs)
+    return {"ok": False, "fontsize": min_fs, "rc": rc, "clipped": False}
+
+
 def _as_float(x: Any, default: float = 0.0) -> float:
     try:
         return float(x)
@@ -184,119 +288,85 @@ def _as_float(x: Any, default: float = 0.0) -> float:
         return default
 
 
-def _norm_poly(poly: Any) -> list[list[float]] | None:
-    """
-    將各種可能的 poly 格式正規化為 4 點：
-    [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
-    """
-    if not isinstance(poly, (list, tuple)) or len(poly) < 4:
-        return None
-
-    out: list[list[float]] = []
-    for p in poly[:4]:
-        if not isinstance(p, (list, tuple)) or len(p) < 2:
-            return None
-        out.append([_as_float(p[0]), _as_float(p[1])])
-
-    return out
-
-
-def normalize_official_json_to_rec_format(official_json_path: Path, fallback_input_path: str | None = None) -> dict[str, Any]:
-    """
-    官方 save_to_json 的輸出結構在不同版本可能略有差異。
-    這裡做「容錯解析」：盡可能抽出每個文字框的 poly/text/score。
-
-    最終輸出結構：
-    {
-      "input_path": "...png",
-      "rec_polys": [...],
-      "rec_texts": [...],
-      "rec_scores": [...],
-    }
-    """
-    data = json.loads(official_json_path.read_text(encoding="utf-8"))
-
-    input_path = data.get("input_path") or data.get("image_path") or data.get("filename") or fallback_input_path
-    if not input_path:
-        # 無法從 json 得知圖片路徑，就先用 json 同名 png 推測（常見情況）
-        guess = official_json_path.with_suffix(".png")
-        input_path = str(guess)
+def extract_rec_entries_from_ppstructure(
+    data: dict[str, Any],
+    skip_text_inside_table: bool,
+    min_line_score: float,
+    table_fallback_layout: bool,
+) -> tuple[list[list[list[float]]], list[str], list[float]]:
+    tables = load_table_bboxes_from_parsing(data)
+    if table_fallback_layout and not tables:
+        tables = load_table_bboxes_fallback_layout(data)
+    table_bboxes = [t["bbox"] for t in tables]
 
     rec_polys: list[list[list[float]]] = []
     rec_texts: list[str] = []
     rec_scores: list[float] = []
 
-    # Case A：你之前那種結構（若官方剛好也是這樣）
-    if isinstance(data.get("rec_polys"), list) and isinstance(data.get("rec_texts"), list):
-        for poly, text, score in zip(data.get("rec_polys", []), data.get("rec_texts", []), data.get("rec_scores", [])):
-            poly4 = _norm_poly(poly)
-            if poly4 is None:
-                continue
-            rec_polys.append(poly4)
-            rec_texts.append(str(text))
-            rec_scores.append(_as_float(score, 0.0))
-        return {"input_path": input_path, "rec_polys": rec_polys, "rec_texts": rec_texts, "rec_scores": rec_scores}
+    # Paragraph blocks
+    for blk in data.get("parsing_res_list", []):
+        if blk.get("block_label") != "text":
+            continue
+        bb_px = blk.get("block_bbox")
+        if not (isinstance(bb_px, list) and len(bb_px) == 4):
+            continue
+        try:
+            bb_px = [float(v) for v in bb_px]
+        except Exception:
+            continue
 
-    # Case B：常見 OCR 結果列表（可能叫 results / ocr_result / det_res / rec_res / boxes 等）
-    candidates = []
-    for k in ("results", "result", "ocr_result", "data", "lines", "texts", "items"):
-        v = data.get(k)
-        if isinstance(v, list):
-            candidates.append(v)
+        content = normalize_paragraph_text(blk.get("block_content", ""))
+        if not content:
+            continue
 
-    # 也有人把內容包在 dict 裡，例如 data={"results":[...]}
-    if isinstance(data.get("data"), dict):
-        for k in ("results", "result", "ocr_result", "lines", "items"):
-            v = data["data"].get(k)
-            if isinstance(v, list):
-                candidates.append(v)
-
-    # 嘗試解析每個 item
-    for items in candidates:
-        for it in items:
-            if not isinstance(it, dict):
+        if skip_text_inside_table and table_bboxes:
+            cx, cy = bbox_center((bb_px[0], bb_px[1], bb_px[2], bb_px[3]))
+            if any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
                 continue
 
-            # poly/box 可能叫：poly / polygon / points / box / bbox / dt_poly / rec_poly
-            poly = (
-                it.get("poly")
-                or it.get("polygon")
-                or it.get("points")
-                or it.get("box")
-                or it.get("bbox")
-                or it.get("dt_poly")
-                or it.get("rec_poly")
-            )
-            poly4 = _norm_poly(poly)
-            if poly4 is None:
-                continue
+        rec_polys.append(bbox_to_poly(bb_px))
+        rec_texts.append(content)
+        rec_scores.append(_as_float(blk.get("block_score"), 1.0))
 
-            text = it.get("text") or it.get("rec_text") or it.get("transcription") or ""
-            score = it.get("score") or it.get("rec_score") or it.get("confidence") or 0.0
+    # Table text lines (rec_polys)
+    overall = data.get("overall_ocr_res", {}) or data.get("overall_ocr", {})
+    ocr_polys = overall.get("rec_polys", []) or []
+    ocr_texts = overall.get("rec_texts", []) or []
+    ocr_scores = overall.get("rec_scores", []) or []
 
-            rec_polys.append(poly4)
-            rec_texts.append(str(text))
-            rec_scores.append(_as_float(score, 0.0))
+    for idx, poly in enumerate(ocr_polys):
+        if not (isinstance(poly, list) and len(poly) >= 4):
+            continue
+        if not table_bboxes:
+            continue
+        score = _as_float(ocr_scores[idx], 0.0) if idx < len(ocr_scores) else 0.0
+        if score < min_line_score:
+            continue
 
-        if rec_polys:
-            break
+        poly4: list[list[float]] = []
+        for p in poly[:4]:
+            if not isinstance(p, (list, tuple)) or len(p) < 2:
+                poly4 = []
+                break
+            poly4.append([_as_float(p[0]), _as_float(p[1])])
+        if not poly4:
+            continue
 
-    # Case C：再退一步，若 json 用「兩層列表」：[[poly, [text,score]], ...]
-    if not rec_polys and isinstance(data.get("raw"), list):
-        raw = data["raw"]
-        for it in raw:
-            if not isinstance(it, (list, tuple)) or len(it) < 2:
-                continue
-            poly4 = _norm_poly(it[0])
-            if poly4 is None:
-                continue
-            txt_score = it[1]
-            if isinstance(txt_score, (list, tuple)) and len(txt_score) >= 2:
-                rec_polys.append(poly4)
-                rec_texts.append(str(txt_score[0]))
-                rec_scores.append(_as_float(txt_score[1], 0.0))
+        bbox = poly_to_bbox(poly4)
+        cx, cy = bbox_center(bbox)
+        if not any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
+            continue
 
-    return {"input_path": input_path, "rec_polys": rec_polys, "rec_texts": rec_texts, "rec_scores": rec_scores}
+        text = ocr_texts[idx] if idx < len(ocr_texts) else ""
+        text = (text or "").strip()
+        if not text:
+            continue
+
+        rec_polys.append(poly4)
+        rec_texts.append(text)
+        rec_scores.append(score)
+
+    return rec_polys, rec_texts, rec_scores
 
 
 # -----------------------------
@@ -329,7 +399,10 @@ def translate_texts_with_openai(
     except Exception as exc:
         raise RuntimeError("openai package is required for translation.") from exc
 
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(
+        base_url="https://bloom-checks-frog-boost.trycloudflare.com/v1",
+        api_key="ollama",
+    )
     cache = cache if cache is not None else {}
 
     def normalize_line(text: str) -> str:
@@ -415,7 +488,7 @@ def translate_texts_with_openai(
 def get_pdf_page_size_pt(pdf_path: Path, page_index_0based: int) -> Tuple[float, float]:
     doc = fitz.open(pdf_path)
     if page_index_0based < 0 or page_index_0based >= doc.page_count:
-        raise ValueError(f"page_index 超出範圍：0~{doc.page_count-1}")
+        raise ValueError(f"page_index out of range: 0~{doc.page_count-1}")
     page = doc.load_page(page_index_0based)
     r = page.rect
     w_pt, h_pt = float(r.width), float(r.height)
@@ -430,16 +503,9 @@ def px_poly_to_pymupdf_pt_poly(
     page_w_pt: float,
     page_h_pt: float,
 ) -> list[list[float]]:
-    # 重要：PyMuPDF 頁面座標原點左上、y 往下，因此不做 y 翻轉
     sx = page_w_pt / img_w_px
     sy = page_h_pt / img_h_px
     return [[p[0] * sx, p[1] * sy] for p in poly_px]
-
-
-def poly_to_bbox(poly: list[list[float]]) -> list[float]:
-    xs = [p[0] for p in poly]
-    ys = [p[1] for p in poly]
-    return [min(xs), min(ys), max(xs), max(ys)]
 
 
 def add_pdf_coords_to_json(
@@ -449,9 +515,7 @@ def add_pdf_coords_to_json(
 ) -> dict[str, Any]:
     img_path = Path(ocr_data["input_path"])
     if not img_path.exists():
-        # 若 input_path 是相對路徑或不含資料夾，則以 json 所在資料夾或 images_dir 處理
-        # 這裡先保持原樣，後續只需要尺寸，所以找不到時就報錯，避免 silently 造成錯位
-        raise FileNotFoundError(f"找不到 input_path 指向的圖片：{img_path}")
+        raise FileNotFoundError(f"Missing input image: {img_path}")
 
     with Image.open(img_path) as im:
         img_w_px, img_h_px = im.size
@@ -479,83 +543,188 @@ def add_pdf_coords_to_json(
 
 
 # -----------------------------
-# Step 4) Overlay debug PDF
+# Step 4) Overlay debug PDF (PPStructure flow)
 # -----------------------------
+def overlay_one_page(
+    page: fitz.Page,
+    data: dict[str, Any],
+    img_w_px: int,
+    img_h_px: int,
+    fontfile: str | None,
+    draw_boxes: bool,
+    draw_text: bool,
+    paragraph_min_fs: float,
+    paragraph_clip_ellipsis: bool,
+    skip_text_inside_table: bool,
+    min_line_score: float,
+    table_fallback_layout: bool,
+) -> None:
+    tables = load_table_bboxes_from_parsing(data)
+    if table_fallback_layout and not tables:
+        tables = load_table_bboxes_fallback_layout(data)
+    table_bboxes = [t["bbox"] for t in tables]
+
+    dbg_shape = page.new_shape() if draw_boxes else None
+
+    for blk in data.get("parsing_res_list", []):
+        if blk.get("block_label") != "text":
+            continue
+        bb_px = blk.get("block_bbox")
+        if not (isinstance(bb_px, list) and len(bb_px) == 4):
+            continue
+
+        content = normalize_paragraph_text(blk.get("block_content", ""))
+        if not content:
+            continue
+
+        if skip_text_inside_table and table_bboxes:
+            cx, cy = bbox_center((bb_px[0], bb_px[1], bb_px[2], bb_px[3]))
+            if any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
+                continue
+
+        rect = px_bbox_to_rect(bb_px, img_w_px, img_h_px, page)
+
+        if dbg_shape is not None:
+            dbg_shape.draw_rect(rect)
+            dbg_shape.finish(color=(1, 0, 0), width=0.6)
+
+        if draw_text:
+            fs_max = min(14.0, max(paragraph_min_fs, rect.height * 0.28))
+            info = insert_paragraph_autowrap_shrink(
+                page=page,
+                rect=rect,
+                text=content,
+                fontfile=fontfile,
+                max_fs=fs_max,
+                min_fs=paragraph_min_fs,
+                align=0,
+                clip_ellipsis=paragraph_clip_ellipsis,
+            )
+            if not info.get("ok", True):
+                print("[WARN] paragraph overflow:", "page=", page.number, "len=", len(content), "bbox_px=", bb_px)
+
+    overall = data.get("overall_ocr_res", {}) or data.get("overall_ocr", {})
+    rec_polys = overall.get("rec_polys", [])
+    rec_texts = overall.get("rec_texts", [])
+    rec_scores = overall.get("rec_scores", [])
+
+    hit = 0
+    for idx, poly in enumerate(rec_polys):
+        if not (isinstance(poly, list) and len(poly) >= 4):
+            continue
+        if not table_bboxes:
+            continue
+
+        sc = _as_float(rec_scores[idx], 0.0) if idx < len(rec_scores) else 0.0
+        if sc < min_line_score:
+            continue
+
+        try:
+            poly4 = [[float(p[0]), float(p[1])] for p in poly[:4]]
+        except Exception:
+            continue
+
+        bbox = poly_to_bbox(poly4)
+        cx, cy = bbox_center(bbox)
+        if not any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
+            continue
+
+        text = rec_texts[idx] if idx < len(rec_texts) else ""
+        text = (text or "").strip()
+        if not text:
+            continue
+
+        bb_px = [bbox[0], bbox[1], bbox[2], bbox[3]]
+        rect = px_bbox_to_rect(bb_px, img_w_px, img_h_px, page)
+
+        if dbg_shape is not None:
+            dbg_shape.draw_rect(rect)
+            dbg_shape.finish(color=(0, 0.6, 0), width=0.6)
+
+        if draw_text:
+            x0, y0, x1, y1 = rect.x0, rect.y0, rect.x1, rect.y1
+            fs = max(4.0, min(12.0, (y1 - y0) * 0.9))
+            pt = fitz.Point(x0, y1 - fs * 0.2 - 10)
+            page.insert_text(
+                pt,
+                text,
+                fontname="helv",
+                fontsize=fs,
+                color=(0, 0, 1),
+                overlay=True,
+            )
+            hit += 1
+
+    if dbg_shape is not None:
+        dbg_shape.commit()
+
+    print(f"[DEBUG] page={page.number} tables={len(table_bboxes)} table_line_hits={hit}")
+
+
 def overlay_debug_pdf(
     pdf_path: Path,
-    per_page_json_paths: list[Path],
+    pp_json_paths: list[Path],
+    images_dir: Path,
     out_pdf_path: Path,
-    draw_boxes: bool = True,
-    draw_text: bool = True,
-    min_score: float = 0.0,
+    fontfile: str | None,
+    draw_boxes: bool,
+    draw_text: bool,
+    paragraph_min_fs: float,
+    paragraph_clip_ellipsis: bool,
+    skip_text_inside_table: bool,
+    min_line_score: float,
+    table_fallback_layout: bool,
 ) -> None:
     doc = fitz.open(pdf_path)
 
-    for js_path in per_page_json_paths:
+    for js_path in pp_json_paths:
         data = json.loads(js_path.read_text(encoding="utf-8"))
-
-        page_idx = int(data.get("page_index_0based", 0))
-        if page_idx < 0 or page_idx >= doc.page_count:
-            continue
-
-        pdf_boxes = data.get("pdf_boxes", [])
-        rec_texts = data.get("rec_texts", [])
-        rec_scores = data.get("rec_scores", [])
-
-        page = doc.load_page(page_idx)
-        shape = page.new_shape()
-
-        for box, text, score in zip(pdf_boxes, rec_texts, rec_scores):
-            if float(score) < min_score:
+        input_path = data.get("input_path")
+        if not input_path:
+            guess = images_dir / f"{js_path.stem}.png"
+            if guess.exists():
+                input_path = str(guess)
+            else:
                 continue
 
-            rect = fitz.Rect(box[0], box[1], box[2], box[3])
+        img_path = resolve_image_path(str(input_path), js_path, images_dir)
+        if not img_path.exists():
+            fallback_png = images_dir / f"{js_path.stem}.png"
+            if fallback_png.exists():
+                img_path = fallback_png
+            else:
+                img_path = images_dir / f"{js_path.stem}.jpg"
+        page_idx = infer_page_index_from_input_path(str(img_path))
+        if page_idx is None:
+            page_idx = infer_page_index_from_stem(js_path.stem)
+        if page_idx is None or page_idx < 0 or page_idx >= doc.page_count:
+            continue
 
-            if draw_boxes:
-                shape.draw_rect(rect)
-                shape.finish(color=(1, 0, 0), width=0.7)
+        if not img_path.exists():
+            raise FileNotFoundError(f"Missing input image: {img_path}")
 
-            if draw_text and (text or "").strip():
-                box_h = max(1.0, rect.height)
-                fs = min(18.0, max(5.0, box_h * 0.7))
+        with Image.open(img_path) as im:
+            img_w_px, img_h_px = im.size
 
-                ok = False
-                for _ in range(30):
-                    rc = shape.insert_textbox(
-                        rect,
-                        text,
-                        fontname="helv",
-                        fontsize=fs,
-                        color=(0, 0, 1),
-                        align=0,
-                    )
-                    if rc >= 0:
-                        ok = True
-                        break
-                    fs -= 0.8
-
-                if not ok:
-                    shape.insert_textbox(
-                        rect,
-                        text,
-                        fontname="helv",
-                        fontsize=4.0,
-                        color=(0, 0, 1),
-                        align=0,
-                    )
-
-        shape.commit()
+        page = doc.load_page(page_idx)
+        overlay_one_page(
+            page=page,
+            data=data,
+            img_w_px=img_w_px,
+            img_h_px=img_h_px,
+            fontfile=fontfile,
+            draw_boxes=draw_boxes,
+            draw_text=draw_text,
+            paragraph_min_fs=paragraph_min_fs,
+            paragraph_clip_ellipsis=paragraph_clip_ellipsis,
+            skip_text_inside_table=skip_text_inside_table,
+            min_line_score=min_line_score,
+            table_fallback_layout=table_fallback_layout,
+        )
 
     out_pdf_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(out_pdf_path.as_posix())
     doc.close()
-
-
-def infer_page_no_1based_from_filename(png_path: Path) -> int | None:
-    m = re.search(r"_p(\d{4,})\.png$", png_path.name, re.IGNORECASE)
-    if not m:
-        return None
-    return int(m.group(1))
 
 
 def run_pipeline(
@@ -576,12 +745,25 @@ def run_pipeline(
     progress_cb: Callable[[str, int, int, str], None] | None = None,
     cancel_event: Any | None = None,
     use_per_image_ocr: bool = False,
+    fontfile: str | None = DEFAULT_FONTFILE,
+    paragraph_min_fs: float = 4.0,
+    paragraph_clip_ellipsis: bool = False,
+    skip_text_inside_table: bool = False,
+    min_line_score: float = 0.0,
+    table_fallback_layout: bool = False,
 ) -> dict[str, Any]:
     img_dir = out_root / "images"
-    official_json_dir = out_root / "official_json"
+    pp_json_dir = out_root / "pp_json"
     norm_json_dir = out_root / "ocr_json"
 
-    # 1) PDF -> PNG
+    if use_per_image_ocr:
+        pass
+
+    fontfile_path = Path(fontfile) if fontfile else None
+    if fontfile_path is not None and not fontfile_path.exists():
+        print(f"[WARN] fontfile not found, fallback to built-in font: {fontfile_path}")
+        fontfile_path = None
+
     png_paths = pdf_to_pngs(
         pdf_path,
         img_dir,
@@ -592,58 +774,60 @@ def run_pipeline(
         cancel_event=cancel_event,
     )
 
-    # 2) official demo style OCR
     if cancel_event is not None and cancel_event.is_set():
         raise PipelineCancelled("Cancelled before OCR.")
-    if use_per_image_ocr or progress_cb or cancel_event is not None:
-        official_json_paths = run_paddleocr_on_images(
-            png_paths,
-            official_json_dir,
-            progress_cb=progress_cb,
-            cancel_event=cancel_event,
-        )
-    else:
-        official_json_paths = run_paddleocr_official_on_folder(img_dir, official_json_dir)
-        if progress_cb:
-            progress_cb("ocr", len(png_paths), len(png_paths), "OCR complete")
 
-    # 2.5) normalize JSON + add per-page json
+    pp_json_paths = run_ppstructurev3_predict(
+        png_paths,
+        pp_json_dir,
+        progress_cb=progress_cb,
+        cancel_event=cancel_event,
+    )
+
     norm_json_dir.mkdir(parents=True, exist_ok=True)
     per_page_with_coords_jsons: list[Path] = []
 
-    png_by_page: dict[int, Path] = {}
-    for p in png_paths:
-        page_no_1based = infer_page_no_1based_from_filename(p)
-        if page_no_1based is None:
-            continue
-        png_by_page[page_no_1based - 1] = p
-
-    total_pages = len(official_json_paths)
+    total_pages = len(pp_json_paths)
     translate_cache: dict[str, str] = {}
-    for idx, oj in enumerate(official_json_paths, start=1):
+    effective_min_line_score = max(min_score, min_line_score)
+
+    for idx, js_path in enumerate(pp_json_paths, start=1):
         if cancel_event is not None and cancel_event.is_set():
             raise PipelineCancelled("Cancelled during normalization.")
-        fallback = None
-        m = re.search(r"_p(\d{4,})", oj.stem, re.IGNORECASE)
-        if m:
-            page_no_1based = int(m.group(1))
-            fallback_png = png_by_page.get(page_no_1based - 1)
-            if fallback_png:
-                fallback = str(fallback_png)
 
-        ocr_data = normalize_official_json_to_rec_format(oj, fallback_input_path=fallback)
+        data = json.loads(js_path.read_text(encoding="utf-8"))
+        input_path = data.get("input_path") or ""
+        img_path = resolve_image_path(str(input_path), js_path, img_dir) if input_path else img_dir / f"{js_path.stem}.png"
+        if not img_path.exists():
+            fallback_png = img_dir / f"{js_path.stem}.png"
+            if fallback_png.exists():
+                img_path = fallback_png
+            else:
+                img_path = img_dir / f"{js_path.stem}.jpg"
+        if not img_path.exists():
+            raise FileNotFoundError(f"Missing input image: {img_path}")
 
-        page_idx_0based = None
-        ip = Path(ocr_data["input_path"]).name
-        m2 = re.search(r"_p(\d{4,})\.png$", ip, re.IGNORECASE)
-        if m2:
-            page_idx_0based = int(m2.group(1)) - 1
-
+        page_idx_0based = infer_page_index_from_input_path(str(img_path))
+        if page_idx_0based is None:
+            page_idx_0based = infer_page_index_from_stem(js_path.stem)
         if page_idx_0based is None:
             continue
 
-        ocr_data["page_index_0based"] = page_idx_0based
-        ocr_data["page_no_1based"] = page_idx_0based + 1
+        rec_polys, rec_texts, rec_scores = extract_rec_entries_from_ppstructure(
+            data,
+            skip_text_inside_table=skip_text_inside_table,
+            min_line_score=effective_min_line_score,
+            table_fallback_layout=table_fallback_layout,
+        )
+
+        ocr_data = {
+            "input_path": str(img_path),
+            "page_index_0based": page_idx_0based,
+            "page_no_1based": page_idx_0based + 1,
+            "rec_polys": rec_polys,
+            "rec_texts": rec_texts,
+            "rec_scores": rec_scores,
+        }
 
         if progress_cb and enable_translate:
             progress_cb("translate", idx, total_pages, f"Translate page {idx}/{total_pages}")
@@ -676,18 +860,24 @@ def run_pipeline(
         progress_cb("overlay", 0, 1, "Building overlay PDF")
     overlay_debug_pdf(
         pdf_path=pdf_path,
-        per_page_json_paths=per_page_with_coords_jsons,
+        pp_json_paths=pp_json_paths,
+        images_dir=img_dir,
         out_pdf_path=debug_pdf,
+        fontfile=str(fontfile_path) if fontfile_path else None,
         draw_boxes=draw_boxes,
         draw_text=draw_text,
-        min_score=min_score,
+        paragraph_min_fs=paragraph_min_fs,
+        paragraph_clip_ellipsis=paragraph_clip_ellipsis,
+        skip_text_inside_table=skip_text_inside_table,
+        min_line_score=effective_min_line_score,
+        table_fallback_layout=table_fallback_layout,
     )
     if progress_cb:
         progress_cb("overlay", 1, 1, "Overlay PDF ready")
 
     return {
         "images_dir": img_dir,
-        "official_json_dir": official_json_dir,
+        "official_json_dir": pp_json_dir,
         "norm_json_dir": norm_json_dir,
         "debug_pdf": debug_pdf,
         "per_page_jsons": per_page_with_coords_jsons,
@@ -695,15 +885,21 @@ def run_pipeline(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PDF→PNG→(官方 PaddleOCR predict)→座標換算→Overlay Debug PDF")
-    parser.add_argument("--pdf", required=True, help="原始 PDF 路徑")
-    parser.add_argument("--out", default="out", help="輸出根目錄")
-    parser.add_argument("--dpi", type=int, default=300, help="PDF 轉圖 DPI（建議 200~300）")
-    parser.add_argument("--start", type=int, default=1, help="起始頁（從 1 開始）")
-    parser.add_argument("--end", type=int, default=None, help="結束頁（含），不填到最後")
-    parser.add_argument("--min-score", type=float, default=0.0, help="Overlay 時最低信心分數門檻")
-    parser.add_argument("--no-box", action="store_true", help="不畫框線")
-    parser.add_argument("--no-text", action="store_true", help="不畫文字（只畫框線）")
+    parser = argparse.ArgumentParser(description="PDF -> PNG -> PPStructureV3 -> overlay debug PDF")
+    parser.add_argument("--pdf", required=True, help="Input PDF path")
+    parser.add_argument("--out", default="out", help="Output directory")
+    parser.add_argument("--dpi", type=int, default=300, help="PDF render DPI")
+    parser.add_argument("--start", type=int, default=1, help="Start page (1-based)")
+    parser.add_argument("--end", type=int, default=None, help="End page (inclusive)")
+    parser.add_argument("--min-score", type=float, default=0.0, help="Minimum table line score for overlay")
+    parser.add_argument("--no-box", action="store_true", help="Do not draw debug boxes")
+    parser.add_argument("--no-text", action="store_true", help="Do not draw debug text")
+    parser.add_argument("--fontfile", default=DEFAULT_FONTFILE, help="Font file path for paragraph text")
+    parser.add_argument("--paragraph-min-fs", type=float, default=4.0, help="Paragraph min font size")
+    parser.add_argument("--paragraph-clip-ellipsis", action="store_true", help="Paragraph ellipsis fallback")
+    parser.add_argument("--skip-text-inside-table", action="store_true", help="Skip paragraph text inside tables")
+    parser.add_argument("--min-line-score", type=float, default=0.0, help="Minimum table line score")
+    parser.add_argument("--table-fallback-layout", action="store_true", help="Use layout table boxes if parsing is empty")
     args = parser.parse_args()
 
     pdf_path = Path(args.pdf)
@@ -719,11 +915,17 @@ def main() -> None:
         draw_boxes=not args.no_box,
         draw_text=not args.no_text,
         enable_translate=False,
+        fontfile=args.fontfile,
+        paragraph_min_fs=args.paragraph_min_fs,
+        paragraph_clip_ellipsis=args.paragraph_clip_ellipsis,
+        skip_text_inside_table=args.skip_text_inside_table,
+        min_line_score=args.min_line_score,
+        table_fallback_layout=args.table_fallback_layout,
     )
 
     print("Done.")
     print(f"- Images:        {result['images_dir'].resolve()}")
-    print(f"- Official JSON: {result['official_json_dir'].resolve()}")
+    print(f"- PP JSON:       {result['official_json_dir'].resolve()}")
     print(f"- Normalized:    {result['norm_json_dir'].resolve()}")
     print(f"- Debug PDF:     {result['debug_pdf'].resolve()}")
 
