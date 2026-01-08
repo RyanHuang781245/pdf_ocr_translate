@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import uuid
 from pathlib import Path
 from typing import Any
@@ -38,13 +39,84 @@ def _job_dir(job_id: str) -> Path:
     return JOB_ROOT / job_id
 
 
-def _load_page_data(page_json_path: Path) -> dict[str, Any]:
-    data = json.loads(page_json_path.read_text(encoding="utf-8"))
-    rec_polys = data.get("rec_polys", []) or []
-    rec_texts = data.get("rec_texts", []) or []
-    edit_texts = data.get("edit_texts", []) or []
-    rec_scores = data.get("rec_scores", []) or []
-    count = len(rec_polys)
+def _job_timestamp(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except FileNotFoundError:
+        return 0.0
+
+
+def _load_edits_map(job_dir: Path) -> dict[int, list[dict[str, Any]]]:
+    edits_path = job_dir / "edits.json"
+    if not edits_path.exists():
+        return {}
+    data = json.loads(edits_path.read_text(encoding="utf-8"))
+    pages: dict[int, list[dict[str, Any]]] = {}
+    for page in data.get("pages", []):
+        if not isinstance(page, dict):
+            continue
+        page_idx = int(page.get("page_index_0based", 0))
+        boxes = page.get("boxes", [])
+        if not isinstance(boxes, list):
+            boxes = []
+        pages[page_idx] = [box for box in boxes if isinstance(box, dict)]
+    return pages
+
+
+def _bbox_to_poly(bbox: dict[str, Any] | list[float] | tuple[float, float, float, float]) -> list[list[float]]:
+    if isinstance(bbox, dict):
+        x = float(bbox.get("x", 0.0))
+        y = float(bbox.get("y", 0.0))
+        w = float(bbox.get("w", 0.0))
+        h = float(bbox.get("h", 0.0))
+    elif isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+        x, y, w, h = [float(v) for v in bbox]
+    else:
+        return []
+    return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]]
+
+
+def _load_page_data(
+    page_json_path: Path,
+    edits_boxes: list[dict[str, Any]] | None = None,
+    data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if data is None:
+        data = json.loads(page_json_path.read_text(encoding="utf-8"))
+    if edits_boxes is not None:
+        rec_polys: list[list[list[float]]] = []
+        rec_texts: list[str] = []
+        edit_texts: list[str] = []
+        rec_scores: list[float] = []
+        font_sizes: list[float] = []
+        colors: list[str] = []
+        box_ids: list[int] = []
+        for box in edits_boxes:
+            if not isinstance(box, dict):
+                continue
+            if box.get("deleted"):
+                continue
+            poly = _bbox_to_poly(box.get("bbox"))
+            if not poly:
+                continue
+            text = str(box.get("text", ""))
+            rec_polys.append(poly)
+            rec_texts.append(text)
+            edit_texts.append(text)
+            rec_scores.append(1.0)
+            font_sizes.append(float(box.get("font_size") or 0.0))
+            colors.append(str(box.get("color") or "#1c3c5a"))
+            box_ids.append(int(box.get("id") or len(box_ids)))
+        count = len(rec_polys)
+    else:
+        rec_polys = data.get("rec_polys", []) or []
+        rec_texts = data.get("rec_texts", []) or []
+        edit_texts = data.get("edit_texts", []) or []
+        rec_scores = data.get("rec_scores", []) or []
+        font_sizes = []
+        colors = []
+        box_ids = []
+        count = len(rec_polys)
 
     if not edit_texts:
         edit_texts = list(rec_texts)
@@ -62,6 +134,9 @@ def _load_page_data(page_json_path: Path) -> dict[str, Any]:
         "rec_texts": rec_texts,
         "edit_texts": edit_texts,
         "rec_scores": rec_scores,
+        "font_sizes": font_sizes,
+        "colors": colors,
+        "box_ids": box_ids,
     }
 
 
@@ -286,10 +361,14 @@ def job_data(job_id: str):
     if not json_dir.exists():
         abort(404)
 
+    edits_map = _load_edits_map(job_dir)
     json_paths = sorted(json_dir.glob("*_res_with_pdf_coords.json"))
     pages = []
     for path in json_paths:
-        page = _load_page_data(path)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        page_idx_guess = int(data.get("page_index_0based", 0))
+        edits_boxes = edits_map.get(page_idx_guess) if page_idx_guess in edits_map else None
+        page = _load_page_data(path, edits_boxes=edits_boxes, data=data)
         if not page["input_image"]:
             continue
         page["image_url"] = url_for("job_file", job_id=job_id, filename=f"images/{page['input_image']}")
@@ -303,6 +382,58 @@ def job_data(job_id: str):
         "pages": pages,
     }
     return jsonify(payload)
+
+
+@app.route("/api/jobs", methods=["GET"])
+def list_jobs():
+    JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    jobs = []
+    for job_dir in sorted(JOB_ROOT.iterdir()):
+        if not job_dir.is_dir():
+            continue
+        job_id = job_dir.name
+        if not _safe_job_id(job_id):
+            continue
+
+        pdf_path = job_dir / f"{job_id}.pdf"
+        debug_pdf_path = job_dir / "overlay_debug.pdf"
+        edited_pdf_path = job_dir / "edited.pdf"
+
+        created_at = _job_timestamp(pdf_path) or _job_timestamp(job_dir)
+        updated_at = max(_job_timestamp(debug_pdf_path), _job_timestamp(edited_pdf_path), created_at)
+
+        jobs.append(
+            {
+                "job_id": job_id,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "status": "ready" if debug_pdf_path.exists() else "processing",
+                "editor_url": url_for("editor", job_id=job_id),
+                "debug_pdf_url": url_for("job_file", job_id=job_id, filename="overlay_debug.pdf")
+                if debug_pdf_path.exists()
+                else None,
+                "edited_pdf_url": url_for("job_file", job_id=job_id, filename="edited.pdf")
+                if edited_pdf_path.exists()
+                else None,
+            }
+        )
+
+    jobs.sort(key=lambda item: item["updated_at"], reverse=True)
+    return jsonify({"jobs": jobs})
+
+
+@app.route("/api/job/<job_id>", methods=["DELETE"])
+def delete_job(job_id: str):
+    if not _safe_job_id(job_id):
+        abort(404)
+    job_dir = _job_dir(job_id)
+    if not job_dir.exists():
+        return jsonify({"ok": True, "deleted": False})
+    try:
+        shutil.rmtree(job_dir)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    return jsonify({"ok": True, "deleted": True})
 
 
 @app.route("/api/job/<job_id>/save", methods=["POST"])

@@ -3,6 +3,7 @@ const state = {
   selected: null,
   dragging: null,
   resizing: null,
+  previewMode: "debug",
   selectedBoxes: new Set(),
   selecting: null,
   lastShiftKey: false,
@@ -15,10 +16,15 @@ const fontSizeEl = document.getElementById("fontSize");
 const fontSizeNumberEl = document.getElementById("fontSizeNumber");
 const fontColorEl = document.getElementById("fontColor");
 const deleteBtn = document.getElementById("deleteBox");
+const addBoxBtn = document.getElementById("addBox");
 const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const pagesEl = document.getElementById("pages");
 const editedLink = document.getElementById("editedPdfLink");
+const previewEl = document.getElementById("pdfPreview");
+const previewDebugBtn = document.getElementById("previewDebug");
+const previewEditedBtn = document.getElementById("previewEdited");
+const debugLinkEl = document.querySelector(".topbar-actions a[href*='overlay_debug.pdf']");
 
 function setStatus(message) {
   if (statusEl) {
@@ -117,6 +123,28 @@ function updateEditedLink(url) {
   if (url) {
     editedLink.href = url;
     editedLink.style.display = "inline-flex";
+    if (previewEditedBtn) {
+      previewEditedBtn.disabled = false;
+    }
+    if (state.previewMode === "edited") {
+      setPreviewMode("edited", url);
+    }
+  }
+}
+
+function setPreviewMode(mode, editedUrl) {
+  if (!previewEl) return;
+  const debugUrl = debugLinkEl?.href || previewEl.dataset.debugUrl || previewEl.getAttribute("data") || "";
+  if (mode === "edited" && editedUrl) {
+    previewEl.setAttribute("data", editedUrl);
+    previewEditedBtn?.classList.add("is-active");
+    previewDebugBtn?.classList.remove("is-active");
+    state.previewMode = "edited";
+  } else {
+    previewEl.setAttribute("data", debugUrl);
+    previewDebugBtn?.classList.add("is-active");
+    previewEditedBtn?.classList.remove("is-active");
+    state.previewMode = "debug";
   }
 }
 
@@ -151,12 +179,15 @@ function buildState(data) {
       const bbox = polyToBbox(poly);
       const text = page.edit_texts[index] ?? page.rec_texts[index] ?? "";
       const baseSize = Math.max(10, Math.min(28, bbox.h * 0.6));
+      const fontSize = Number(page.font_sizes?.[index]);
+      const color = page.colors?.[index] ?? "#1c3c5a";
+      const id = page.box_ids?.[index] ?? index;
       return {
-        id: index,
+        id,
         bbox,
         text,
-        fontSize: baseSize,
-        color: "#1c3c5a",
+        fontSize: fontSize > 0 ? fontSize : baseSize,
+        color,
         deleted: false,
         element: null,
       };
@@ -493,69 +524,120 @@ function renderPages() {
     wrap.addEventListener("pointercancel", endRangeSelection);
 
     page.boxes.forEach((box, index) => {
-      const boxEl = document.createElement("div");
-      boxEl.className = "text-box";
-      boxEl.style.left = "0px";
-      boxEl.style.top = "0px";
-
-      const textEl = document.createElement("div");
-      textEl.className = "text";
-      textEl.contentEditable = "true";
-      textEl.spellcheck = false;
-      textEl.textContent = box.text;
-
-      boxEl.appendChild(textEl);
-      overlay.appendChild(boxEl);
-
-      boxEl.addEventListener("pointerdown", (event) => {
-        state.lastShiftKey = event.shiftKey;
-        if (event.target.closest(".resize-handle")) {
-          return;
-        }
-        if (event.target.closest(".text")) {
-          selectBox(pageIdx, index, event.shiftKey);
-          return;
-        }
-        if (event.shiftKey) {
-          const key = boxKey(pageIdx, index);
-          if (!state.selectedBoxes.has(key)) {
-            state.selectedBoxes.add(key);
-            applySelectionClasses();
-          }
-          onDragStart(event, pageIdx, index, true);
-          return;
-        }
-        onDragStart(event, pageIdx, index);
-      });
-      boxEl.addEventListener("pointermove", onDragMove);
-      boxEl.addEventListener("pointerup", onDragEnd);
-      boxEl.addEventListener("pointercancel", onDragEnd);
-
-      textEl.addEventListener("focus", () => {
-        selectBox(pageIdx, index, state.lastShiftKey);
-        state.lastShiftKey = false;
-      });
-      textEl.addEventListener("input", () => {
-        const sanitized = textEl.textContent.replace(/\n+/g, " ").trim();
-        box.text = sanitized;
-        if (textEl.textContent !== sanitized) {
-          textEl.textContent = sanitized;
-        }
-      });
-
-      const handleEl = document.createElement("div");
-      handleEl.className = "resize-handle";
-      boxEl.appendChild(handleEl);
-
-      handleEl.addEventListener("pointerdown", (event) => onResizeStart(event, pageIdx, index));
-      handleEl.addEventListener("pointermove", onResizeMove);
-      handleEl.addEventListener("pointerup", onResizeEnd);
-      handleEl.addEventListener("pointercancel", onResizeEnd);
-
-      box.element = boxEl;
-      updateBoxElement(page, box);
+      createBoxElement(pageIdx, index);
     });
   });
+}
+
+function createBoxElement(pageIdx, boxIdx) {
+  const page = state.pages[pageIdx];
+  const box = page?.boxes[boxIdx];
+  if (!page || !box || !page.overlay) return null;
+
+  const boxEl = document.createElement("div");
+  boxEl.className = "text-box";
+  boxEl.style.left = "0px";
+  boxEl.style.top = "0px";
+
+  const textEl = document.createElement("div");
+  textEl.className = "text";
+  textEl.contentEditable = "true";
+  textEl.spellcheck = false;
+  textEl.textContent = box.text;
+
+  boxEl.appendChild(textEl);
+  page.overlay.appendChild(boxEl);
+
+  boxEl.addEventListener("pointerdown", (event) => {
+    state.lastShiftKey = event.shiftKey;
+    if (event.target.closest(".resize-handle")) {
+      return;
+    }
+    if (event.target.closest(".text")) {
+      selectBox(pageIdx, boxIdx, event.shiftKey);
+      return;
+    }
+    if (event.shiftKey) {
+      const key = boxKey(pageIdx, boxIdx);
+      if (!state.selectedBoxes.has(key)) {
+        state.selectedBoxes.add(key);
+        applySelectionClasses();
+      }
+      onDragStart(event, pageIdx, boxIdx, true);
+      return;
+    }
+    onDragStart(event, pageIdx, boxIdx);
+  });
+  boxEl.addEventListener("pointermove", onDragMove);
+  boxEl.addEventListener("pointerup", onDragEnd);
+  boxEl.addEventListener("pointercancel", onDragEnd);
+
+  textEl.addEventListener("focus", () => {
+    selectBox(pageIdx, boxIdx, state.lastShiftKey);
+    state.lastShiftKey = false;
+  });
+  textEl.addEventListener("input", () => {
+    const sanitized = textEl.textContent.replace(/\n+/g, " ").trim();
+    box.text = sanitized;
+    if (textEl.textContent !== sanitized) {
+      textEl.textContent = sanitized;
+    }
+  });
+
+  const handleEl = document.createElement("div");
+  handleEl.className = "resize-handle";
+  boxEl.appendChild(handleEl);
+
+  handleEl.addEventListener("pointerdown", (event) => onResizeStart(event, pageIdx, boxIdx));
+  handleEl.addEventListener("pointermove", onResizeMove);
+  handleEl.addEventListener("pointerup", onResizeEnd);
+  handleEl.addEventListener("pointercancel", onResizeEnd);
+
+  box.element = boxEl;
+  updateBoxElement(page, box);
+  return textEl;
+}
+
+function addNewBox() {
+  if (!state.pages.length) return;
+  const targetPageIdx = state.selected?.pageIdx ?? 0;
+  const page = state.pages[targetPageIdx];
+  if (!page) return;
+
+  const pageWidth = page.imageSize?.[0] ?? 800;
+  const pageHeight = page.imageSize?.[1] ?? 1000;
+  const defaultW = Math.min(220, pageWidth * 0.4);
+  const defaultH = Math.min(48, pageHeight * 0.1);
+
+  let x = 24;
+  let y = 24;
+  if (state.selected && state.selected.pageIdx === targetPageIdx) {
+    const selBox = page.boxes[state.selected.boxIdx];
+    if (selBox) {
+      x = selBox.bbox.x;
+      y = selBox.bbox.y + selBox.bbox.h + 12;
+    }
+  }
+  if (x + defaultW > pageWidth) x = Math.max(0, pageWidth - defaultW - 12);
+  if (y + defaultH > pageHeight) y = Math.max(0, pageHeight - defaultH - 12);
+
+  const nextId = page.boxes.length ? Math.max(...page.boxes.map((box) => Number(box.id) || 0)) + 1 : 0;
+  const box = {
+    id: nextId,
+    bbox: { x, y, w: defaultW, h: defaultH },
+    text: "",
+    fontSize: Math.max(10, Math.min(28, defaultH * 0.6)),
+    color: "#1c3c5a",
+    deleted: false,
+    element: null,
+  };
+  page.boxes.push(box);
+  const textEl = createBoxElement(targetPageIdx, page.boxes.length - 1);
+  selectBox(targetPageIdx, page.boxes.length - 1);
+  if (textEl) {
+    textEl.focus();
+  }
+  setStatus("Text box added.");
 }
 
 function buildSavePayload() {
@@ -674,6 +756,12 @@ function bindControls() {
     });
   }
 
+  if (addBoxBtn) {
+    addBoxBtn.addEventListener("click", () => {
+      addNewBox();
+    });
+  }
+
   if (saveBtn) {
     saveBtn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -685,6 +773,20 @@ function bindControls() {
     downloadBtn.addEventListener("click", (event) => {
       event.preventDefault();
       saveEdits(true);
+    });
+  }
+
+  if (previewDebugBtn) {
+    previewDebugBtn.addEventListener("click", () => {
+      setPreviewMode("debug");
+    });
+  }
+
+  if (previewEditedBtn) {
+    previewEditedBtn.addEventListener("click", () => {
+      if (!previewEditedBtn.disabled && editedLink?.href) {
+        setPreviewMode("edited", editedLink.href);
+      }
     });
   }
 
@@ -712,6 +814,13 @@ async function init() {
   buildState(data);
   renderPages();
   updateEditedLink(data.edited_pdf_url);
+  if (previewEditedBtn) {
+    if (data.edited_pdf_url) {
+      previewEditedBtn.disabled = false;
+    } else {
+      previewEditedBtn.disabled = true;
+    }
+  }
   setStatus("Ready.");
 }
 

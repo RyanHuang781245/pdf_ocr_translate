@@ -56,6 +56,17 @@
         </p>
         <p class="hint">Translation requires <code>OPENAI_API_KEY</code> in your environment.</p>
       </section>
+      <section class="upload-card jobs-board">
+        <div class="jobs-header">
+          <div>
+            <p class="eyebrow">Manage</p>
+            <h2>Processed files</h2>
+          </div>
+          <button id="jobsRefresh" class="ghost" type="button">Refresh</button>
+        </div>
+        <div id="jobsEmpty" class="hint">No processed files yet.</div>
+        <div id="jobsList" class="jobs-list"></div>
+      </section>
     </main>
     <div id="loadingOverlay" class="loading-overlay" hidden>
       <div class="loading-card">
@@ -77,6 +88,127 @@
           }
         });
       }
+
+      const jobsList = document.getElementById("jobsList");
+      const jobsEmpty = document.getElementById("jobsEmpty");
+      const jobsRefresh = document.getElementById("jobsRefresh");
+
+      function formatDate(ts) {
+        if (!ts) return "Unknown";
+        const date = new Date(ts * 1000);
+        return date.toLocaleString();
+      }
+
+      function renderJobs(jobs) {
+        if (!jobsList) return;
+        jobsList.innerHTML = "";
+        if (!jobs || jobs.length === 0) {
+          if (jobsEmpty) jobsEmpty.style.display = "block";
+          return;
+        }
+        if (jobsEmpty) jobsEmpty.style.display = "none";
+        jobs.forEach((job) => {
+          const card = document.createElement("article");
+          card.className = "job-card";
+
+          const title = document.createElement("div");
+          title.className = "job-title";
+          title.textContent = `Job ${job.job_id.slice(0, 8)}`;
+
+          const meta = document.createElement("div");
+          meta.className = "job-meta";
+          meta.textContent = `Updated: ${formatDate(job.updated_at)} · Status: ${job.status}`;
+
+          const actions = document.createElement("div");
+          actions.className = "job-actions";
+
+          if (job.status === "ready") {
+            const editLink = document.createElement("a");
+            editLink.href = job.editor_url;
+            editLink.textContent = "Edit";
+            editLink.className = "ghost";
+            actions.appendChild(editLink);
+          } else {
+            const pendingEdit = document.createElement("span");
+            pendingEdit.className = "job-muted";
+            pendingEdit.textContent = "Processing...";
+            actions.appendChild(pendingEdit);
+          }
+
+          if (job.debug_pdf_url) {
+            const debugLink = document.createElement("a");
+            debugLink.href = job.debug_pdf_url;
+            debugLink.textContent = "Debug PDF";
+            debugLink.className = "ghost";
+            debugLink.target = "_blank";
+            debugLink.rel = "noopener";
+            actions.appendChild(debugLink);
+          }
+
+          if (job.edited_pdf_url) {
+            const editedLink = document.createElement("a");
+            editedLink.href = job.edited_pdf_url;
+            editedLink.textContent = "Edited PDF";
+            editedLink.className = "ghost";
+            editedLink.target = "_blank";
+            editedLink.rel = "noopener";
+            actions.appendChild(editedLink);
+          } else {
+            const pending = document.createElement("span");
+            pending.className = "job-muted";
+            pending.textContent = "Edited PDF pending";
+            actions.appendChild(pending);
+          }
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.type = "button";
+          deleteBtn.className = "danger job-delete";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", async () => {
+            const ok = confirm(`Delete job ${job.job_id}? This cannot be undone.`);
+            if (!ok) return;
+            deleteBtn.disabled = true;
+            try {
+              const res = await fetch(`/api/job/${job.job_id}`, { method: "DELETE" });
+              if (!res.ok) {
+                alert("Delete failed. Please try again.");
+              }
+            } catch (error) {
+              alert("Delete failed. Please try again.");
+            } finally {
+              deleteBtn.disabled = false;
+              loadJobs();
+            }
+          });
+          actions.appendChild(deleteBtn);
+
+          card.appendChild(title);
+          card.appendChild(meta);
+          card.appendChild(actions);
+          jobsList.appendChild(card);
+        });
+      }
+
+      async function loadJobs() {
+        if (!jobsList) return;
+        jobsList.innerHTML = '<div class="hint">Loading...</div>';
+        try {
+          const res = await fetch("/api/jobs");
+          if (!res.ok) {
+            renderJobs([]);
+            return;
+          }
+          const payload = await res.json();
+          renderJobs(payload.jobs || []);
+        } catch (error) {
+          renderJobs([]);
+        }
+      }
+
+      if (jobsRefresh) {
+        jobsRefresh.addEventListener("click", loadJobs);
+      }
+      loadJobs();
     </script>
   </body>
 </html>

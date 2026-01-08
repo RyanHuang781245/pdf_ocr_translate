@@ -13,6 +13,7 @@
         <h1>OCR Overlay Editor</h1>
       </div>
       <div class="topbar-actions">
+        <a class="ghost" href="{{ url_for('index') }}">Back to upload</a>
         <a id="editedPdfLink" class="ghost" href="#" target="_blank" rel="noopener" style="display:none">Open edited PDF</a>
         <a class="ghost" href="{{ debug_pdf_url }}" target="_blank" rel="noopener">Open debug PDF</a>
         <button id="saveBtn" class="primary">Save edits</button>
@@ -35,7 +36,10 @@
             <input id="fontColor" type="color" value="#1c3c5a" />
           </label>
           <div class="button-row">
-            <button id="deleteBox" class="danger">Delete box</button>
+            <button id="addBox" class="ghost">Add TextBox</button>
+          </div>
+          <div class="button-row">
+            <button id="deleteBox" class="danger">Delete TextBox</button>
           </div>
         </section>
         <section>
@@ -52,7 +56,11 @@
       </aside>
       <section class="canvas">
         <div class="pdf-preview">
-          <object data="{{ debug_pdf_url }}" type="application/pdf">
+          <div class="preview-controls">
+            <button id="previewDebug" class="ghost is-active">Debug preview</button>
+            <button id="previewEdited" class="ghost" disabled>Edited preview</button>
+          </div>
+          <object id="pdfPreview" data="{{ debug_pdf_url }}" data-debug-url="{{ debug_pdf_url }}" type="application/pdf">
             <p>PDF preview is unavailable. <a href="{{ debug_pdf_url }}">Download PDF</a></p>
           </object>
         </div>
