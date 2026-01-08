@@ -2,6 +2,7 @@ const state = {
   pages: [],
   selected: null,
   dragging: null,
+  resizing: null,
   selectedBoxes: new Set(),
   selecting: null,
   lastShiftKey: false,
@@ -11,6 +12,7 @@ let controlsBound = false;
 
 const statusEl = document.getElementById("status");
 const fontSizeEl = document.getElementById("fontSize");
+const fontSizeNumberEl = document.getElementById("fontSizeNumber");
 const fontColorEl = document.getElementById("fontColor");
 const deleteBtn = document.getElementById("deleteBox");
 const saveBtn = document.getElementById("saveBtn");
@@ -51,7 +53,9 @@ function applySelectionClasses() {
 
 function syncInspectorFromBox(box) {
   if (!box) return;
-  if (fontSizeEl) fontSizeEl.value = Math.round(box.fontSize).toString();
+  const sizeValue = Math.round(box.fontSize).toString();
+  if (fontSizeEl) fontSizeEl.value = sizeValue;
+  if (fontSizeNumberEl) fontSizeNumberEl.value = sizeValue;
   if (fontColorEl) fontColorEl.value = box.color;
 }
 
@@ -254,6 +258,7 @@ function onDragStart(event, pageIdx, boxIndex, groupMode = false) {
 }
 
 function onDragMove(event) {
+  if (state.resizing) return;
   if (!state.dragging) return;
   const { pageIdx, startX, startY, group } = state.dragging;
   const page = state.pages[pageIdx];
@@ -284,6 +289,63 @@ function onDragEnd(event) {
     box.element.releasePointerCapture(event.pointerId);
   }
   state.dragging = null;
+}
+
+function onResizeStart(event, pageIdx, boxIdx) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const page = state.pages[pageIdx];
+  const box = page?.boxes[boxIdx];
+  if (!page || !box || box.deleted) return;
+  setSelection(pageIdx, boxIdx);
+  state.resizing = {
+    pageIdx,
+    boxIdx,
+    startX: event.clientX,
+    startY: event.clientY,
+    originW: box.bbox.w,
+    originH: box.bbox.h,
+    originX: box.bbox.x,
+    originY: box.bbox.y,
+  };
+  event.currentTarget.setPointerCapture(event.pointerId);
+}
+
+function onResizeMove(event) {
+  if (!state.resizing) return;
+  const { pageIdx, boxIdx, startX, startY, originW, originH, originX, originY } = state.resizing;
+  const page = state.pages[pageIdx];
+  const box = page?.boxes[boxIdx];
+  if (!page || !box) return;
+  const scale = page.scale || 1;
+  const dx = (event.clientX - startX) / scale;
+  const dy = (event.clientY - startY) / scale;
+  const minSize = 12;
+  let newW = Math.max(minSize, originW + dx);
+  let newH = Math.max(minSize, originH + dy);
+
+  if (page.imageSize && page.imageSize.length === 2) {
+    const maxW = page.imageSize[0] - originX;
+    const maxH = page.imageSize[1] - originY;
+    if (Number.isFinite(maxW)) newW = Math.min(newW, maxW);
+    if (Number.isFinite(maxH)) newH = Math.min(newH, maxH);
+  }
+
+  box.bbox.w = newW;
+  box.bbox.h = newH;
+  updateBoxElement(page, box);
+}
+
+function onResizeEnd(event) {
+  if (!state.resizing) return;
+  const { pageIdx, boxIdx } = state.resizing;
+  const page = state.pages[pageIdx];
+  const box = page?.boxes[boxIdx];
+  if (box?.element) {
+    box.element.releasePointerCapture(event.pointerId);
+  }
+  state.resizing = null;
 }
 
 function startRangeSelection(event, pageIdx) {
@@ -447,6 +509,9 @@ function renderPages() {
 
       boxEl.addEventListener("pointerdown", (event) => {
         state.lastShiftKey = event.shiftKey;
+        if (event.target.closest(".resize-handle")) {
+          return;
+        }
         if (event.target.closest(".text")) {
           selectBox(pageIdx, index, event.shiftKey);
           return;
@@ -477,6 +542,15 @@ function renderPages() {
           textEl.textContent = sanitized;
         }
       });
+
+      const handleEl = document.createElement("div");
+      handleEl.className = "resize-handle";
+      boxEl.appendChild(handleEl);
+
+      handleEl.addEventListener("pointerdown", (event) => onResizeStart(event, pageIdx, index));
+      handleEl.addEventListener("pointermove", onResizeMove);
+      handleEl.addEventListener("pointerup", onResizeEnd);
+      handleEl.addEventListener("pointercancel", onResizeEnd);
 
       box.element = boxEl;
       updateBoxElement(page, box);
@@ -547,15 +621,38 @@ async function saveEdits(shouldDownload = false) {
 function bindControls() {
   if (controlsBound) return;
   controlsBound = true;
+  const applyFontSize = (value) => {
+    if (!Number.isFinite(value)) return;
+    const minValue = Math.max(
+      Number(fontSizeEl?.min ?? value),
+      Number(fontSizeNumberEl?.min ?? value),
+    );
+    const maxValue = Math.min(
+      Number(fontSizeEl?.max ?? value),
+      Number(fontSizeNumberEl?.max ?? value),
+    );
+    const clamped = Math.max(minValue, Math.min(maxValue, value));
+    const displayValue = Math.round(clamped).toString();
+    if (fontSizeEl) fontSizeEl.value = displayValue;
+    if (fontSizeNumberEl) fontSizeNumberEl.value = displayValue;
+
+    const selected = getSelectedBoxes();
+    if (!selected.length) return;
+    selected.forEach(({ page, box }) => {
+      box.fontSize = clamped;
+      updateBoxElement(page, box);
+    });
+  };
+
   if (fontSizeEl) {
     fontSizeEl.addEventListener("input", () => {
-      const selected = getSelectedBoxes();
-      if (!selected.length) return;
-      const value = Number(fontSizeEl.value);
-      selected.forEach(({ page, box }) => {
-        box.fontSize = value;
-        updateBoxElement(page, box);
-      });
+      applyFontSize(Number(fontSizeEl.value));
+    });
+  }
+
+  if (fontSizeNumberEl) {
+    fontSizeNumberEl.addEventListener("input", () => {
+      applyFontSize(Number(fontSizeNumberEl.value));
     });
   }
 

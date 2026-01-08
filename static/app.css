@@ -110,6 +110,20 @@ input[type="color"] {
   font-family: var(--font-main);
 }
 
+.input-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.input-row input[type="range"] {
+  flex: 1;
+}
+
+.input-row input[type="number"] {
+  width: 4.5rem;
+}
+
 button,
 .ghost {
   font-family: var(--font-main);
@@ -182,6 +196,9 @@ button.primary:hover {
   border: 1px solid var(--edge);
   display: grid;
   gap: 1.5rem;
+  position: sticky;
+  top: 1.5rem;
+  align-self: start;
 }
 
 .panel h2 {
@@ -192,6 +209,7 @@ button.primary:hover {
 .button-row {
   display: flex;
   justify-content: flex-start;
+  margin-top: 0.6rem;
 }
 
 .status {
@@ -278,6 +296,8 @@ button.primary:hover {
   border-radius: 6px;
   cursor: move;
   user-select: none;
+  min-width: 20px;
+  min-height: 16px;
 }
 
 .text-box .text {
@@ -285,6 +305,11 @@ button.primary:hover {
   cursor: text;
   user-select: text;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .text-box.selected {
@@ -304,6 +329,19 @@ button.primary:hover {
 
 .text-box.is-deleted {
   display: none;
+}
+
+.resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 10px;
+  height: 10px;
+  background: var(--accent);
+  border: 2px solid #fff;
+  border-radius: 3px;
+  cursor: se-resize;
+  z-index: 3;
 }
 
 @keyframes rise {
@@ -366,5 +404,9 @@ button.primary:hover {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .panel {
+    position: static;
   }
 }

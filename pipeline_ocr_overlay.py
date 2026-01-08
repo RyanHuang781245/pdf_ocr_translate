@@ -644,7 +644,7 @@ def overlay_one_page(
         if draw_text:
             x0, y0, x1, y1 = rect.x0, rect.y0, rect.x1, rect.y1
             fs = max(4.0, min(12.0, (y1 - y0) * 0.9))
-            pt = fitz.Point(x0, y1 - fs * 0.2 - 10)
+            pt = fitz.Point(x0, y1 - fs * 0.2)
             page.insert_text(
                 pt,
                 text,
