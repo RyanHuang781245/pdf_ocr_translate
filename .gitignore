@@ -1,7 +1,9 @@
 *.pdf
 output/
 out/
+.vscode/
 .env
+.coverage
 *png
 *.jpg
 *.jpeg

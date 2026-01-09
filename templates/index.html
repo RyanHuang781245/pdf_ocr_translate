@@ -3,22 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AI 文件翻譯系統</title>
+    <title>文件翻譯系統</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
   <body class="home">
     <main class="shell">
       <header class="hero">
         <p class="eyebrow">PDF -> OCR -> Translate</p>
-        <h1>AI 文件翻譯系統</h1>
-        <p class="lede">
-          Upload a PDF, run PaddleOCR, and refine translations inside movable text boxes.
-        </p>
+        <h1>文件翻譯系統</h1>
       </header>
       <section class="upload-card">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
           <label class="file-input">
-            <span>選擇PDF文件</span>
+            <span>
+              選擇 PDF
+            </span>
             <input type="file" name="pdf" accept="application/pdf" required />
           </label>
           <div class="form-grid">
@@ -51,10 +50,6 @@
           </div>
           <button class="primary" type="submit">執行翻譯</button>
         </form>
-        <p class="hint">
-          The pipeline runs locally and writes outputs into the <code>out</code> folder.
-        </p>
-        <p class="hint">Translation requires <code>OPENAI_API_KEY</code> in your environment.</p>
       </section>
       <section class="upload-card jobs-board">
         <div class="jobs-header">
@@ -125,7 +120,7 @@
           if (job.status === "ready") {
             const editLink = document.createElement("a");
             editLink.href = job.editor_url;
-            editLink.textContent = "Edit";
+            editLink.textContent = "編輯文件";
             editLink.className = "ghost";
             actions.appendChild(editLink);
           } else {
@@ -138,7 +133,7 @@
           if (job.debug_pdf_url) {
             const debugLink = document.createElement("a");
             debugLink.href = job.debug_pdf_url;
-            debugLink.textContent = "Debug PDF";
+            debugLink.textContent = "預覽除錯文件";
             debugLink.className = "ghost";
             debugLink.target = "_blank";
             debugLink.rel = "noopener";
@@ -148,7 +143,7 @@
           if (job.edited_pdf_url) {
             const editedLink = document.createElement("a");
             editedLink.href = job.edited_pdf_url;
-            editedLink.textContent = "Edited PDF";
+            editedLink.textContent = "預覽已編輯文件";
             editedLink.className = "ghost";
             editedLink.target = "_blank";
             editedLink.rel = "noopener";
@@ -163,7 +158,7 @@
           const deleteBtn = document.createElement("button");
           deleteBtn.type = "button";
           deleteBtn.className = "danger job-delete";
-          deleteBtn.textContent = "Delete";
+          deleteBtn.textContent = "刪除文件";
           deleteBtn.addEventListener("click", async () => {
             const ok = confirm(`Delete job ${job.job_id}? This cannot be undone.`);
             if (!ok) return;

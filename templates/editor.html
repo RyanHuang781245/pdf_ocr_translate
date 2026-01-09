@@ -10,55 +10,52 @@
     <header class="topbar">
       <div>
         <p class="eyebrow">Editing job</p>
-        <h1>OCR Overlay Editor</h1>
+        <h1>文件翻譯系統</h1>
       </div>
       <div class="topbar-actions">
-        <a class="ghost" href="{{ url_for('index') }}">Back to upload</a>
-        <a id="editedPdfLink" class="ghost" href="#" target="_blank" rel="noopener" style="display:none">Open edited PDF</a>
-        <a class="ghost" href="{{ debug_pdf_url }}" target="_blank" rel="noopener">Open debug PDF</a>
-        <button id="saveBtn" class="primary">Save edits</button>
-        <button id="downloadBtn" class="ghost">Download edited PDF</button>
+        <a class="ghost" href="{{ url_for('index') }}">首頁</a>
+        <a id="editedPdfLink" class="ghost" href="#" target="_blank" rel="noopener" style="display:none">開啟已編輯 PDF</a>
+        <a class="ghost" href="{{ debug_pdf_url }}" target="_blank" rel="noopener">開啟除錯 PDF</a>
+        <button id="saveBtn" class="primary">保存編輯</button>
+        <button id="downloadBtn" class="ghost">下載已編輯 PDF</button>
       </div>
     </header>
     <main class="workspace">
       <aside class="panel">
         <section>
-          <h2>Selected box</h2>
+          <h2>編輯工具</h2>
           <label>
-            <span>Font size</span>
+            <span>文字大小</span>
             <div class="input-row">
               <input id="fontSize" type="range" min="8" max="72" value="16" />
               <input id="fontSizeNumber" type="number" min="8" max="72" value="16" />
             </div>
           </label>
           <label>
-            <span>Color</span>
+            <span>文字顏色</span>
             <input id="fontColor" type="color" value="#1c3c5a" />
           </label>
           <div class="button-row">
-            <button id="addBox" class="ghost">Add TextBox</button>
+            <button id="addBox" class="ghost">加入文字框</button>
           </div>
           <div class="button-row">
-            <button id="deleteBox" class="danger">Delete TextBox</button>
+            <button id="deleteBox" class="danger">刪除文字框</button>
           </div>
         </section>
         <section>
-          <h2>Notes</h2>
+          <h2>使用說明</h2>
           <p class="hint">
-            Drag a box to move it. Click inside to edit text.
-            Changes are saved to <code>out/jobs/&lt;job_id&gt;/edits.json</code>.
+            拖曳方框即可移動它<br />
+            點擊方格內部即可編輯文字。<br />
+            使用 Delete 刪除方框
           </p>
-        </section>
-        <section>
-          <h2>Status</h2>
-          <p id="status" class="status">Waiting for data...</p>
         </section>
       </aside>
       <section class="canvas">
         <div class="pdf-preview">
           <div class="preview-controls">
-            <button id="previewDebug" class="ghost is-active">Debug preview</button>
-            <button id="previewEdited" class="ghost" disabled>Edited preview</button>
+            <button id="previewDebug" class="ghost is-active">除錯預覽</button>
+            <button id="previewEdited" class="ghost" disabled>編輯預覽</button>
           </div>
           <object id="pdfPreview" data="{{ debug_pdf_url }}" data-debug-url="{{ debug_pdf_url }}" type="application/pdf">
             <p>PDF preview is unavailable. <a href="{{ debug_pdf_url }}">Download PDF</a></p>
