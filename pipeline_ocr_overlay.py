@@ -27,6 +27,67 @@ class PipelineCancelled(Exception):
 
 
 # -----------------------------
+# Language filtering
+# -----------------------------
+CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
+LATIN_RE = re.compile(r"[A-Za-z]")
+DIGIT_RE = re.compile(r"\d")
+REMOVE_LATIN_RE = re.compile(r"[A-Za-z]+")
+REMOVE_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
+
+
+def _filter_text_by_lang(text: str, keep_lang: str) -> str:
+    if keep_lang == "all":
+        return (text or "").strip()
+
+    cleaned = str(text or "")
+    if keep_lang == "zh":
+        cleaned = REMOVE_LATIN_RE.sub("", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if not (CJK_RE.search(cleaned) or DIGIT_RE.search(cleaned)):
+            return ""
+        return cleaned
+
+    if keep_lang == "en":
+        cleaned = REMOVE_CJK_RE.sub("", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if not (LATIN_RE.search(cleaned) or DIGIT_RE.search(cleaned)):
+            return ""
+        return cleaned
+
+    return (text or "").strip()
+
+
+def filter_rec_entries_by_lang(
+    rec_polys: list[list[list[float]]],
+    rec_texts: list[str],
+    rec_scores: list[float],
+    keep_lang: str,
+) -> tuple[list[list[list[float]]], list[str], list[float]]:
+    if keep_lang == "all":
+        return rec_polys, rec_texts, rec_scores
+
+    new_polys: list[list[list[float]]] = []
+    new_texts: list[str] = []
+    new_scores: list[float] = []
+
+    for idx, text in enumerate(rec_texts):
+        if idx >= len(rec_polys):
+            break
+        filtered = _filter_text_by_lang(text, keep_lang)
+        if not filtered:
+            continue
+        new_polys.append(rec_polys[idx])
+        new_texts.append(filtered)
+        if idx < len(rec_scores):
+            new_scores.append(rec_scores[idx])
+        else:
+            new_scores.append(0.0)
+
+    return new_polys, new_texts, new_scores
+
+
+# -----------------------------
 # Step 1) PDF -> PNG
 # -----------------------------
 def pdf_to_pngs(
@@ -758,6 +819,7 @@ def run_pipeline(
     cancel_event: Any | None = None,
     use_per_image_ocr: bool = False,
     triton_url: str = "localhost:8001",
+    keep_lang: str = "all",
     fontfile: str | None = DEFAULT_FONTFILE,
     paragraph_min_fs: float = 4.0,
     paragraph_clip_ellipsis: bool = False,
@@ -833,6 +895,12 @@ def run_pipeline(
             min_line_score=effective_min_line_score,
             table_fallback_layout=table_fallback_layout,
         )
+        rec_polys, rec_texts, rec_scores = filter_rec_entries_by_lang(
+            rec_polys,
+            rec_texts,
+            rec_scores,
+            keep_lang=keep_lang,
+        )
 
         ocr_data = {
             "input_path": str(img_path),
@@ -906,6 +974,13 @@ def main() -> None:
     parser.add_argument("--start", type=int, default=1, help="Start page (1-based)")
     parser.add_argument("--end", type=int, default=None, help="End page (inclusive)")
     parser.add_argument("--url", type=str, default="localhost:8001", help="Triton gRPC URL")
+    parser.add_argument(
+        "--keep-lang",
+        type=str,
+        choices=["all", "zh", "en"],
+        default="all",
+        help="Keep only target language in OCR results",
+    )
     parser.add_argument("--min-score", type=float, default=0.0, help="Minimum table line score for overlay")
     parser.add_argument("--no-box", action="store_true", help="Do not draw debug boxes")
     parser.add_argument("--no-text", action="store_true", help="Do not draw debug text")
@@ -931,6 +1006,7 @@ def main() -> None:
         draw_text=not args.no_text,
         enable_translate=False,
         triton_url=args.url,
+        keep_lang=args.keep_lang,
         fontfile=args.fontfile,
         paragraph_min_fs=args.paragraph_min_fs,
         paragraph_clip_ellipsis=args.paragraph_clip_ellipsis,

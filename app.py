@@ -322,6 +322,9 @@ def upload() -> str:
     enable_translate = request.form.get("translate") == "on"
     translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
     translate_model = request.form.get("model", "gpt-4o-mini").strip() or "gpt-4o-mini"
+    keep_lang = request.form.get("keep_lang", "all").strip().lower() or "all"
+    if keep_lang not in {"all", "zh", "en"}:
+        keep_lang = "all"
 
     run_pipeline(
         pdf_path=pdf_path,
@@ -336,6 +339,7 @@ def upload() -> str:
         translate_target_lang=translate_target_lang,
         translate_model=translate_model,
         triton_url=TRITON_URL,
+        keep_lang=keep_lang,
     )
 
     return redirect(url_for("editor", job_id=job_id))
