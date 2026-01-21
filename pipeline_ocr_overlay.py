@@ -10,7 +10,8 @@ from typing import Any, Callable, List, Tuple
 
 import fitz  # PyMuPDF
 from PIL import Image
-from paddleocr import PPStructureV3
+from paddlex_hps_client import triton_request, utils
+from tritonclient import grpc as triton_grpc
 
 # -----------------------------
 # Font (Windows CJK default)
@@ -74,20 +75,18 @@ def pdf_to_pngs(
 
 
 # -----------------------------
-# Step 2) PPStructureV3 -> JSON
+# Step 2) Triton layout-parsing -> JSON
 # -----------------------------
-def run_ppstructurev3_predict(
+def run_layout_parsing_predict(
     images: list[Path],
     json_out_dir: Path,
+    triton_url: str = "localhost:8001",
     progress_cb: Callable[[str, int, int, str], None] | None = None,
     cancel_event: Any | None = None,
 ) -> list[Path]:
     json_out_dir.mkdir(parents=True, exist_ok=True)
 
-    pipeline = PPStructureV3(
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-    )
+    client = triton_grpc.InferenceServerClient(url=triton_url)
 
     out_jsons: list[Path] = []
     total = len(images)
@@ -95,17 +94,30 @@ def run_ppstructurev3_predict(
         if cancel_event is not None and cancel_event.is_set():
             raise PipelineCancelled("Cancelled during OCR.")
 
-        output = pipeline.predict(input=str(img_path))
-        for res in output:
-            res.save_to_json(save_path=str(json_out_dir))
+        input_ = {
+            "file": utils.prepare_input_file(str(img_path)),
+            "fileType": 1,
+        }
+        output = triton_request(client, "layout-parsing", input_)
+        if output.get("errorCode", -1) != 0:
+            msg = output.get("errorMsg") or "unknown error"
+            raise RuntimeError(f"Triton OCR failed for {img_path}: {msg}")
 
-        guess = json_out_dir / f"{img_path.stem}.json"
-        if guess.exists():
-            out_jsons.append(guess)
-        else:
-            candidates = sorted(json_out_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-            if candidates:
-                out_jsons.append(candidates[0])
+        try:
+            pruned = output["result"]["layoutParsingResults"][0]["prunedResult"]
+        except Exception as exc:
+            raise RuntimeError(f"Unexpected Triton output for {img_path}") from exc
+
+        if not isinstance(pruned, dict):
+            raise RuntimeError(f"Unexpected prunedResult type for {img_path}: {type(pruned)}")
+
+        if not pruned.get("input_path"):
+            pruned = dict(pruned)
+            pruned["input_path"] = str(img_path)
+
+        json_path = json_out_dir / f"{img_path.stem}.json"
+        json_path.write_text(json.dumps(pruned, ensure_ascii=False, indent=2), encoding="utf-8")
+        out_jsons.append(json_path)
 
         if progress_cb:
             progress_cb("ocr", idx, total, f"OCR page {idx}/{total}")
@@ -119,7 +131,7 @@ def run_ppstructurev3_predict(
             seen.add(k)
 
     if not uniq:
-        raise RuntimeError(f"No PPStructure JSON output: {json_out_dir}")
+        raise RuntimeError(f"No layout-parsing JSON output: {json_out_dir}")
     return uniq
 
 
@@ -745,6 +757,7 @@ def run_pipeline(
     progress_cb: Callable[[str, int, int, str], None] | None = None,
     cancel_event: Any | None = None,
     use_per_image_ocr: bool = False,
+    triton_url: str = "localhost:8001",
     fontfile: str | None = DEFAULT_FONTFILE,
     paragraph_min_fs: float = 4.0,
     paragraph_clip_ellipsis: bool = False,
@@ -777,9 +790,10 @@ def run_pipeline(
     if cancel_event is not None and cancel_event.is_set():
         raise PipelineCancelled("Cancelled before OCR.")
 
-    pp_json_paths = run_ppstructurev3_predict(
+    pp_json_paths = run_layout_parsing_predict(
         png_paths,
         pp_json_dir,
+        triton_url=triton_url,
         progress_cb=progress_cb,
         cancel_event=cancel_event,
     )
@@ -885,12 +899,13 @@ def run_pipeline(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PDF -> PNG -> PPStructureV3 -> overlay debug PDF")
+    parser = argparse.ArgumentParser(description="PDF -> PNG -> Triton layout-parsing -> overlay debug PDF")
     parser.add_argument("--pdf", required=True, help="Input PDF path")
     parser.add_argument("--out", default="out", help="Output directory")
     parser.add_argument("--dpi", type=int, default=300, help="PDF render DPI")
     parser.add_argument("--start", type=int, default=1, help="Start page (1-based)")
     parser.add_argument("--end", type=int, default=None, help="End page (inclusive)")
+    parser.add_argument("--url", type=str, default="localhost:8001", help="Triton gRPC URL")
     parser.add_argument("--min-score", type=float, default=0.0, help="Minimum table line score for overlay")
     parser.add_argument("--no-box", action="store_true", help="Do not draw debug boxes")
     parser.add_argument("--no-text", action="store_true", help="Do not draw debug text")
@@ -915,6 +930,7 @@ def main() -> None:
         draw_boxes=not args.no_box,
         draw_text=not args.no_text,
         enable_translate=False,
+        triton_url=args.url,
         fontfile=args.fontfile,
         paragraph_min_fs=args.paragraph_min_fs,
         paragraph_clip_ellipsis=args.paragraph_clip_ellipsis,

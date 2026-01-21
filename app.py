@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import uuid
@@ -17,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 OUT_ROOT = BASE_DIR / "out"
 JOB_ROOT = OUT_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
+TRITON_URL = os.getenv("TRITON_URL", "localhost:8001")
 ALLOWED_EXTENSIONS = {".pdf"}
 FONT_CANDIDATES = [
     r"C:\Windows\Fonts\msjh.ttf",
@@ -333,6 +335,7 @@ def upload() -> str:
         enable_translate=enable_translate,
         translate_target_lang=translate_target_lang,
         translate_model=translate_model,
+        triton_url=TRITON_URL,
     )
 
     return redirect(url_for("editor", job_id=job_id))
