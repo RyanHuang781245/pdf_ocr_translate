@@ -42,11 +42,17 @@ def _filter_text_by_lang(text: str, keep_lang: str) -> str:
 
     cleaned = str(text or "")
     if keep_lang == "zh":
-        cleaned = REMOVE_LATIN_RE.sub("", cleaned)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-        if not (CJK_RE.search(cleaned) or DIGIT_RE.search(cleaned)):
+        cleaned = cleaned.strip()
+        has_cjk = bool(CJK_RE.search(cleaned))
+        has_latin = bool(LATIN_RE.search(cleaned))
+        has_digit = bool(DIGIT_RE.search(cleaned))
+        if has_cjk:
+            return cleaned
+        if has_latin:
             return ""
-        return cleaned
+        if has_digit:
+            return cleaned
+        return ""
 
     if keep_lang == "en":
         cleaned = REMOVE_CJK_RE.sub("", cleaned)
@@ -199,6 +205,7 @@ def run_layout_parsing_predict(
 # -----------------------------
 # Helpers from PPStructure flow
 # -----------------------------
+TEXT_BLOCK_LABELS = {"text", "doc_title", "vision_footnote", "paragraph_title"}
 def poly_to_bbox(poly: list[list[float]]) -> list[float]:
     xs = [p[0] for p in poly]
     ys = [p[1] for p in poly]
@@ -366,7 +373,9 @@ def extract_rec_entries_from_ppstructure(
     skip_text_inside_table: bool,
     min_line_score: float,
     table_fallback_layout: bool,
+    include_block_labels: set[str] | None = None,
 ) -> tuple[list[list[list[float]]], list[str], list[float]]:
+    include_block_labels = include_block_labels or TEXT_BLOCK_LABELS
     tables = load_table_bboxes_from_parsing(data)
     if table_fallback_layout and not tables:
         tables = load_table_bboxes_fallback_layout(data)
@@ -378,7 +387,7 @@ def extract_rec_entries_from_ppstructure(
 
     # Paragraph blocks
     for blk in data.get("parsing_res_list", []):
-        if blk.get("block_label") != "text":
+        if blk.get("block_label") not in include_block_labels:
             continue
         bb_px = blk.get("block_bbox")
         if not (isinstance(bb_px, list) and len(bb_px) == 4):
@@ -640,7 +649,7 @@ def overlay_one_page(
     dbg_shape = page.new_shape() if draw_boxes else None
 
     for blk in data.get("parsing_res_list", []):
-        if blk.get("block_label") != "text":
+        if blk.get("block_label") not in TEXT_BLOCK_LABELS:
             continue
         bb_px = blk.get("block_bbox")
         if not (isinstance(bb_px, list) and len(bb_px) == 4):
