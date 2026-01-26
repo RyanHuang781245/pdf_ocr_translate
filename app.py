@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import datetime
+import logging
 import json
 import os
 import re
 import shutil
+import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -12,13 +16,33 @@ import fitz
 from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, url_for
 from werkzeug.utils import secure_filename
 
-from pipeline_ocr_overlay import run_pipeline
+from pipeline_ocr_overlay import PipelineCancelled, run_pipeline
 
 BASE_DIR = Path(__file__).resolve().parent
 OUT_ROOT = BASE_DIR / "out"
 JOB_ROOT = OUT_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
 TRITON_URL = os.getenv("TRITON_URL", "localhost:8001")
+AZURE_BASE_URL = os.getenv("AZURE_OPENAI_BASE_URL", "https://uocp-azure-openai.openai.azure.com/openai/v1/")
+AZURE_API_KEY_ENV = os.getenv("AZURE_OPENAI_API_KEY_ENV", "UO_AZURE_OPENAI_API_KEY")
+AZURE_BATCH_MODEL = os.getenv("AZURE_BATCH_MODEL", "gpt-4o-mini-global-batch")
+AZURE_BATCH_POLL_SECONDS = float(os.getenv("AZURE_BATCH_POLL_SECONDS", "60"))
+AZURE_BATCH_COMPLETION_WINDOW = os.getenv("AZURE_BATCH_COMPLETION_WINDOW", "24h")
+AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
+    "AZURE_BATCH_SYSTEM_PROMPT",
+    "\n".join(
+        [
+            "You are a professional medical device regulatory translator.",
+            "Translate the text from Chinese to English accurately and literally.",
+            "Do NOT summarize, paraphrase, explain, or add content.",
+            "Preserve all numbers, codes, references, and formatting.",
+            "Output only the translated English text.",
+        ]
+    ),
+).strip()
+BATCH_INPUT_NAME = "azure_batch_input.jsonl"
+BATCH_OUTPUT_NAME = "azure_batch_output.jsonl"
+BATCH_STATUS_NAME = "batch_status.json"
 ALLOWED_EXTENSIONS = {".pdf"}
 FONT_CANDIDATES = [
     r"C:\Windows\Fonts\msjh.ttf",
@@ -31,6 +55,12 @@ FONT_CANDIDATES = [
     r"C:\Windows\Fonts\simsun.ttc",
 ]
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+
+ACTIVE_UPLOAD: dict[str, Any] | None = None
+ACTIVE_UPLOAD_LOCK = threading.Lock()
 
 
 def _safe_job_id(job_id: str) -> bool:
@@ -46,6 +76,47 @@ def _job_timestamp(path: Path) -> float:
         return path.stat().st_mtime
     except FileNotFoundError:
         return 0.0
+
+
+def _batch_status_path(job_dir: Path) -> Path:
+    return job_dir / BATCH_STATUS_NAME
+
+
+def _batch_config_path(job_dir: Path) -> Path:
+    return job_dir / "batch_config.json"
+
+
+def _write_batch_config(job_dir: Path, config: dict[str, Any]) -> None:
+    _batch_config_path(job_dir).write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_batch_config(job_dir: Path) -> dict[str, Any] | None:
+    path = _batch_config_path(job_dir)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
+def _write_batch_status(job_dir: Path, status: str, **meta: Any) -> None:
+    payload = {
+        "status": status,
+        "updated_at": time.time(),
+        **meta,
+    }
+    _batch_status_path(job_dir).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_batch_status(job_dir: Path) -> dict[str, Any] | None:
+    path = _batch_status_path(job_dir)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
 
 
 def _load_edits_map(job_dir: Path) -> dict[int, list[dict[str, Any]]]:
@@ -164,6 +235,239 @@ def _resolve_fontfile() -> str | None:
         if Path(candidate).exists():
             return candidate
     return None
+
+
+def _normalize_text(text: str) -> str:
+    return " ".join((text or "").strip().split())
+
+
+def _parse_batch_custom_id(custom_id: str) -> tuple[int, int] | None:
+    m = re.match(r"p(\d+)-l(\d+)$", custom_id or "")
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+def _extract_batch_translation(item: dict[str, Any]) -> str:
+    body = item.get("response", {}).get("body", {}) or {}
+    if "output_text" in body:
+        return str(body.get("output_text") or "").strip()
+    choices = body.get("choices", []) or []
+    if choices:
+        return str(choices[0].get("message", {}).get("content", "")).strip()
+    return ""
+
+
+def _poly_to_bbox(poly: list[list[float]] | None) -> dict[str, float] | None:
+    if not poly or len(poly) < 4:
+        return None
+    xs = [float(p[0]) for p in poly if isinstance(p, (list, tuple)) and len(p) >= 2]
+    ys = [float(p[1]) for p in poly if isinstance(p, (list, tuple)) and len(p) >= 2]
+    if not xs or not ys:
+        return None
+    x1, y1, x2, y2 = min(xs), min(ys), max(xs), max(ys)
+    return {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1}
+
+
+def _get_azure_client():
+    try:
+        from dotenv import load_dotenv
+        from openai import OpenAI
+    except Exception as exc:
+        raise RuntimeError("openai and python-dotenv are required for Azure batch translation.") from exc
+
+    load_dotenv()
+    api_key = os.getenv(AZURE_API_KEY_ENV)
+    if not api_key:
+        raise RuntimeError(f"Environment variable {AZURE_API_KEY_ENV} is not set.")
+    return OpenAI(base_url=AZURE_BASE_URL, api_key=api_key)
+
+
+def _resolve_batch_prompt(target_lang: str, override: str | None = None) -> str:
+    if override:
+        return override.strip()
+    normalized = (target_lang or "").strip().lower()
+    if normalized in {"en", "english", "en-us", "en-gb"}:
+        return AZURE_BATCH_SYSTEM_PROMPT
+    return "\n".join(
+        [
+            "You are a professional translator.",
+            f"Translate the text to {target_lang} accurately and literally.",
+            "Do NOT summarize, paraphrase, explain, or add content.",
+            "Preserve all numbers, codes, references, and formatting.",
+            "Output only the translated text.",
+        ]
+    ).strip()
+
+
+def _build_batch_items(
+    ocr_pages: list[dict[str, Any]],
+    model_name: str,
+    system_prompt: str,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for page in ocr_pages:
+        page_idx = int(page.get("page_index_0based", 0))
+        texts = page.get("rec_texts", []) or []
+        for idx, text in enumerate(texts):
+            clean = _normalize_text(text)
+            if not clean:
+                continue
+            custom_id = f"p{page_idx:04d}-l{idx:04d}"
+            items.append(
+                {
+                    "custom_id": custom_id,
+                    "method": "POST",
+                    "url": "/v1/chat/completions",
+                    "body": {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": clean},
+                        ],
+                    },
+                }
+            )
+    return items
+
+
+def _write_jsonl(path: Path, items: list[dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8") as f:
+        for item in items:
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+
+def _load_ocr_pages(job_dir: Path) -> list[dict[str, Any]]:
+    json_dir = job_dir / "ocr_json"
+    if not json_dir.exists():
+        raise FileNotFoundError(f"Missing OCR JSON directory: {json_dir}")
+    page_paths = sorted(json_dir.glob("*_res_with_pdf_coords.json"))
+    if not page_paths:
+        raise RuntimeError("No OCR JSON pages found.")
+    return [json.loads(path.read_text(encoding="utf-8")) for path in page_paths]
+
+
+def _build_translations_from_jsonl_text(raw_text: str) -> dict[str, str]:
+    translations: dict[str, str] = {}
+    for line in raw_text.splitlines():
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        custom_id = item.get("custom_id", "")
+        translated = _extract_batch_translation(item)
+        if translated:
+            translations[custom_id] = translated
+    return translations
+
+
+def _build_edits_payload_from_translations(
+    ocr_pages: list[dict[str, Any]],
+    translations: dict[str, str],
+) -> dict[str, Any]:
+    pages_payload: list[dict[str, Any]] = []
+    for page in ocr_pages:
+        page_idx = int(page.get("page_index_0based", 0))
+        rec_polys = page.get("rec_polys", []) or []
+        rec_texts = page.get("rec_texts", []) or []
+        edit_texts = page.get("edit_texts", []) or []
+        boxes: list[dict[str, Any]] = []
+        for idx, poly in enumerate(rec_polys):
+            custom_id = f"p{page_idx:04d}-l{idx:04d}"
+            text = translations.get(custom_id)
+            if not text:
+                text = edit_texts[idx] if idx < len(edit_texts) else rec_texts[idx] if idx < len(rec_texts) else ""
+            text = _normalize_text(text)
+            if not text:
+                continue
+            bbox = _poly_to_bbox(poly)
+            if not bbox:
+                continue
+            boxes.append({"id": idx, "bbox": bbox, "text": text, "deleted": False})
+
+        pages_payload.append({"page_index_0based": page_idx, "boxes": boxes})
+
+    return {"pages": pages_payload}
+
+
+def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] | None = None) -> None:
+    config = config or _load_batch_config(job_dir) or {}
+    target_lang = str(config.get("target_lang") or "en")
+    model_name = str(config.get("model") or AZURE_BATCH_MODEL)
+    system_prompt = _resolve_batch_prompt(target_lang, config.get("system_prompt"))
+    status_meta = {
+        "job_id": job_id,
+        "started_at": time.time(),
+        "model": model_name,
+        "target_lang": target_lang,
+    }
+    logger.info("Batch translate start job_id=%s target_lang=%s model=%s", job_id, target_lang, model_name)
+    _write_batch_status(job_dir, "running", **status_meta)
+    try:
+        ocr_pages = _load_ocr_pages(job_dir)
+        batch_items = _build_batch_items(ocr_pages, model_name=model_name, system_prompt=system_prompt)
+        logger.info("Batch translate collected pages=%s lines=%s", len(ocr_pages), len(batch_items))
+        if not batch_items:
+            raise RuntimeError("No OCR text lines found to translate.")
+
+        batch_input_path = job_dir / BATCH_INPUT_NAME
+        _write_jsonl(batch_input_path, batch_items)
+        logger.info("Batch translate wrote input jsonl=%s", batch_input_path.resolve())
+
+        client = _get_azure_client()
+        file_obj = client.files.create(
+            file=open(batch_input_path, "rb"),
+            purpose="batch",
+            extra_body={"expires_after": {"seconds": 1209600, "anchor": "created_at"}},
+        )
+        logger.info("Batch translate uploaded file_id=%s", file_obj.id)
+        batch = client.batches.create(
+            input_file_id=file_obj.id,
+            endpoint="chat/completions",
+            completion_window=AZURE_BATCH_COMPLETION_WINDOW,
+        )
+
+        batch_id = batch.id
+        logger.info("Batch translate created batch_id=%s", batch_id)
+        _write_batch_status(job_dir, "running", **status_meta, batch_id=batch_id)
+
+        status = batch.status
+        while status not in ("completed", "failed", "canceled", "cancelled"):
+            time.sleep(AZURE_BATCH_POLL_SECONDS)
+            batch = client.batches.retrieve(batch_id)
+            status = batch.status
+            logger.info("Batch translate poll job_id=%s batch_id=%s status=%s", job_id, batch_id, status)
+            _write_batch_status(
+                job_dir,
+                status,
+                **status_meta,
+                batch_id=batch_id,
+                last_check=datetime.datetime.now().isoformat(timespec="seconds"),
+            )
+
+        if status != "completed":
+            raise RuntimeError(f"Batch status = {status}")
+
+        output_file_id = batch.output_file_id or batch.error_file_id
+        if not output_file_id:
+            raise RuntimeError("Batch has no output_file_id/error_file_id.")
+
+        file_response = client.files.content(output_file_id)
+        raw_text = file_response.text or ""
+        (job_dir / BATCH_OUTPUT_NAME).write_text(raw_text, encoding="utf-8")
+        logger.info("Batch translate downloaded output file_id=%s", output_file_id)
+
+        translations = _build_translations_from_jsonl_text(raw_text)
+        edits_payload = _build_edits_payload_from_translations(ocr_pages, translations)
+        edits_path = job_dir / "edits.json"
+        edits_path.write_text(json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info("Batch translate wrote edits.json=%s", edits_path.resolve())
+        _apply_edits_to_pdf(job_id, job_dir, edits_payload)
+        logger.info("Batch translate wrote edited.pdf job_id=%s", job_id)
+        _write_batch_status(job_dir, "completed", **status_meta, batch_id=batch_id)
+        logger.info("Batch translate completed job_id=%s", job_id)
+    except Exception as exc:
+        logger.exception("Batch translate failed job_id=%s error=%s", job_id, exc)
+        _write_batch_status(job_dir, "failed", **status_meta, error=str(exc))
 
 
 def _load_page_transforms(job_dir: Path) -> dict[int, tuple[float, float, float, float]]:
@@ -321,26 +625,52 @@ def upload() -> str:
     end_page = int(end_page_raw) if end_page_raw else None
     enable_translate = request.form.get("translate") == "on"
     translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
-    translate_model = request.form.get("model", "gpt-4o-mini").strip() or "gpt-4o-mini"
+    translate_model = request.form.get("model", AZURE_BATCH_MODEL).strip() or AZURE_BATCH_MODEL
     keep_lang = request.form.get("keep_lang", "all").strip().lower() or "all"
     if keep_lang not in {"all", "zh", "en"}:
         keep_lang = "all"
 
-    run_pipeline(
-        pdf_path=pdf_path,
-        out_root=job_dir,
-        dpi=dpi,
-        start_page=start_page,
-        end_page=end_page,
-        min_score=0.0,
-        draw_boxes=True,
-        draw_text=True,
-        enable_translate=enable_translate,
-        translate_target_lang=translate_target_lang,
-        translate_model=translate_model,
-        triton_url=TRITON_URL,
-        keep_lang=keep_lang,
-    )
+    cancel_event = threading.Event()
+    global ACTIVE_UPLOAD
+    with ACTIVE_UPLOAD_LOCK:
+        ACTIVE_UPLOAD = {"event": cancel_event, "job_id": job_id, "started_at": time.time()}
+
+    try:
+        run_pipeline(
+            pdf_path=pdf_path,
+            out_root=job_dir,
+            dpi=dpi,
+            start_page=start_page,
+            end_page=end_page,
+            min_score=0.0,
+            draw_boxes=True,
+            draw_text=True,
+            enable_translate=False,
+            translate_target_lang=translate_target_lang,
+            translate_model=translate_model,
+            triton_url=TRITON_URL,
+            keep_lang=keep_lang,
+            cancel_event=cancel_event,
+        )
+    except PipelineCancelled:
+        logger.info("Upload pipeline cancelled job_id=%s", job_id)
+        try:
+            shutil.rmtree(job_dir)
+        except Exception as exc:
+            logger.warning("Failed to delete cancelled job_dir=%s error=%s", job_dir, exc)
+        return redirect(url_for("index"))
+    finally:
+        with ACTIVE_UPLOAD_LOCK:
+            if ACTIVE_UPLOAD and ACTIVE_UPLOAD.get("job_id") == job_id:
+                ACTIVE_UPLOAD = None
+
+    if enable_translate:
+        batch_config = {
+            "target_lang": translate_target_lang,
+            "model": translate_model,
+        }
+        _write_batch_config(job_dir, batch_config)
+        threading.Thread(target=_run_batch_translate_job, args=(job_id, job_dir, batch_config), daemon=True).start()
 
     return redirect(url_for("editor", job_id=job_id))
 
@@ -386,9 +716,63 @@ def job_data(job_id: str):
         "job_id": job_id,
         "debug_pdf_url": url_for("job_file", job_id=job_id, filename="overlay_debug.pdf"),
         "edited_pdf_url": url_for("job_file", job_id=job_id, filename="edited.pdf") if edited_pdf_path.exists() else None,
+        "batch_status": _load_batch_status(job_dir),
         "pages": pages,
     }
     return jsonify(payload)
+
+
+@app.route("/api/job/<job_id>/batch-translate", methods=["POST"])
+def batch_translate(job_id: str):
+    if not _safe_job_id(job_id):
+        abort(404)
+    job_dir = _job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+    status = _load_batch_status(job_dir)
+    if status and status.get("status") in {"running", "queued"}:
+        return jsonify({"ok": True, "status": status})
+    config = _load_batch_config(job_dir) or {}
+    threading.Thread(target=_run_batch_translate_job, args=(job_id, job_dir, config), daemon=True).start()
+    return jsonify({"ok": True, "status": {"status": "running"}})
+
+
+@app.route("/api/job/<job_id>/batch-status", methods=["GET"])
+def batch_status(job_id: str):
+    if not _safe_job_id(job_id):
+        abort(404)
+    job_dir = _job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+    status = _load_batch_status(job_dir) or {"status": "not_started"}
+    return jsonify({"ok": True, "status": status})
+
+
+@app.route("/api/job/<job_id>/batch-restore", methods=["POST"])
+def batch_restore(job_id: str):
+    if not _safe_job_id(job_id):
+        abort(404)
+    job_dir = _job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+    output_path = job_dir / BATCH_OUTPUT_NAME
+    if not output_path.exists():
+        return jsonify({"ok": False, "error": "Batch output not found."}), 400
+
+    try:
+        raw_text = output_path.read_text(encoding="utf-8")
+        translations = _build_translations_from_jsonl_text(raw_text)
+        ocr_pages = _load_ocr_pages(job_dir)
+        edits_payload = _build_edits_payload_from_translations(ocr_pages, translations)
+        edits_path = job_dir / "edits.json"
+        edits_path.write_text(json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        _apply_edits_to_pdf(job_id, job_dir, edits_payload)
+        logger.info("Batch translate restored edits.json job_id=%s", job_id)
+    except Exception as exc:
+        logger.exception("Batch translate restore failed job_id=%s error=%s", job_id, exc)
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    return jsonify({"ok": True})
 
 
 @app.route("/api/jobs", methods=["GET"])
@@ -471,5 +855,18 @@ def job_file(job_id: str, filename: str):
     return send_from_directory(job_dir, filename)
 
 
+@app.route("/api/upload-cancel", methods=["POST"])
+def cancel_upload():
+    global ACTIVE_UPLOAD
+    with ACTIVE_UPLOAD_LOCK:
+        active = ACTIVE_UPLOAD
+    if not active:
+        return jsonify({"ok": False, "status": "idle"})
+    event = active.get("event")
+    if event is not None:
+        event.set()
+    return jsonify({"ok": True, "job_id": active.get("job_id")})
+
+
 if __name__ == "__main__":
-    app.run(port=5001, debug=True)
+    app.run(port=5001, debug=True, threaded=True)

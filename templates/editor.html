@@ -11,11 +11,14 @@
       <div>
         <p class="eyebrow">Editing job</p>
         <h1>文件翻譯系統</h1>
+        <p id="status" class="hint"></p>
       </div>
       <div class="topbar-actions">
         <a class="ghost" href="{{ url_for('index') }}">首頁</a>
         <a id="editedPdfLink" class="ghost" href="#" target="_blank" rel="noopener" style="display:none">開啟已編輯 PDF</a>
         <a class="ghost" href="{{ debug_pdf_url }}" target="_blank" rel="noopener">開啟除錯 PDF</a>
+        <button id="batchTranslateBtn" class="ghost">Batch 翻譯</button>
+        <button id="batchRestoreBtn" class="ghost">回復翻譯結果</button>
         <button id="saveBtn" class="primary">保存編輯</button>
         <button id="downloadBtn" class="ghost">下載已編輯 PDF</button>
       </div>

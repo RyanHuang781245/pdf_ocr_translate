@@ -36,7 +36,7 @@
           </div>
           <div class="form-grid">
             <label>
-              <span>啟用 GPT 翻譯</span>
+              <span>啟用 Batch 翻譯</span>
               <input type="checkbox" name="translate" />
             </label>
             <label>
@@ -52,8 +52,8 @@
               <input type="text" name="target_lang" value="en" />
             </label>
             <label>
-              <span>OpenAI 模型</span>
-              <input type="text" name="model" value="gpt-oss:120b" />
+              <span>Batch 模型</span>
+              <input type="text" name="model" value="gpt-4o-mini-global-batch" />
             </label>
           </div>
           <button class="primary" type="submit">執行翻譯</button>
@@ -75,11 +75,13 @@
       <div class="loading-card">
         <div class="spinner"></div>
         <p>OCR is running. Please wait...</p>
+        <button id="cancelProcessing" class="ghost" type="button">取消</button>
       </div>
     </div>
     <script>
       const form = document.querySelector("form");
       const overlay = document.getElementById("loadingOverlay");
+      const cancelBtn = document.getElementById("cancelProcessing");
       if (form && overlay) {
         form.addEventListener("submit", () => {
           overlay.hidden = false;
@@ -88,6 +90,21 @@
           if (button) {
             button.disabled = true;
             button.textContent = "Processing...";
+          }
+        });
+      }
+      if (cancelBtn && overlay) {
+        cancelBtn.addEventListener("click", () => {
+          fetch("/api/upload-cancel", { method: "POST" }).catch(() => {});
+          overlay.hidden = true;
+          document.body.classList.remove("is-loading");
+          const button = form?.querySelector('button[type="submit"]');
+          if (button) {
+            button.disabled = false;
+            button.textContent = "執行翻譯";
+          }
+          if (document.readyState !== "complete") {
+            window.stop();
           }
         });
       }

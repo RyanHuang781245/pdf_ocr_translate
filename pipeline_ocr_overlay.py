@@ -205,7 +205,7 @@ def run_layout_parsing_predict(
 # -----------------------------
 # Helpers from PPStructure flow
 # -----------------------------
-TEXT_BLOCK_LABELS = {"text", "doc_title", "vision_footnote", "paragraph_title"}
+TEXT_BLOCK_LABELS = {"text", "doc_title", "vision_footnote", "paragraph_title", "figure_title"}
 def poly_to_bbox(poly: list[list[float]]) -> list[float]:
     xs = [p[0] for p in poly]
     ys = [p[1] for p in poly]
@@ -947,6 +947,8 @@ def run_pipeline(
 
     per_page_with_coords_jsons = sorted(per_page_with_coords_jsons)
     debug_pdf = out_root / "overlay_debug.pdf"
+    if cancel_event is not None and cancel_event.is_set():
+        raise PipelineCancelled("Cancelled before overlay.")
     if progress_cb:
         progress_cb("overlay", 0, 1, "Building overlay PDF")
     overlay_debug_pdf(

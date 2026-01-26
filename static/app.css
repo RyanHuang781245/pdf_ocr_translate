@@ -481,6 +481,10 @@ button.primary:hover {
   max-width: 320px;
 }
 
+.loading-card button {
+  margin-top: 0.8rem;
+}
+
 .spinner {
   width: 44px;
   height: 44px;

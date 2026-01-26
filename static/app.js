@@ -19,6 +19,8 @@ const deleteBtn = document.getElementById("deleteBox");
 const addBoxBtn = document.getElementById("addBox");
 const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
+const batchTranslateBtn = document.getElementById("batchTranslateBtn");
+const batchRestoreBtn = document.getElementById("batchRestoreBtn");
 const pagesEl = document.getElementById("pages");
 const editedLink = document.getElementById("editedPdfLink");
 const previewEl = document.getElementById("pdfPreview");
@@ -30,6 +32,32 @@ function setStatus(message) {
   if (statusEl) {
     statusEl.textContent = message;
   }
+}
+
+function setBatchButtonState(status) {
+  if (!batchTranslateBtn) return;
+  if (status === "running" || status === "queued") {
+    batchTranslateBtn.disabled = true;
+    batchTranslateBtn.textContent = "Batch 翻譯中...";
+  } else {
+    batchTranslateBtn.disabled = false;
+    batchTranslateBtn.textContent = "Batch 翻譯";
+  }
+}
+
+function renderBatchStatus(status) {
+  if (!status || !statusEl) return;
+  const label = status.status || "unknown";
+  if (label === "completed") {
+    setStatus("Batch 翻譯完成，已更新編輯內容。");
+  } else if (label === "running" || label === "queued") {
+    setStatus("Batch 翻譯進行中...");
+  } else if (label === "failed") {
+    setStatus(`Batch 翻譯失敗：${status.error || "unknown error"}`);
+  } else {
+    setStatus("Ready.");
+  }
+  setBatchButtonState(label);
 }
 
 function boxKey(pageIdx, boxIdx) {
@@ -656,6 +684,38 @@ function buildSavePayload() {
   };
 }
 
+async function loadJobData(jobId) {
+  setStatus("Loading OCR data...");
+  const res = await fetch(`/api/job/${jobId}`);
+  if (!res.ok) {
+    setStatus("Failed to load job data.");
+    return null;
+  }
+  const data = await res.json();
+  buildState(data);
+  renderPages();
+  updateEditedLink(data.edited_pdf_url);
+  if (previewEditedBtn) {
+    previewEditedBtn.disabled = !data.edited_pdf_url;
+  }
+  renderBatchStatus(data.batch_status);
+  return data;
+}
+
+async function pollBatchStatus(jobId) {
+  const res = await fetch(`/api/job/${jobId}/batch-status`);
+  if (!res.ok) return null;
+  const payload = await res.json();
+  const status = payload.status || { status: "unknown" };
+  renderBatchStatus(status);
+  if (status.status === "running" || status.status === "queued") {
+    setTimeout(() => pollBatchStatus(jobId), 5000);
+  } else if (status.status === "completed") {
+    await loadJobData(jobId);
+  }
+  return status;
+}
+
 async function saveEdits(shouldDownload = false) {
   const jobId = document.body.dataset.jobId;
   if (!jobId) return;
@@ -790,6 +850,49 @@ function bindControls() {
     });
   }
 
+  if (batchTranslateBtn) {
+    batchTranslateBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const jobId = document.body.dataset.jobId;
+      if (!jobId) return;
+      setBatchButtonState("running");
+      setStatus("啟動 Batch 翻譯...");
+      try {
+        const res = await fetch(`/api/job/${jobId}/batch-translate`, { method: "POST" });
+        if (!res.ok) {
+          setStatus("Batch 翻譯啟動失敗。");
+          setBatchButtonState("failed");
+          return;
+        }
+        setTimeout(() => pollBatchStatus(jobId), 3000);
+      } catch (error) {
+        setStatus("Batch 翻譯啟動失敗。");
+        setBatchButtonState("failed");
+      }
+    });
+  }
+
+  if (batchRestoreBtn) {
+    batchRestoreBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const jobId = document.body.dataset.jobId;
+      if (!jobId) return;
+      setStatus("回復翻譯結果中...");
+      try {
+        const res = await fetch(`/api/job/${jobId}/batch-restore`, { method: "POST" });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setStatus(body.error ? `回復失敗：${body.error}` : "回復失敗。");
+          return;
+        }
+        await loadJobData(jobId);
+        setStatus("已回復翻譯結果。");
+      } catch (error) {
+        setStatus("回復失敗。");
+      }
+    });
+  }
+
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Delete") return;
     const target = event.target;
@@ -804,24 +907,12 @@ async function init() {
   const jobId = document.body.dataset.jobId;
   if (!jobId) return;
   bindControls();
-  setStatus("Loading OCR data...");
-  const res = await fetch(`/api/job/${jobId}`);
-  if (!res.ok) {
-    setStatus("Failed to load job data.");
-    return;
+  const data = await loadJobData(jobId);
+  if (!data) return;
+  const status = data.batch_status?.status;
+  if (status === "running" || status === "queued") {
+    setTimeout(() => pollBatchStatus(jobId), 5000);
   }
-  const data = await res.json();
-  buildState(data);
-  renderPages();
-  updateEditedLink(data.edited_pdf_url);
-  if (previewEditedBtn) {
-    if (data.edited_pdf_url) {
-      previewEditedBtn.disabled = false;
-    } else {
-      previewEditedBtn.disabled = true;
-    }
-  }
-  setStatus("Ready.");
 }
 
 if (document.body.classList.contains("editor")) {
