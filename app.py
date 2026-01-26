@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import datetime
-import logging
 import json
+import logging
 import os
 import re
 import shutil
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import fitz
-from flask import Flask, abort, jsonify, redirect, render_template, request, send_from_directory, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory, stream_with_context, url_for
 from werkzeug.utils import secure_filename
 
 from pipeline_ocr_overlay import PipelineCancelled, run_pipeline
@@ -61,6 +61,8 @@ if not logging.getLogger().handlers:
 
 ACTIVE_UPLOAD: dict[str, Any] | None = None
 ACTIVE_UPLOAD_LOCK = threading.Lock()
+JOBS_EVENT = threading.Condition()
+JOBS_VERSION = 0
 
 
 def _safe_job_id(job_id: str) -> bool:
@@ -76,6 +78,73 @@ def _job_timestamp(path: Path) -> float:
         return path.stat().st_mtime
     except FileNotFoundError:
         return 0.0
+
+
+def _notify_jobs_update() -> None:
+    global JOBS_VERSION
+    with JOBS_EVENT:
+        JOBS_VERSION += 1
+        JOBS_EVENT.notify_all()
+
+
+def _build_jobs_list() -> list[dict[str, Any]]:
+    JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    jobs = []
+    for job_dir in sorted(JOB_ROOT.iterdir()):
+        if not job_dir.is_dir():
+            continue
+        job_id = job_dir.name
+        if not _safe_job_id(job_id):
+            continue
+
+        pdf_path = job_dir / f"{job_id}.pdf"
+        debug_pdf_path = job_dir / "overlay_debug.pdf"
+        edited_pdf_path = job_dir / "edited.pdf"
+
+        created_at = _job_timestamp(pdf_path) or _job_timestamp(job_dir)
+        updated_at = max(_job_timestamp(debug_pdf_path), _job_timestamp(edited_pdf_path), created_at)
+
+        debug_ready = debug_pdf_path.exists()
+        batch_status = _load_batch_status(job_dir)
+        batch_config = _load_batch_config(job_dir)
+        if not debug_ready:
+            status_code = "ocr"
+            status_label = "OCR"
+        elif batch_config:
+            batch_state = str((batch_status or {}).get("status") or "").lower()
+            if batch_state in {"failed", "canceled", "cancelled"}:
+                status_code = "translate_failed"
+                status_label = "翻譯失敗"
+            elif batch_state == "completed":
+                status_code = "completed"
+                status_label = "完成"
+            else:
+                status_code = "translate"
+                status_label = "翻譯中"
+        else:
+            status_code = "completed"
+            status_label = "完成"
+
+        jobs.append(
+            {
+                "job_id": job_id,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "status_code": status_code,
+                "status_label": status_label,
+                "status": status_label,
+                "editor_url": url_for("editor", job_id=job_id),
+                "debug_pdf_url": url_for("job_file", job_id=job_id, filename="overlay_debug.pdf")
+                if debug_ready
+                else None,
+                "edited_pdf_url": url_for("job_file", job_id=job_id, filename="edited.pdf")
+                if edited_pdf_path.exists()
+                else None,
+            }
+        )
+
+    jobs.sort(key=lambda item: item["updated_at"], reverse=True)
+    return jobs
 
 
 def _batch_status_path(job_dir: Path) -> Path:
@@ -107,6 +176,7 @@ def _write_batch_status(job_dir: Path, status: str, **meta: Any) -> None:
         **meta,
     }
     _batch_status_path(job_dir).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _notify_jobs_update()
 
 
 def _load_batch_status(job_dir: Path) -> dict[str, Any] | None:
@@ -470,6 +540,67 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
         _write_batch_status(job_dir, "failed", **status_meta, error=str(exc))
 
 
+def _run_ocr_pipeline_job(
+    job_id: str,
+    job_dir: Path,
+    pdf_path: Path,
+    dpi: int,
+    start_page: int,
+    end_page: int | None,
+    translate_target_lang: str,
+    translate_model: str,
+    keep_lang: str,
+    enable_translate: bool,
+    cancel_event: threading.Event,
+) -> None:
+    logger.info("OCR pipeline start job_id=%s", job_id)
+    try:
+        run_pipeline(
+            pdf_path=pdf_path,
+            out_root=job_dir,
+            dpi=dpi,
+            start_page=start_page,
+            end_page=end_page,
+            min_score=0.0,
+            draw_boxes=True,
+            draw_text=True,
+            enable_translate=False,
+            translate_target_lang=translate_target_lang,
+            translate_model=translate_model,
+            triton_url=TRITON_URL,
+            keep_lang=keep_lang,
+            cancel_event=cancel_event,
+        )
+    except PipelineCancelled:
+        logger.info("OCR pipeline cancelled job_id=%s", job_id)
+        try:
+            shutil.rmtree(job_dir)
+        except Exception as exc:
+            logger.warning("Failed to delete cancelled job_dir=%s error=%s", job_dir, exc)
+        _notify_jobs_update()
+        return
+    except Exception as exc:
+        logger.exception("OCR pipeline failed job_id=%s error=%s", job_id, exc)
+        _notify_jobs_update()
+        return
+    finally:
+        global ACTIVE_UPLOAD
+        with ACTIVE_UPLOAD_LOCK:
+            if ACTIVE_UPLOAD and ACTIVE_UPLOAD.get("job_id") == job_id:
+                ACTIVE_UPLOAD = None
+
+    logger.info("OCR pipeline completed job_id=%s", job_id)
+    _notify_jobs_update()
+    if enable_translate:
+        batch_config = {
+            "target_lang": translate_target_lang,
+            "model": translate_model,
+        }
+        _write_batch_config(job_dir, batch_config)
+        _notify_jobs_update()
+        threading.Thread(target=_run_batch_translate_job, args=(job_id, job_dir, batch_config), daemon=True).start()
+
+
 def _load_page_transforms(job_dir: Path) -> dict[int, tuple[float, float, float, float]]:
     json_dir = job_dir / "ocr_json"
     mapping: dict[int, tuple[float, float, float, float]] = {}
@@ -618,6 +749,7 @@ def upload() -> str:
     pdf_filename = secure_filename(f"{job_id}.pdf")
     pdf_path = job_dir / pdf_filename
     file.save(pdf_path)
+    _notify_jobs_update()
 
     dpi = int(request.form.get("dpi", 300))
     start_page = int(request.form.get("start", 1))
@@ -635,44 +767,25 @@ def upload() -> str:
     with ACTIVE_UPLOAD_LOCK:
         ACTIVE_UPLOAD = {"event": cancel_event, "job_id": job_id, "started_at": time.time()}
 
-    try:
-        run_pipeline(
-            pdf_path=pdf_path,
-            out_root=job_dir,
-            dpi=dpi,
-            start_page=start_page,
-            end_page=end_page,
-            min_score=0.0,
-            draw_boxes=True,
-            draw_text=True,
-            enable_translate=False,
-            translate_target_lang=translate_target_lang,
-            translate_model=translate_model,
-            triton_url=TRITON_URL,
-            keep_lang=keep_lang,
-            cancel_event=cancel_event,
-        )
-    except PipelineCancelled:
-        logger.info("Upload pipeline cancelled job_id=%s", job_id)
-        try:
-            shutil.rmtree(job_dir)
-        except Exception as exc:
-            logger.warning("Failed to delete cancelled job_dir=%s error=%s", job_dir, exc)
-        return redirect(url_for("index"))
-    finally:
-        with ACTIVE_UPLOAD_LOCK:
-            if ACTIVE_UPLOAD and ACTIVE_UPLOAD.get("job_id") == job_id:
-                ACTIVE_UPLOAD = None
+    threading.Thread(
+        target=_run_ocr_pipeline_job,
+        args=(
+            job_id,
+            job_dir,
+            pdf_path,
+            dpi,
+            start_page,
+            end_page,
+            translate_target_lang,
+            translate_model,
+            keep_lang,
+            enable_translate,
+            cancel_event,
+        ),
+        daemon=True,
+    ).start()
 
-    if enable_translate:
-        batch_config = {
-            "target_lang": translate_target_lang,
-            "model": translate_model,
-        }
-        _write_batch_config(job_dir, batch_config)
-        threading.Thread(target=_run_batch_translate_job, args=(job_id, job_dir, batch_config), daemon=True).start()
-
-    return redirect(url_for("editor", job_id=job_id))
+    return redirect(url_for("index"))
 
 
 @app.route("/job/<job_id>", methods=["GET"])
@@ -768,6 +881,7 @@ def batch_restore(job_id: str):
         edits_path.write_text(json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         _apply_edits_to_pdf(job_id, job_dir, edits_payload)
         logger.info("Batch translate restored edits.json job_id=%s", job_id)
+        _notify_jobs_update()
     except Exception as exc:
         logger.exception("Batch translate restore failed job_id=%s error=%s", job_id, exc)
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -777,40 +891,32 @@ def batch_restore(job_id: str):
 
 @app.route("/api/jobs", methods=["GET"])
 def list_jobs():
-    JOB_ROOT.mkdir(parents=True, exist_ok=True)
-    jobs = []
-    for job_dir in sorted(JOB_ROOT.iterdir()):
-        if not job_dir.is_dir():
-            continue
-        job_id = job_dir.name
-        if not _safe_job_id(job_id):
-            continue
-
-        pdf_path = job_dir / f"{job_id}.pdf"
-        debug_pdf_path = job_dir / "overlay_debug.pdf"
-        edited_pdf_path = job_dir / "edited.pdf"
-
-        created_at = _job_timestamp(pdf_path) or _job_timestamp(job_dir)
-        updated_at = max(_job_timestamp(debug_pdf_path), _job_timestamp(edited_pdf_path), created_at)
-
-        jobs.append(
-            {
-                "job_id": job_id,
-                "created_at": created_at,
-                "updated_at": updated_at,
-                "status": "ready" if debug_pdf_path.exists() else "processing",
-                "editor_url": url_for("editor", job_id=job_id),
-                "debug_pdf_url": url_for("job_file", job_id=job_id, filename="overlay_debug.pdf")
-                if debug_pdf_path.exists()
-                else None,
-                "edited_pdf_url": url_for("job_file", job_id=job_id, filename="edited.pdf")
-                if edited_pdf_path.exists()
-                else None,
-            }
-        )
-
-    jobs.sort(key=lambda item: item["updated_at"], reverse=True)
+    jobs = _build_jobs_list()
     return jsonify({"jobs": jobs})
+
+
+@app.route("/api/jobs/stream", methods=["GET"])
+def jobs_stream():
+    @stream_with_context
+    def generate():
+        last_version = -1
+        while True:
+            with JOBS_EVENT:
+                if last_version == JOBS_VERSION:
+                    JOBS_EVENT.wait(timeout=15)
+                current_version = JOBS_VERSION
+            if current_version == last_version:
+                yield ": ping\n\n"
+                continue
+            last_version = current_version
+            payload = {"jobs": _build_jobs_list()}
+            data = json.dumps(payload, ensure_ascii=False)
+            yield f"event: jobs\ndata: {data}\n\n"
+
+    resp = Response(generate(), mimetype="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    return resp
 
 
 @app.route("/api/job/<job_id>", methods=["DELETE"])
@@ -824,6 +930,7 @@ def delete_job(job_id: str):
         shutil.rmtree(job_dir)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
+    _notify_jobs_update()
     return jsonify({"ok": True, "deleted": True})
 
 
@@ -842,6 +949,7 @@ def save_job(job_id: str):
         edited_pdf = _apply_edits_to_pdf(job_id, job_dir, payload)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
+    _notify_jobs_update()
     return jsonify({"ok": True, "edited_pdf_url": url_for("job_file", job_id=job_id, filename=edited_pdf.name)})
 
 
@@ -865,6 +973,7 @@ def cancel_upload():
     event = active.get("event")
     if event is not None:
         event.set()
+    _notify_jobs_update()
     return jsonify({"ok": True, "job_id": active.get("job_id")})
 
 

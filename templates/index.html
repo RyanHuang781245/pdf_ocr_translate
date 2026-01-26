@@ -71,47 +71,12 @@
         <div id="jobsList" class="jobs-list"></div>
       </section>
     </main>
-    <div id="loadingOverlay" class="loading-overlay" hidden>
-      <div class="loading-card">
-        <div class="spinner"></div>
-        <p>OCR is running. Please wait...</p>
-        <button id="cancelProcessing" class="ghost" type="button">取消</button>
-      </div>
-    </div>
     <script>
-      const form = document.querySelector("form");
-      const overlay = document.getElementById("loadingOverlay");
-      const cancelBtn = document.getElementById("cancelProcessing");
-      if (form && overlay) {
-        form.addEventListener("submit", () => {
-          overlay.hidden = false;
-          document.body.classList.add("is-loading");
-          const button = form.querySelector('button[type="submit"]');
-          if (button) {
-            button.disabled = true;
-            button.textContent = "Processing...";
-          }
-        });
-      }
-      if (cancelBtn && overlay) {
-        cancelBtn.addEventListener("click", () => {
-          fetch("/api/upload-cancel", { method: "POST" }).catch(() => {});
-          overlay.hidden = true;
-          document.body.classList.remove("is-loading");
-          const button = form?.querySelector('button[type="submit"]');
-          if (button) {
-            button.disabled = false;
-            button.textContent = "執行翻譯";
-          }
-          if (document.readyState !== "complete") {
-            window.stop();
-          }
-        });
-      }
-
       const jobsList = document.getElementById("jobsList");
       const jobsEmpty = document.getElementById("jobsEmpty");
       const jobsRefresh = document.getElementById("jobsRefresh");
+      let jobsLoading = false;
+      let jobsSource = null;
 
       function formatDate(ts) {
         if (!ts) return "Unknown";
@@ -137,12 +102,14 @@
 
           const meta = document.createElement("div");
           meta.className = "job-meta";
-          meta.textContent = `Updated: ${formatDate(job.updated_at)} · Status: ${job.status}`;
+          const statusLabel = job.status_label || job.status || "Unknown";
+          const statusCode = job.status_code || job.status || "unknown";
+          meta.textContent = `Updated: ${formatDate(job.updated_at)} · Status: ${statusLabel}`;
 
           const actions = document.createElement("div");
           actions.className = "job-actions";
 
-          if (job.status === "ready") {
+          if (statusCode !== "ocr" && statusCode !== "processing") {
             const editLink = document.createElement("a");
             editLink.href = job.editor_url;
             editLink.textContent = "編輯文件";
@@ -211,6 +178,8 @@
 
       async function loadJobs() {
         if (!jobsList) return;
+        if (jobsLoading) return;
+        jobsLoading = true;
         jobsList.innerHTML = '<div class="hint">Loading...</div>';
         try {
           const res = await fetch("/api/jobs");
@@ -222,13 +191,36 @@
           renderJobs(payload.jobs || []);
         } catch (error) {
           renderJobs([]);
+        } finally {
+          jobsLoading = false;
         }
       }
 
       if (jobsRefresh) {
         jobsRefresh.addEventListener("click", loadJobs);
       }
+      function startJobsStream() {
+        if (!window.EventSource || jobsSource) {
+          return;
+        }
+        jobsSource = new EventSource("/api/jobs/stream");
+        jobsSource.addEventListener("jobs", (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            renderJobs(payload.jobs || []);
+          } catch (error) {
+            loadJobs();
+          }
+        });
+        jobsSource.addEventListener("error", () => {
+          jobsSource?.close();
+          jobsSource = null;
+          setTimeout(startJobsStream, 5000);
+        });
+      }
+
       loadJobs();
+      startJobsStream();
     </script>
   </body>
 </html>
