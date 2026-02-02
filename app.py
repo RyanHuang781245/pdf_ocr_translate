@@ -22,7 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent
 OUT_ROOT = BASE_DIR / "out"
 JOB_ROOT = OUT_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
-TRITON_URL = os.getenv("TRITON_URL", "localhost:8001")
+TRITON_URL = os.getenv("TRITON_URL", "https://reproduced-dating-tamil-edited.trycloudflare.com/layout-parsing")
 AZURE_BASE_URL = os.getenv("AZURE_OPENAI_BASE_URL", "https://uocp-azure-openai.openai.azure.com/openai/v1/")
 AZURE_API_KEY_ENV = os.getenv("AZURE_OPENAI_API_KEY_ENV", "UO_AZURE_OPENAI_API_KEY")
 AZURE_BATCH_MODEL = os.getenv("AZURE_BATCH_MODEL", "gpt-4o-mini-global-batch")
@@ -751,7 +751,7 @@ def upload() -> str:
     file.save(pdf_path)
     _notify_jobs_update()
 
-    dpi = int(request.form.get("dpi", 300))
+    dpi = 300
     start_page = int(request.form.get("start", 1))
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
@@ -978,4 +978,4 @@ def cancel_upload():
 
 
 if __name__ == "__main__":
-    app.run(port=5001, debug=True, threaded=True)
+    app.run(host="0.0.0.0", port=5001, debug=True, threaded=True)

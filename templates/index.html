@@ -22,10 +22,6 @@
           </label>
           <div class="form-grid">
             <label>
-              <span>圖片 DPI</span>
-              <input type="number" name="dpi" value="300" min="72" max="600" />
-            </label>
-            <label>
               <span>開始頁面</span>
               <input type="number" name="start" value="1" min="1" />
             </label>
@@ -49,11 +45,16 @@
             </label>
             <label>
               <span>翻譯語言</span>
-              <input type="text" name="target_lang" value="en" />
+              <select name="target_lang">
+                <option value="en" selected>English (en)</option>
+                <option value="zh">中文 (zh)</option>
+              </select>
             </label>
             <label>
               <span>Batch 模型</span>
-              <input type="text" name="model" value="gpt-4o-mini-global-batch" />
+              <select name="model">
+                <option value="gpt-4o-mini-global-batch" selected>gpt-4o-mini-global-batch</option>
+              </select>
             </label>
           </div>
           <button class="primary" type="submit">執行翻譯</button>

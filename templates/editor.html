@@ -42,6 +42,9 @@
             <button id="addBox" class="ghost">加入文字框</button>
           </div>
           <div class="button-row">
+            <button id="copyBox" class="ghost">複製文字框</button>
+          </div>
+          <div class="button-row">
             <button id="deleteBox" class="danger">刪除文字框</button>
           </div>
         </section>
@@ -55,15 +58,6 @@
         </section>
       </aside>
       <section class="canvas">
-        <div class="pdf-preview">
-          <div class="preview-controls">
-            <button id="previewDebug" class="ghost is-active">除錯預覽</button>
-            <button id="previewEdited" class="ghost" disabled>編輯預覽</button>
-          </div>
-          <object id="pdfPreview" data="{{ debug_pdf_url }}" data-debug-url="{{ debug_pdf_url }}" type="application/pdf">
-            <p>PDF preview is unavailable. <a href="{{ debug_pdf_url }}">Download PDF</a></p>
-          </object>
-        </div>
         <div id="pages" class="pages"></div>
       </section>
     </main>

@@ -410,7 +410,7 @@ def extract_rec_entries_from_ppstructure(
         rec_texts.append(content)
         rec_scores.append(_as_float(blk.get("block_score"), 1.0))
 
-    # Table text lines (rec_polys)
+    # OCR text lines (rec_polys)
     overall = data.get("overall_ocr_res", {}) or data.get("overall_ocr", {})
     ocr_polys = overall.get("rec_polys", []) or []
     ocr_texts = overall.get("rec_texts", []) or []
@@ -418,8 +418,6 @@ def extract_rec_entries_from_ppstructure(
 
     for idx, poly in enumerate(ocr_polys):
         if not (isinstance(poly, list) and len(poly) >= 4):
-            continue
-        if not table_bboxes:
             continue
         score = _as_float(ocr_scores[idx], 0.0) if idx < len(ocr_scores) else 0.0
         if score < min_line_score:
@@ -432,11 +430,6 @@ def extract_rec_entries_from_ppstructure(
                 break
             poly4.append([_as_float(p[0]), _as_float(p[1])])
         if not poly4:
-            continue
-
-        bbox = poly_to_bbox(poly4)
-        cx, cy = bbox_center(bbox)
-        if not any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
             continue
 
         text = ocr_texts[idx] if idx < len(ocr_texts) else ""
@@ -694,8 +687,6 @@ def overlay_one_page(
     for idx, poly in enumerate(rec_polys):
         if not (isinstance(poly, list) and len(poly) >= 4):
             continue
-        if not table_bboxes:
-            continue
 
         sc = _as_float(rec_scores[idx], 0.0) if idx < len(rec_scores) else 0.0
         if sc < min_line_score:
@@ -707,10 +698,6 @@ def overlay_one_page(
             continue
 
         bbox = poly_to_bbox(poly4)
-        cx, cy = bbox_center(bbox)
-        if not any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
-            continue
-
         text = rec_texts[idx] if idx < len(rec_texts) else ""
         text = (text or "").strip()
         if not text:
@@ -740,7 +727,7 @@ def overlay_one_page(
     if dbg_shape is not None:
         dbg_shape.commit()
 
-    print(f"[DEBUG] page={page.number} tables={len(table_bboxes)} table_line_hits={hit}")
+    print(f"[DEBUG] page={page.number} tables={len(table_bboxes)} ocr_line_hits={hit}")
 
 
 def overlay_debug_pdf(

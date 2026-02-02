@@ -7,6 +7,12 @@ const state = {
   selectedBoxes: new Set(),
   selecting: null,
   lastShiftKey: false,
+  activePageIdx: 0,
+  clipboard: {
+    boxes: [],
+    sourcePageIdx: null,
+    pasteCount: 0,
+  },
 };
 
 let controlsBound = false;
@@ -17,6 +23,7 @@ const fontSizeNumberEl = document.getElementById("fontSizeNumber");
 const fontColorEl = document.getElementById("fontColor");
 const deleteBtn = document.getElementById("deleteBox");
 const addBoxBtn = document.getElementById("addBox");
+const copyBoxBtn = document.getElementById("copyBox");
 const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const batchTranslateBtn = document.getElementById("batchTranslateBtn");
@@ -99,6 +106,12 @@ function clearSelection() {
   applySelectionClasses();
 }
 
+function setActivePage(pageIdx) {
+  if (!Number.isFinite(pageIdx)) return;
+  const maxIdx = Math.max(0, state.pages.length - 1);
+  state.activePageIdx = Math.max(0, Math.min(pageIdx, maxIdx));
+}
+
 function setSelection(pageIdx, boxIdx, additive = false) {
   const page = state.pages[pageIdx];
   const box = page?.boxes[boxIdx];
@@ -108,6 +121,7 @@ function setSelection(pageIdx, boxIdx, additive = false) {
     }
     return;
   }
+  setActivePage(pageIdx);
   const key = boxKey(pageIdx, boxIdx);
   if (!additive) {
     state.selectedBoxes.clear();
@@ -144,6 +158,164 @@ function deleteSelectedBoxes() {
   });
   clearSelection();
   setStatus("Box deleted.");
+}
+
+function copySelectedBoxes() {
+  const selected = getSelectedBoxes();
+  if (!selected.length) {
+    setStatus("No boxes selected.");
+    return;
+  }
+  state.clipboard = {
+    boxes: selected.map(({ box }) => ({
+      bbox: { ...box.bbox },
+      text: box.text,
+      fontSize: box.fontSize,
+      color: box.color,
+    })),
+    sourcePageIdx: selected.length === 1 ? selected[0].pageIdx : null,
+    pasteCount: 0,
+  };
+  setStatus(`Copied ${selected.length} box${selected.length > 1 ? "es" : ""}.`);
+}
+
+function pasteClipboardBoxes() {
+  const items = state.clipboard?.boxes || [];
+  if (!items.length) {
+    setStatus("Clipboard is empty.");
+    return;
+  }
+  const targetPageIdx = Number.isFinite(state.activePageIdx)
+    ? state.activePageIdx
+    : state.selected?.pageIdx ?? 0;
+  const targetPage = state.pages[targetPageIdx];
+  if (!targetPage) return;
+
+  const samePage = state.clipboard.sourcePageIdx === targetPageIdx;
+  const pasteOffset = (state.clipboard.pasteCount + 1) * 12;
+  const dx = samePage ? pasteOffset : 0;
+  const dy = samePage ? pasteOffset : 0;
+
+  const baseNextId = targetPage.boxes.length
+    ? Math.max(...targetPage.boxes.map((b) => Number(b.id) || 0)) + 1
+    : 0;
+  let nextId = baseNextId;
+
+  const newSelections = [];
+  items.forEach((item) => {
+    const bbox = {
+      x: item.bbox.x + dx,
+      y: item.bbox.y + dy,
+      w: item.bbox.w,
+      h: item.bbox.h,
+    };
+
+    if (targetPage.imageSize && targetPage.imageSize.length === 2) {
+      const maxX = Math.max(0, targetPage.imageSize[0] - bbox.w);
+      const maxY = Math.max(0, targetPage.imageSize[1] - bbox.h);
+      bbox.x = Math.min(Math.max(0, bbox.x), maxX);
+      bbox.y = Math.min(Math.max(0, bbox.y), maxY);
+    }
+
+    const newBox = {
+      id: nextId++,
+      bbox,
+      text: item.text,
+      fontSize: item.fontSize,
+      color: item.color,
+      deleted: false,
+      element: null,
+    };
+
+    targetPage.boxes.push(newBox);
+    const newIndex = targetPage.boxes.length - 1;
+    createBoxElement(targetPageIdx, newIndex);
+    newSelections.push({ pageIdx: targetPageIdx, boxIdx: newIndex });
+  });
+
+  state.clipboard.pasteCount += 1;
+  clearSelection();
+  newSelections.forEach(({ pageIdx, boxIdx }, idx) => {
+    state.selectedBoxes.add(boxKey(pageIdx, boxIdx));
+    if (idx === 0) {
+      state.selected = { pageIdx, boxIdx };
+      syncInspectorFromBox(state.pages[pageIdx]?.boxes[boxIdx]);
+      setActivePage(pageIdx);
+    }
+  });
+  applySelectionClasses();
+  setStatus(`Pasted ${items.length} box${items.length > 1 ? "es" : ""}.`);
+}
+
+function duplicateSelectedBoxes() {
+  const selected = getSelectedBoxes();
+  if (!selected.length) return;
+
+  const targetPageIdx = Number.isFinite(state.activePageIdx)
+    ? state.activePageIdx
+    : state.selected?.pageIdx ?? 0;
+  const targetPage = state.pages[targetPageIdx];
+  if (!targetPage) return;
+
+  const nextIdByPage = new Map();
+  const offsetCountByPage = new Map();
+  const newSelections = [];
+
+  selected.forEach(({ pageIdx, page, box }) => {
+    const sourcePageIdx = pageIdx;
+    const nextId = nextIdByPage.has(targetPageIdx)
+      ? nextIdByPage.get(targetPageIdx)
+      : targetPage.boxes.length
+      ? Math.max(...targetPage.boxes.map((b) => Number(b.id) || 0)) + 1
+      : 0;
+
+    const offsetCount = offsetCountByPage.get(targetPageIdx) ?? 0;
+    const offset = sourcePageIdx === targetPageIdx ? 12 * (offsetCount + 1) : 0;
+
+    const bbox = {
+      x: box.bbox.x + offset,
+      y: box.bbox.y + offset,
+      w: box.bbox.w,
+      h: box.bbox.h,
+    };
+
+    if (targetPage.imageSize && targetPage.imageSize.length === 2) {
+      const maxX = Math.max(0, targetPage.imageSize[0] - bbox.w);
+      const maxY = Math.max(0, targetPage.imageSize[1] - bbox.h);
+      bbox.x = Math.min(Math.max(0, bbox.x), maxX);
+      bbox.y = Math.min(Math.max(0, bbox.y), maxY);
+    }
+
+    const newBox = {
+      id: nextId,
+      bbox,
+      text: box.text,
+      fontSize: box.fontSize,
+      color: box.color,
+      deleted: false,
+      element: null,
+    };
+
+    targetPage.boxes.push(newBox);
+    nextIdByPage.set(targetPageIdx, nextId + 1);
+    offsetCountByPage.set(targetPageIdx, offsetCount + 1);
+
+    const newIndex = targetPage.boxes.length - 1;
+    createBoxElement(targetPageIdx, newIndex);
+    newSelections.push({ pageIdx: targetPageIdx, boxIdx: newIndex });
+  });
+
+  clearSelection();
+  newSelections.forEach(({ pageIdx, boxIdx }, idx) => {
+    state.selectedBoxes.add(boxKey(pageIdx, boxIdx));
+    if (idx === 0) {
+      state.selected = { pageIdx, boxIdx };
+      syncInspectorFromBox(state.pages[pageIdx]?.boxes[boxIdx]);
+      setActivePage(pageIdx);
+    }
+  });
+  applySelectionClasses();
+  setStatus("Box duplicated.");
 }
 
 function updateEditedLink(url) {
@@ -231,6 +403,7 @@ function buildState(data) {
       scale: 1,
     };
   });
+  state.activePageIdx = 0;
 }
 
 function updateBoxElement(page, box) {
@@ -289,6 +462,7 @@ function onDragStart(event, pageIdx, boxIndex, groupMode = false) {
   const page = state.pages[pageIdx];
   const box = page?.boxes[boxIndex];
   if (!page || !box || box.deleted) return;
+  setActivePage(pageIdx);
   const key = boxKey(pageIdx, boxIndex);
   const selectedOnPage = getSelectedBoxes().filter((item) => item.pageIdx === pageIdx);
   const shouldGroup = groupMode || (selectedOnPage.length > 1 && state.selectedBoxes.has(key));
@@ -412,6 +586,7 @@ function startRangeSelection(event, pageIdx) {
   if (event.target.closest(".text-box")) return;
   const page = state.pages[pageIdx];
   if (!page || !page.overlay) return;
+  setActivePage(pageIdx);
   const bounds = page.overlay.getBoundingClientRect();
   const startX = event.clientX - bounds.left;
   const startY = event.clientY - bounds.top;
@@ -510,6 +685,10 @@ function renderPages() {
     const header = document.createElement("div");
     header.className = "page-header";
     header.innerHTML = `<span class="page-number">Page ${page.pageIndex + 1}</span>`;
+    header.addEventListener("click", () => {
+      setActivePage(pageIdx);
+      setStatus(`Active page: ${page.pageIndex + 1}`);
+    });
 
     const wrap = document.createElement("div");
     wrap.className = "page-wrap";
@@ -628,7 +807,7 @@ function createBoxElement(pageIdx, boxIdx) {
 
 function addNewBox() {
   if (!state.pages.length) return;
-  const targetPageIdx = state.selected?.pageIdx ?? 0;
+  const targetPageIdx = state.selected?.pageIdx ?? state.activePageIdx ?? 0;
   const page = state.pages[targetPageIdx];
   if (!page) return;
 
@@ -822,6 +1001,12 @@ function bindControls() {
     });
   }
 
+  if (copyBoxBtn) {
+    copyBoxBtn.addEventListener("click", () => {
+      duplicateSelectedBoxes();
+    });
+  }
+
   if (saveBtn) {
     saveBtn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -894,11 +1079,26 @@ function bindControls() {
   }
 
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Delete") return;
     const target = event.target;
-    if (target && (target.isContentEditable || ["INPUT", "TEXTAREA"].includes(target.tagName))) {
-      return;
+    const isEditing =
+      target && (target.isContentEditable || ["INPUT", "TEXTAREA"].includes(target.tagName));
+
+    if ((event.ctrlKey || event.metaKey) && !isEditing) {
+      const key = event.key.toLowerCase();
+      if (key === "c") {
+        event.preventDefault();
+        copySelectedBoxes();
+        return;
+      }
+      if (key === "v") {
+        event.preventDefault();
+        pasteClipboardBoxes();
+        return;
+      }
     }
+
+    if (event.key !== "Delete") return;
+    if (isEditing) return;
     deleteSelectedBoxes();
   });
 }
