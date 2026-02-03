@@ -299,30 +299,18 @@ def px_point_to_pdf_pt(
     rotation: int,
 ) -> list[float]:
     rot = rotation % 360
-    if rot == 0:
-        x = x_px * page_w_pt / img_w_px
-        y = y_px * page_h_pt / img_h_px
-        return [x, y]
+    sx = page_w_pt / img_w_px
+    sy = page_h_pt / img_h_px
+    x = x_px * sx
+    # image origin is top-left, PDF origin is bottom-left
+    y = y_px * sy
+    
     if rot == 90:
-        xr = x_px * page_h_pt / img_w_px
-        yr = y_px * page_w_pt / img_h_px
-        x = page_w_pt - yr
-        y = xr
-        return [x, y]
-    if rot == 180:
-        xr = x_px * page_w_pt / img_w_px
-        yr = y_px * page_h_pt / img_h_px
-        x = page_w_pt - xr
-        y = page_h_pt - yr
-        return [x, y]
-    if rot == 270:
-        xr = x_px * page_h_pt / img_w_px
-        yr = y_px * page_w_pt / img_h_px
-        x = yr
-        y = page_h_pt - xr
-        return [x, y]
-    x = x_px * page_w_pt / img_w_px
-    y = y_px * page_h_pt / img_h_px
+        x, y = y, page_w_pt - x
+    elif rot == 180:
+        x, y = page_w_pt - x, page_h_pt - y
+    elif rot == 270:
+        x, y = page_h_pt - y, x
     return [x, y]
 
 
@@ -332,8 +320,8 @@ def px_bbox_to_rect(
     img_h_px: int,
     page: fitz.Page,
 ) -> fitz.Rect:
-    page_w_pt = float(page.mediabox.width)
-    page_h_pt = float(page.mediabox.height)
+    page_w_pt = float(page.rect.width)
+    page_h_pt = float(page.rect.height)
     rotation = int(page.rotation or 0)
     x1, y1, x2, y2 = px_bb
     poly = [
@@ -625,7 +613,7 @@ def get_pdf_page_info(pdf_path: Path, page_index_0based: int) -> Tuple[float, fl
     if page_index_0based < 0 or page_index_0based >= doc.page_count:
         raise ValueError(f"page_index out of range: 0~{doc.page_count-1}")
     page = doc.load_page(page_index_0based)
-    w_pt, h_pt = float(page.mediabox.width), float(page.mediabox.height)
+    w_pt, h_pt = float(page.rect.width), float(page.rect.height)
     rotation = int(page.rotation or 0)
     doc.close()
     return w_pt, h_pt, rotation
@@ -662,8 +650,19 @@ def add_pdf_coords_to_json(
     pdf_polys: list[list[list[float]]] = []
     pdf_boxes: list[list[float]] = []
 
-    for poly_px in ocr_data.get("rec_polys", []):
-        poly_pt = px_poly_to_pymupdf_pt_poly(poly_px, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation)
+    rec_boxes = ocr_data.get("rec_boxes", []) or []
+    if not rec_boxes:
+        rec_boxes = [poly_to_bbox(poly) for poly in ocr_data.get("rec_polys", [])]
+
+    for bb_px in rec_boxes:
+        if not (isinstance(bb_px, list) and len(bb_px) == 4):
+            continue
+        x1, y1, x2, y2 = [float(v) for v in bb_px]
+        p1 = px_point_to_pdf_pt(x1, y1, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation)
+        p2 = px_point_to_pdf_pt(x2, y1, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation)
+        p3 = px_point_to_pdf_pt(x2, y2, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation)
+        p4 = px_point_to_pdf_pt(x1, y2, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation)
+        poly_pt = [p1, p2, p3, p4]
         pdf_polys.append(poly_pt)
         pdf_boxes.append(poly_to_bbox(poly_pt))
 
@@ -673,7 +672,7 @@ def add_pdf_coords_to_json(
         "image_size_px": [img_w_px, img_h_px],
         "pdf_page_size_pt": [page_w_pt, page_h_pt],
         "page_rotation": rotation,
-        "method": "scale_by_page_size_with_rotation_for_pymupdf",
+        "method": "rec_boxes_with_rotation",
     }
     out["pdf_polys"] = pdf_polys
     out["pdf_boxes"] = pdf_boxes
@@ -789,6 +788,7 @@ def overlay_one_page(
                 fontsize=fs,
                 color=(0, 0, 1),
                 overlay=True,
+                rotate=int(page.rotation),
             )
             hit += 1
 
@@ -971,6 +971,7 @@ def run_pipeline(
             "page_index_0based": page_idx_0based,
             "page_no_1based": page_idx_0based + 1,
             "rec_polys": rec_polys,
+            "rec_boxes": [poly_to_bbox(poly) for poly in rec_polys],
             "rec_texts": rec_texts,
             "rec_scores": rec_scores,
         }

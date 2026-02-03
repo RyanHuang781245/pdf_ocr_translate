@@ -16,7 +16,7 @@ import fitz
 from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory, stream_with_context, url_for
 from werkzeug.utils import secure_filename
 
-from pipeline_ocr_overlay import PipelineCancelled, run_pipeline
+from pipeline_ocr_overlay import PipelineCancelled, run_pipeline, px_point_to_pdf_pt
 
 BASE_DIR = Path(__file__).resolve().parent
 OUT_ROOT = BASE_DIR / "out"
@@ -601,17 +601,24 @@ def _run_ocr_pipeline_job(
         threading.Thread(target=_run_batch_translate_job, args=(job_id, job_dir, batch_config), daemon=True).start()
 
 
-def _load_page_transforms(job_dir: Path) -> dict[int, tuple[float, float, float, float]]:
+def _load_page_transforms(job_dir: Path) -> dict[int, dict[str, Any]]:
     json_dir = job_dir / "ocr_json"
-    mapping: dict[int, tuple[float, float, float, float]] = {}
+    mapping: dict[int, dict[str, Any]] = {}
     for path in json_dir.glob("*_res_with_pdf_coords.json"):
         data = json.loads(path.read_text(encoding="utf-8"))
         page_idx = int(data.get("page_index_0based", 0))
         transform = data.get("coord_transform", {})
         img_size = transform.get("image_size_px") or []
         pdf_size = transform.get("pdf_page_size_pt") or []
+        rotation = transform.get("page_rotation")
         if len(img_size) == 2 and len(pdf_size) == 2:
-            mapping[page_idx] = (float(img_size[0]), float(img_size[1]), float(pdf_size[0]), float(pdf_size[1]))
+            mapping[page_idx] = {
+                "img_w": float(img_size[0]),
+                "img_h": float(img_size[1]),
+                "page_w": float(pdf_size[0]),
+                "page_h": float(pdf_size[1]),
+                "rotation": int(rotation) if rotation is not None else 0,
+            }
     return mapping
 
 
@@ -636,7 +643,11 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
         transform = page_transforms.get(page_idx)
         if not transform:
             continue
-        img_w, img_h, page_w, page_h = transform
+        img_w = float(transform.get("img_w", 0.0))
+        img_h = float(transform.get("img_h", 0.0))
+        page_w = float(transform.get("page_w", 0.0))
+        page_h = float(transform.get("page_h", 0.0))
+        rotation = int(transform.get("rotation", 0))
         if img_w <= 0 or img_h <= 0:
             continue
         sx = page_w / img_w
@@ -657,11 +668,18 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
             else:
                 continue
             text = str(box.get("text", "")).strip()
-            rect = fitz.Rect(x * sx, y * sy, (x + w) * sx, (y + h) * sy)
+            p1 = px_point_to_pdf_pt(x, y, img_w, img_h, page_w, page_h, rotation)
+            p2 = px_point_to_pdf_pt(x + w, y, img_w, img_h, page_w, page_h, rotation)
+            p3 = px_point_to_pdf_pt(x + w, y + h, img_w, img_h, page_w, page_h, rotation)
+            p4 = px_point_to_pdf_pt(x, y + h, img_w, img_h, page_w, page_h, rotation)
+            xs = [p1[0], p2[0], p3[0], p4[0]]
+            ys = [p1[1], p2[1], p3[1], p4[1]]
+            rect = fitz.Rect(min(xs), min(ys), max(xs), max(ys))
             if rect.is_empty:
                 continue
 
             font_size_px = float(box.get("font_size") or 0.0)
+            sy = rect.height / max(h, 1.0)
             font_size_pt = font_size_px * sy if font_size_px > 0 else max(5.0, rect.height * 0.7)
             color = _hex_to_rgb(box.get("color"))
 
@@ -671,6 +689,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
             ok = False
             current = font_size_pt
             for _ in range(20):
+                rotate = rotation if rotation else 0
                 if fontfile:
                     rc = shape.insert_textbox(
                         rect,
@@ -679,6 +698,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                         fontsize=current,
                         color=color,
                         align=0,
+                        rotate=rotate,
                     )
                 else:
                     rc = shape.insert_textbox(
@@ -688,6 +708,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                         fontsize=current,
                         color=color,
                         align=0,
+                        rotate=rotate,
                     )
                 if rc >= 0:
                     ok = True
@@ -705,6 +726,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                         fontsize=max(4.0, current),
                         color=color,
                         align=0,
+                        rotate=rotate,
                     )
                 else:
                     shape.insert_textbox(
@@ -714,6 +736,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                         fontsize=max(4.0, current),
                         color=color,
                         align=0,
+                        rotate=rotate,
                     )
 
         shape.commit()
