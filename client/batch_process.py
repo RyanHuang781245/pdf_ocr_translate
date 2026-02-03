@@ -2,14 +2,13 @@ import os
 import json
 import argparse
 import time
-from paddlex_hps_client import triton_request, utils
-from tritonclient import grpc as triton_grpc
+import base64
+import requests
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tiff"}
 
 
 def infer_folder(folder_path, url="localhost:8001"):
-    client = triton_grpc.InferenceServerClient(url=url)
 
     if not os.path.isdir(folder_path):
         raise ValueError(f"{folder_path} 不是合法的資料夾路徑")
@@ -30,14 +29,17 @@ def infer_folder(folder_path, url="localhost:8001"):
     for idx, img_path in enumerate(files):
         print(f"[{idx+1}/{len(files)}] 辨識：{img_path}")
 
-        # 準備 input
-        file_bytes = utils.prepare_input_file(img_path)
-        input_ = {
-            "file": file_bytes,
-            "fileType": 1  # 0 = image
+        with open(img_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode("ascii")
+        payload = {
+            "file": image_data,
+            "fileType": 1,  # 0 = image
         }
-
-        output = triton_request(client, "layout-parsing", input_)
+        response = requests.post(url, json=payload, timeout=120)
+        if response.status_code != 200:
+            print("識別失敗: HTTP", response.status_code)
+            continue
+        output = response.json()
 
         if output.get("errorCode", -1) != 0:
             print("識別失敗:", output.get("errorMsg"))

@@ -8,10 +8,10 @@ import time
 from pathlib import Path
 from typing import Any, Callable, List, Tuple
 
+import base64
 import fitz  # PyMuPDF
 from PIL import Image
-from paddlex_hps_client import triton_request, utils
-from tritonclient import grpc as triton_grpc
+import requests
 
 # -----------------------------
 # Font (Windows CJK default)
@@ -142,7 +142,7 @@ def pdf_to_pngs(
 
 
 # -----------------------------
-# Step 2) Triton layout-parsing -> JSON
+# Step 2) layout-parsing -> JSON (Base64 + requests.post)
 # -----------------------------
 def run_layout_parsing_predict(
     images: list[Path],
@@ -153,19 +153,22 @@ def run_layout_parsing_predict(
 ) -> list[Path]:
     json_out_dir.mkdir(parents=True, exist_ok=True)
 
-    client = triton_grpc.InferenceServerClient(url=triton_url)
-
     out_jsons: list[Path] = []
     total = len(images)
     for idx, img_path in enumerate(images, start=1):
         if cancel_event is not None and cancel_event.is_set():
             raise PipelineCancelled("Cancelled during OCR.")
 
-        input_ = {
-            "file": utils.prepare_input_file(str(img_path)),
+        with img_path.open("rb") as f:
+            image_data = base64.b64encode(f.read()).decode("ascii")
+        payload = {
+            "file": image_data,
             "fileType": 1,
         }
-        output = triton_request(client, "layout-parsing", input_)
+        response = requests.post(triton_url, json=payload, timeout=120)
+        if response.status_code != 200:
+            raise RuntimeError(f"OCR request failed for {img_path}: HTTP {response.status_code}")
+        output = response.json()
         if output.get("errorCode", -1) != 0:
             msg = output.get("errorMsg") or "unknown error"
             raise RuntimeError(f"Triton OCR failed for {img_path}: {msg}")
@@ -225,7 +228,7 @@ def point_in_bbox(px: float, py: float, bbox: list[float]) -> bool:
 def load_table_bboxes_from_parsing(data: dict) -> list[dict]:
     tables = []
     for blk in data.get("parsing_res_list", []):
-        if blk.get("block_label") == "table" and isinstance(blk.get("block_bbox"), list) and len(blk["block_bbox"]) == 4:
+        if blk.get("block_label") in {"table", "image"} and isinstance(blk.get("block_bbox"), list) and len(blk["block_bbox"]) == 4:
             tables.append(
                 {
                     "bbox": blk["block_bbox"],
@@ -286,12 +289,62 @@ def bbox_to_poly(bb_px: list[float]) -> list[list[float]]:
     return [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
 
 
-def px_bbox_to_rect(px_bb: list[float], img_w_px: int, img_h_px: int, page: fitz.Page) -> fitz.Rect:
-    page_w_pt, page_h_pt = float(page.rect.width), float(page.rect.height)
-    sx = page_w_pt / img_w_px
-    sy = page_h_pt / img_h_px
+def px_point_to_pdf_pt(
+    x_px: float,
+    y_px: float,
+    img_w_px: int,
+    img_h_px: int,
+    page_w_pt: float,
+    page_h_pt: float,
+    rotation: int,
+) -> list[float]:
+    rot = rotation % 360
+    if rot == 0:
+        x = x_px * page_w_pt / img_w_px
+        y = y_px * page_h_pt / img_h_px
+        return [x, y]
+    if rot == 90:
+        xr = x_px * page_h_pt / img_w_px
+        yr = y_px * page_w_pt / img_h_px
+        x = page_w_pt - yr
+        y = xr
+        return [x, y]
+    if rot == 180:
+        xr = x_px * page_w_pt / img_w_px
+        yr = y_px * page_h_pt / img_h_px
+        x = page_w_pt - xr
+        y = page_h_pt - yr
+        return [x, y]
+    if rot == 270:
+        xr = x_px * page_h_pt / img_w_px
+        yr = y_px * page_w_pt / img_h_px
+        x = yr
+        y = page_h_pt - xr
+        return [x, y]
+    x = x_px * page_w_pt / img_w_px
+    y = y_px * page_h_pt / img_h_px
+    return [x, y]
+
+
+def px_bbox_to_rect(
+    px_bb: list[float],
+    img_w_px: int,
+    img_h_px: int,
+    page: fitz.Page,
+) -> fitz.Rect:
+    page_w_pt = float(page.mediabox.width)
+    page_h_pt = float(page.mediabox.height)
+    rotation = int(page.rotation or 0)
     x1, y1, x2, y2 = px_bb
-    return fitz.Rect(x1 * sx, y1 * sy, x2 * sx, y2 * sy)
+    poly = [
+        px_point_to_pdf_pt(x1, y1, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation),
+        px_point_to_pdf_pt(x2, y1, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation),
+        px_point_to_pdf_pt(x2, y2, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation),
+        px_point_to_pdf_pt(x1, y2, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation),
+    ]
+    xs = [p[0] for p in poly]
+    ys = [p[1] for p in poly]
+    return fitz.Rect(min(xs), min(ys), max(xs), max(ys))
 
 
 # -----------------------------
@@ -380,6 +433,7 @@ def extract_rec_entries_from_ppstructure(
     if table_fallback_layout and not tables:
         tables = load_table_bboxes_fallback_layout(data)
     table_bboxes = [t["bbox"] for t in tables]
+    paragraph_bboxes: list[list[float]] = []
 
     rec_polys: list[list[list[float]]] = []
     rec_texts: list[str] = []
@@ -400,6 +454,7 @@ def extract_rec_entries_from_ppstructure(
         content = normalize_paragraph_text(blk.get("block_content", ""))
         if not content:
             continue
+        paragraph_bboxes.append(bb_px)
 
         if skip_text_inside_table and table_bboxes:
             cx, cy = bbox_center((bb_px[0], bb_px[1], bb_px[2], bb_px[3]))
@@ -410,7 +465,7 @@ def extract_rec_entries_from_ppstructure(
         rec_texts.append(content)
         rec_scores.append(_as_float(blk.get("block_score"), 1.0))
 
-    # OCR text lines (rec_polys)
+    # OCR text lines (rec_polys): keep all lines, but skip if inside paragraph blocks
     overall = data.get("overall_ocr_res", {}) or data.get("overall_ocr", {})
     ocr_polys = overall.get("rec_polys", []) or []
     ocr_texts = overall.get("rec_texts", []) or []
@@ -430,6 +485,11 @@ def extract_rec_entries_from_ppstructure(
                 break
             poly4.append([_as_float(p[0]), _as_float(p[1])])
         if not poly4:
+            continue
+
+        bbox = poly_to_bbox(poly4)
+        cx, cy = bbox_center(bbox)
+        if any(point_in_bbox(cx, cy, pb) for pb in paragraph_bboxes):
             continue
 
         text = ocr_texts[idx] if idx < len(ocr_texts) else ""
@@ -560,15 +620,15 @@ def translate_texts_with_openai(
 # -----------------------------
 # Step 3) image(px) -> PyMuPDF page(pt) coord (no y-flip)
 # -----------------------------
-def get_pdf_page_size_pt(pdf_path: Path, page_index_0based: int) -> Tuple[float, float]:
+def get_pdf_page_info(pdf_path: Path, page_index_0based: int) -> Tuple[float, float, int]:
     doc = fitz.open(pdf_path)
     if page_index_0based < 0 or page_index_0based >= doc.page_count:
         raise ValueError(f"page_index out of range: 0~{doc.page_count-1}")
     page = doc.load_page(page_index_0based)
-    r = page.rect
-    w_pt, h_pt = float(r.width), float(r.height)
+    w_pt, h_pt = float(page.mediabox.width), float(page.mediabox.height)
+    rotation = int(page.rotation or 0)
     doc.close()
-    return w_pt, h_pt
+    return w_pt, h_pt, rotation
 
 
 def px_poly_to_pymupdf_pt_poly(
@@ -577,10 +637,12 @@ def px_poly_to_pymupdf_pt_poly(
     img_h_px: int,
     page_w_pt: float,
     page_h_pt: float,
+    rotation: int,
 ) -> list[list[float]]:
-    sx = page_w_pt / img_w_px
-    sy = page_h_pt / img_h_px
-    return [[p[0] * sx, p[1] * sy] for p in poly_px]
+    return [
+        px_point_to_pdf_pt(p[0], p[1], img_w_px, img_h_px, page_w_pt, page_h_pt, rotation)
+        for p in poly_px
+    ]
 
 
 def add_pdf_coords_to_json(
@@ -595,13 +657,13 @@ def add_pdf_coords_to_json(
     with Image.open(img_path) as im:
         img_w_px, img_h_px = im.size
 
-    page_w_pt, page_h_pt = get_pdf_page_size_pt(pdf_path, page_index_0based)
+    page_w_pt, page_h_pt, rotation = get_pdf_page_info(pdf_path, page_index_0based)
 
     pdf_polys: list[list[list[float]]] = []
     pdf_boxes: list[list[float]] = []
 
     for poly_px in ocr_data.get("rec_polys", []):
-        poly_pt = px_poly_to_pymupdf_pt_poly(poly_px, img_w_px, img_h_px, page_w_pt, page_h_pt)
+        poly_pt = px_poly_to_pymupdf_pt_poly(poly_px, img_w_px, img_h_px, page_w_pt, page_h_pt, rotation)
         pdf_polys.append(poly_pt)
         pdf_boxes.append(poly_to_bbox(poly_pt))
 
@@ -610,7 +672,8 @@ def add_pdf_coords_to_json(
     out["coord_transform"] = {
         "image_size_px": [img_w_px, img_h_px],
         "pdf_page_size_pt": [page_w_pt, page_h_pt],
-        "method": "scale_by_page_size_no_y_flip_for_pymupdf",
+        "page_rotation": rotation,
+        "method": "scale_by_page_size_with_rotation_for_pymupdf",
     }
     out["pdf_polys"] = pdf_polys
     out["pdf_boxes"] = pdf_boxes
@@ -638,6 +701,7 @@ def overlay_one_page(
     if table_fallback_layout and not tables:
         tables = load_table_bboxes_fallback_layout(data)
     table_bboxes = [t["bbox"] for t in tables]
+    paragraph_bboxes: list[list[float]] = []
 
     dbg_shape = page.new_shape() if draw_boxes else None
 
@@ -651,6 +715,7 @@ def overlay_one_page(
         content = normalize_paragraph_text(blk.get("block_content", ""))
         if not content:
             continue
+        paragraph_bboxes.append(bb_px)
 
         if skip_text_inside_table and table_bboxes:
             cx, cy = bbox_center((bb_px[0], bb_px[1], bb_px[2], bb_px[3]))
@@ -687,7 +752,6 @@ def overlay_one_page(
     for idx, poly in enumerate(rec_polys):
         if not (isinstance(poly, list) and len(poly) >= 4):
             continue
-
         sc = _as_float(rec_scores[idx], 0.0) if idx < len(rec_scores) else 0.0
         if sc < min_line_score:
             continue
@@ -698,6 +762,10 @@ def overlay_one_page(
             continue
 
         bbox = poly_to_bbox(poly4)
+        cx, cy = bbox_center(bbox)
+        if any(point_in_bbox(cx, cy, pb) for pb in paragraph_bboxes):
+            continue
+
         text = rec_texts[idx] if idx < len(rec_texts) else ""
         text = (text or "").strip()
         if not text:
