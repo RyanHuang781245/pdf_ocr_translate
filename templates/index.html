@@ -22,6 +22,10 @@
           </label>
           <div class="form-grid">
             <label>
+              <span>任務名稱</span>
+              <input type="text" name="job_name" placeholder="輸入任務名稱" />
+            </label>
+            <label>
               <span>開始頁面</span>
               <input type="number" name="start" value="1" min="1" />
             </label>
@@ -97,9 +101,16 @@
           const card = document.createElement("article");
           card.className = "job-card";
 
+          const idTag = document.createElement("div");
+          idTag.className = "job-id";
+          idTag.textContent = job.job_id.slice(0, 8);
+
           const title = document.createElement("div");
           title.className = "job-title";
-          title.textContent = `Job ${job.job_id.slice(0, 8)}`;
+          const displayName = job.job_name && job.job_name.trim()
+            ? job.job_name
+            : `Job ${job.job_id.slice(0, 8)}`;
+          title.textContent = displayName;
 
           const meta = document.createElement("div");
           meta.className = "job-meta";
@@ -170,6 +181,7 @@
           });
           actions.appendChild(deleteBtn);
 
+          card.appendChild(idTag);
           card.appendChild(title);
           card.appendChild(meta);
           card.appendChild(actions);

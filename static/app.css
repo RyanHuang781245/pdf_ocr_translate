@@ -99,6 +99,16 @@ code {
   display: grid;
   gap: 0.5rem;
   background: rgba(255, 255, 255, 0.6);
+  position: relative;
+}
+
+.job-id {
+  position: absolute;
+  top: 0.85rem;
+  right: 1.1rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
 }
 
 .job-title {
@@ -167,6 +177,7 @@ label span {
 }
 
 input[type="number"],
+input[type="text"],
 input[type="file"],
 input[type="range"],
 input[type="color"],

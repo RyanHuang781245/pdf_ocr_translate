@@ -110,6 +110,12 @@ def _build_jobs_list() -> list[dict[str, Any]]:
         debug_ready = debug_pdf_path.exists()
         batch_status = _load_batch_status(job_dir)
         batch_config = _load_batch_config(job_dir)
+        job_meta = _load_job_meta(job_dir) or {}
+        job_name = job_meta.get("job_name")
+        if isinstance(job_name, str):
+            job_name = job_name.strip() or None
+        else:
+            job_name = None
         if not debug_ready:
             status_code = "ocr"
             status_label = "OCR"
@@ -136,6 +142,7 @@ def _build_jobs_list() -> list[dict[str, Any]]:
                 "status_code": status_code,
                 "status_label": status_label,
                 "status": status_label,
+                "job_name": job_name,
                 "editor_url": url_for("editor", job_id=job_id),
                 "debug_pdf_url": url_for("job_file", job_id=job_id, filename="overlay_debug.pdf")
                 if debug_ready
@@ -154,6 +161,21 @@ def _batch_status_path(job_dir: Path) -> Path:
 
 def _batch_config_path(job_dir: Path) -> Path:
     return job_dir / "batch_config.json"
+
+def _job_meta_path(job_dir: Path) -> Path:
+    return job_dir / "job_meta.json"
+
+def _write_job_meta(job_dir: Path, meta: dict[str, Any]) -> None:
+    _job_meta_path(job_dir).write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def _load_job_meta(job_dir: Path) -> dict[str, Any] | None:
+    path = _job_meta_path(job_dir)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
 
 
 def _write_batch_config(job_dir: Path, config: dict[str, Any]) -> None:
@@ -829,6 +851,10 @@ def upload() -> str:
     job_id = uuid.uuid4().hex
     job_dir = _job_dir(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
+
+    job_name = request.form.get("job_name", "").strip()
+    if job_name:
+        _write_job_meta(job_dir, {"job_name": job_name})
 
     pdf_filename = secure_filename(f"{job_id}.pdf")
     pdf_path = job_dir / pdf_filename
