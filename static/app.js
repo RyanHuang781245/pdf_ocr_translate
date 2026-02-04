@@ -1014,9 +1014,10 @@ function createBoxElement(pageIdx, boxIdx) {
     }
     if (event.shiftKey) {
       const key = boxKey(pageIdx, boxIdx);
-      if (!state.selectedBoxes.has(key)) {
-        state.selectedBoxes.add(key);
-        applySelectionClasses();
+      const wasSelected = state.selectedBoxes.has(key);
+      selectBox(pageIdx, boxIdx, true);
+      if (wasSelected) {
+        return;
       }
       onDragStart(event, pageIdx, boxIdx, true);
       return;
