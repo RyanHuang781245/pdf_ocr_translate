@@ -391,6 +391,7 @@ button.primary:hover {
   border-radius: 6px;
   cursor: move;
   user-select: none;
+  -webkit-user-drag: none;
   min-width: 20px;
   min-height: 16px;
 }
@@ -399,6 +400,7 @@ button.primary:hover {
   outline: none;
   cursor: text;
   user-select: text;
+  -webkit-user-drag: none;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;

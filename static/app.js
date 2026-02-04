@@ -35,6 +35,12 @@ const previewDebugBtn = document.getElementById("previewDebug");
 const previewEditedBtn = document.getElementById("previewEdited");
 const debugLinkEl = document.querySelector(".topbar-actions a[href*='overlay_debug.pdf']");
 
+document.addEventListener("dragstart", (event) => {
+  if (event.target.closest(".page-wrap, .overlay, .text-box, .text")) {
+    event.preventDefault();
+  }
+});
+
 function setStatus(message) {
   if (statusEl) {
     statusEl.textContent = message;
@@ -459,6 +465,7 @@ function buildDragGroup(pageIdx, boxIdx) {
 
 function onDragStart(event, pageIdx, boxIndex, groupMode = false) {
   if (event.button !== 0) return;
+  event.preventDefault();
   const page = state.pages[pageIdx];
   const box = page?.boxes[boxIndex];
   if (!page || !box || box.deleted) return;
@@ -605,6 +612,7 @@ function startRangeSelection(event, pageIdx) {
     startX,
     startY,
     bounds,
+    overlayEl: page.overlay,
     rectEl,
     captureEl: event.currentTarget,
     pointerId: event.pointerId,
@@ -618,7 +626,9 @@ function startRangeSelection(event, pageIdx) {
 
 function updateRangeSelection(event) {
   if (!state.selecting) return;
-  const { startX, startY, bounds, rectEl } = state.selecting;
+  const { startX, startY, rectEl, overlayEl } = state.selecting;
+  if (!overlayEl) return;
+  const bounds = overlayEl.getBoundingClientRect();
   const currentX = event.clientX - bounds.left;
   const currentY = event.clientY - bounds.top;
   const left = Math.min(startX, currentX);
@@ -629,6 +639,9 @@ function updateRangeSelection(event) {
   rectEl.style.top = `${top}px`;
   rectEl.style.width = `${width}px`;
   rectEl.style.height = `${height}px`;
+  state.selecting.bounds = bounds;
+  state.selecting.lastClientX = event.clientX;
+  state.selecting.lastClientY = event.clientY;
   state.selecting.rect = { left, top, width, height };
 }
 
@@ -692,6 +705,8 @@ function renderPages() {
 
     const wrap = document.createElement("div");
     wrap.className = "page-wrap";
+    wrap.draggable = false;
+    wrap.addEventListener("dragstart", (event) => event.preventDefault());
 
     const img = document.createElement("img");
     img.src = page.imageUrl;
@@ -701,6 +716,8 @@ function renderPages() {
 
     const overlay = document.createElement("div");
     overlay.className = "overlay";
+    overlay.draggable = false;
+    overlay.addEventListener("dragstart", (event) => event.preventDefault());
 
     const selectionRect = document.createElement("div");
     selectionRect.className = "selection-rect";
@@ -729,6 +746,11 @@ function renderPages() {
     wrap.addEventListener("pointermove", updateRangeSelection);
     wrap.addEventListener("pointerup", endRangeSelection);
     wrap.addEventListener("pointercancel", endRangeSelection);
+    wrap.addEventListener("wheel", (event) => {
+      if (state.selecting) {
+        updateRangeSelection(event);
+      }
+    }, { passive: true });
 
     page.boxes.forEach((box, index) => {
       createBoxElement(pageIdx, index);
@@ -750,10 +772,14 @@ function createBoxElement(pageIdx, boxIdx) {
   textEl.className = "text";
   textEl.contentEditable = "true";
   textEl.spellcheck = false;
+  textEl.draggable = false;
+  textEl.addEventListener("dragstart", (event) => event.preventDefault());
   textEl.textContent = box.text;
 
   boxEl.appendChild(textEl);
   page.overlay.appendChild(boxEl);
+  boxEl.draggable = false;
+  boxEl.addEventListener("dragstart", (event) => event.preventDefault());
 
   boxEl.addEventListener("pointerdown", (event) => {
     state.lastShiftKey = event.shiftKey;
