@@ -634,6 +634,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
     pages_by_index = {int(p.get("page_index_0based", 0)): p for p in edits.get("pages", []) if isinstance(p, dict)}
 
     fontfile = _resolve_fontfile()
+    debug_boxes = os.getenv("DEBUG_EDIT_BOXES") == "1"
     doc = fitz.open(pdf_path)
     for page_idx in range(doc.page_count):
         page = doc.load_page(page_idx)
@@ -654,6 +655,7 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
         sy = page_h / img_h
 
         shape = page.new_shape()
+        dbg_shape = page.new_shape() if debug_boxes else None
         for box in page_edits.get("boxes", []):
             if not isinstance(box, dict) or box.get("deleted"):
                 continue
@@ -668,6 +670,9 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
             else:
                 continue
             text = str(box.get("text", "")).strip()
+            if not text:
+                continue
+
             p1 = px_point_to_pdf_pt(x, y, img_w, img_h, page_w, page_h, rotation)
             p2 = px_point_to_pdf_pt(x + w, y, img_w, img_h, page_w, page_h, rotation)
             p3 = px_point_to_pdf_pt(x + w, y + h, img_w, img_h, page_w, page_h, rotation)
@@ -677,19 +682,18 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
             rect = fitz.Rect(min(xs), min(ys), max(xs), max(ys))
             if rect.is_empty:
                 continue
+            if dbg_shape is not None:
+                dbg_shape.draw_rect(rect)
+                dbg_shape.finish(color=(1, 0, 0), width=0.6)
 
             font_size_px = float(box.get("font_size") or 0.0)
-            sy = rect.height / max(h, 1.0)
-            font_size_pt = font_size_px * sy if font_size_px > 0 else max(5.0, rect.height * 0.7)
+            font_size_pt = font_size_px * (page_h / img_h) if font_size_px > 0 else max(5.0, rect.height * 0.7)
             color = _hex_to_rgb(box.get("color"))
-
-            if not text:
-                continue
+            rotate = rotation if rotation else 0
 
             ok = False
             current = font_size_pt
             for _ in range(20):
-                rotate = rotation if rotation else 0
                 if fontfile:
                     rc = shape.insert_textbox(
                         rect,
@@ -740,6 +744,8 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                     )
 
         shape.commit()
+        if dbg_shape is not None:
+            dbg_shape.commit()
 
     out_path = job_dir / "edited.pdf"
     doc.save(out_path.as_posix())
@@ -774,7 +780,7 @@ def upload() -> str:
     file.save(pdf_path)
     _notify_jobs_update()
 
-    dpi = 300
+    dpi = 200
     start_page = int(request.form.get("start", 1))
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
