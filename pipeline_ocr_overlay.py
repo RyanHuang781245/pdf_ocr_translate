@@ -576,9 +576,15 @@ def translate_texts_with_openai(
         if not entries:
             return text
         out = text
+        hits: list[tuple[str, str]] = []
         for cn, en in entries:
             if cn in out:
                 out = out.replace(cn, en)
+                hits.append((cn, en))
+        if hits:
+            preview = ", ".join([f"{cn}->{en}" for cn, en in hits[:6]])
+            more = f" (+{len(hits) - 6})" if len(hits) > 6 else ""
+            print(f"[GLOSSARY] hits={len(hits)} {preview}{more}")
         return out
 
     def chunk_list(items: list[str], size: int) -> list[list[str]]:
