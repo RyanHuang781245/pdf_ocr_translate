@@ -1032,10 +1032,14 @@ function createBoxElement(pageIdx, boxIdx) {
     state.lastShiftKey = false;
   });
   textEl.addEventListener("input", () => {
-    const sanitized = textEl.textContent.replace(/\n+/g, " ").trim();
-    box.text = sanitized;
-    if (textEl.textContent !== sanitized) {
-      textEl.textContent = sanitized;
+    const raw = textEl.textContent.replace(/\n+/g, " ");
+    box.text = raw;
+  });
+  textEl.addEventListener("blur", () => {
+    const normalized = textEl.textContent.replace(/\s+/g, " ").trim();
+    box.text = normalized;
+    if (textEl.textContent !== normalized) {
+      textEl.textContent = normalized;
     }
   });
 
