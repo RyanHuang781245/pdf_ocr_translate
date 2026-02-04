@@ -13,6 +13,9 @@ const state = {
     sourcePageIdx: null,
     pasteCount: 0,
   },
+  zoom: 1,
+  pdfUrl: null,
+  pdfDoc: null,
 };
 
 let controlsBound = false;
@@ -28,12 +31,23 @@ const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const batchTranslateBtn = document.getElementById("batchTranslateBtn");
 const batchRestoreBtn = document.getElementById("batchRestoreBtn");
-const pagesEl = document.getElementById("pages");
+const prevPageBtn = document.getElementById("prevPage");
+const nextPageBtn = document.getElementById("nextPage");
+const pageSelectEl = document.getElementById("pageSelect");
+const zoomRangeEl = document.getElementById("zoomRange");
+const zoomNumberEl = document.getElementById("zoomNumber");
+const thumbsEl = document.getElementById("thumbs");
+const pageViewEl = document.getElementById("pageView");
 const editedLink = document.getElementById("editedPdfLink");
 const previewEl = document.getElementById("pdfPreview");
 const previewDebugBtn = document.getElementById("previewDebug");
 const previewEditedBtn = document.getElementById("previewEdited");
 const debugLinkEl = document.querySelector(".topbar-actions a[href*='overlay_debug.pdf']");
+
+if (window.pdfjsLib) {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js";
+}
 
 document.addEventListener("dragstart", (event) => {
   if (event.target.closest(".page-wrap, .overlay, .text-box, .text")) {
@@ -114,8 +128,67 @@ function clearSelection() {
 
 function setActivePage(pageIdx) {
   if (!Number.isFinite(pageIdx)) return;
+  const prevIdx = state.activePageIdx;
   const maxIdx = Math.max(0, state.pages.length - 1);
   state.activePageIdx = Math.max(0, Math.min(pageIdx, maxIdx));
+  syncPageSelector();
+  updatePageNavButtons();
+  if (state.activePageIdx !== prevIdx) {
+    clearSelection();
+    renderActivePage();
+    highlightActiveThumbnail();
+  }
+}
+
+function syncPageSelector() {
+  if (!pageSelectEl) return;
+  const current = state.activePageIdx ?? 0;
+  if (Number.isFinite(current)) {
+    pageSelectEl.value = String(current);
+  }
+}
+
+function updatePageNavButtons() {
+  if (prevPageBtn) {
+    prevPageBtn.disabled = state.activePageIdx <= 0;
+  }
+  if (nextPageBtn) {
+    nextPageBtn.disabled = state.activePageIdx >= state.pages.length - 1;
+  }
+}
+
+function applyZoomToPage(page) {
+  if (!page?.image) return;
+  if (state.pdfDoc) {
+    renderPdfPage(state.pages.indexOf(page));
+    return;
+  }
+  const zoom = state.zoom || 1;
+  const img = page.image;
+  if (img.naturalWidth) {
+    img.style.width = `${img.naturalWidth * zoom}px`;
+  } else {
+    img.style.width = `${zoom * 100}%`;
+  }
+  updatePageLayout(page);
+}
+
+function applyZoom(zoom) {
+  const clamped = Math.max(0.5, Math.min(2, zoom));
+  state.zoom = clamped;
+  if (state.pdfDoc) {
+    renderPdfPage(state.activePageIdx ?? 0);
+  } else {
+    const page = state.pages[state.activePageIdx ?? 0];
+    if (page) applyZoomToPage(page);
+  }
+}
+
+function setZoomPercent(percent) {
+  const value = Math.max(50, Math.min(200, Math.round(percent)));
+  if (zoomRangeEl) zoomRangeEl.value = String(value);
+  if (zoomNumberEl) zoomNumberEl.value = String(value);
+  applyZoom(value / 100);
 }
 
 function setSelection(pageIdx, boxIdx, additive = false) {
@@ -380,6 +453,7 @@ function polyToBbox(poly) {
 }
 
 function buildState(data) {
+  state.pdfUrl = data.pdf_url || null;
   state.pages = data.pages.map((page) => {
     const boxes = page.rec_polys.map((poly, index) => {
       const bbox = polyToBbox(poly);
@@ -410,6 +484,20 @@ function buildState(data) {
     };
   });
   state.activePageIdx = 0;
+  state.zoom = 0.5;
+  if (zoomRangeEl) zoomRangeEl.value = "50";
+  if (zoomNumberEl) zoomNumberEl.value = "50";
+  if (pageSelectEl) {
+    pageSelectEl.innerHTML = "";
+    state.pages.forEach((page, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `Page ${page.pageIndex + 1}`;
+      pageSelectEl.appendChild(option);
+    });
+  }
+  syncPageSelector();
+  updatePageNavButtons();
 }
 
 function updateBoxElement(page, box) {
@@ -432,11 +520,59 @@ function updateBoxElement(page, box) {
 function updatePageLayout(page) {
   if (!page.image || !page.overlay) return;
   const img = page.image;
-  const scale = img.clientWidth / img.naturalWidth;
+  const naturalWidth = page.imageSize?.[0] || img.naturalWidth || img.width || img.clientWidth || 1;
+  const naturalHeight = page.imageSize?.[1] || img.naturalHeight || img.height || img.clientHeight || 1;
+  const scale = img.clientWidth / naturalWidth;
   page.scale = scale || 1;
   page.overlay.style.width = `${img.clientWidth}px`;
   page.overlay.style.height = `${img.clientHeight}px`;
   page.boxes.forEach((box) => updateBoxElement(page, box));
+}
+
+async function loadPdfDocument(pdfUrl) {
+  if (!pdfUrl || !window.pdfjsLib) return;
+  state.pdfUrl = pdfUrl;
+  try {
+    const task = window.pdfjsLib.getDocument(pdfUrl);
+    state.pdfDoc = await task.promise;
+    renderThumbnails();
+    renderActivePage();
+  } catch (error) {
+    state.pdfDoc = null;
+    state.pdfUrl = null;
+    renderPages();
+    setStatus("PDF 載入失敗。");
+  }
+}
+
+async function renderPdfPage(pageIdx) {
+  if (!state.pdfDoc) return;
+  const page = state.pages[pageIdx];
+  if (!page || !page.image) return;
+  if (typeof page.image.getContext !== "function") return;
+  const pdfPage = await state.pdfDoc.getPage(page.pageIndex + 1);
+  const baseViewport = pdfPage.getViewport({ scale: 1 });
+  const imageW = page.imageSize?.[0] || baseViewport.width;
+  const imageH = page.imageSize?.[1] || baseViewport.height;
+  const baseScale = imageW / baseViewport.width;
+  const zoom = state.zoom || 1;
+  const scale = baseScale * zoom;
+  const viewport = pdfPage.getViewport({ scale });
+
+  const canvas = page.image;
+  const ctx = canvas.getContext("2d");
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
+  canvas.style.width = `${canvas.width}px`;
+  canvas.style.height = `${canvas.height}px`;
+
+  await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+  updatePageLayout(page);
+}
+
+async function renderAllPdfPages() {
+  if (!state.pdfDoc) return;
+  renderActivePage();
 }
 
 function selectBox(pageIdx, boxIdx, additive = false) {
@@ -689,73 +825,152 @@ function endRangeSelection(event) {
   applySelectionClasses();
 }
 
-function renderPages() {
-  pagesEl.innerHTML = "";
-  state.pages.forEach((page, pageIdx) => {
-    const pageEl = document.createElement("article");
-    pageEl.className = "page";
+let viewerResizeBound = false;
 
-    const header = document.createElement("div");
-    header.className = "page-header";
-    header.innerHTML = `<span class="page-number">Page ${page.pageIndex + 1}</span>`;
-    header.addEventListener("click", () => {
+function bindViewerResize() {
+  if (viewerResizeBound) return;
+  viewerResizeBound = true;
+  window.addEventListener("resize", () => {
+    const page = state.pages[state.activePageIdx ?? 0];
+    if (page) updatePageLayout(page);
+  });
+}
+
+function highlightActiveThumbnail() {
+  state.pages.forEach((page, idx) => {
+    if (page.thumbElement) {
+      page.thumbElement.classList.toggle("is-active", idx === state.activePageIdx);
+    }
+  });
+}
+
+async function renderThumbnail(pageIdx, canvas) {
+  if (!state.pdfDoc) return;
+  const page = state.pages[pageIdx];
+  if (!page) return;
+  const pdfPage = await state.pdfDoc.getPage(page.pageIndex + 1);
+  const baseViewport = pdfPage.getViewport({ scale: 1 });
+  const targetWidth = 130;
+  const scale = targetWidth / baseViewport.width;
+  const viewport = pdfPage.getViewport({ scale });
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
+  const ctx = canvas.getContext("2d");
+  await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+}
+
+function renderThumbnails() {
+  if (!thumbsEl) return;
+  thumbsEl.innerHTML = "";
+  state.pages.forEach((page, pageIdx) => {
+    const thumb = document.createElement("button");
+    thumb.type = "button";
+    thumb.className = "thumb";
+    thumb.addEventListener("click", () => {
       setActivePage(pageIdx);
       setStatus(`Active page: ${page.pageIndex + 1}`);
     });
 
-    const wrap = document.createElement("div");
-    wrap.className = "page-wrap";
-    wrap.draggable = false;
-    wrap.addEventListener("dragstart", (event) => event.preventDefault());
+    if (state.pdfUrl && window.pdfjsLib) {
+      const canvas = document.createElement("canvas");
+      canvas.className = "thumb-canvas";
+      thumb.appendChild(canvas);
+      if (state.pdfDoc) {
+        renderThumbnail(pageIdx, canvas);
+      }
+    } else if (page.imageUrl) {
+      const img = document.createElement("img");
+      img.src = page.imageUrl;
+      img.alt = `Page ${page.pageIndex + 1}`;
+      thumb.appendChild(img);
+    }
 
-    const img = document.createElement("img");
+    const label = document.createElement("span");
+    label.textContent = `${page.pageIndex + 1}`;
+    thumb.appendChild(label);
+
+    page.thumbElement = thumb;
+    thumbsEl.appendChild(thumb);
+  });
+  highlightActiveThumbnail();
+}
+
+function renderActivePage() {
+  if (!pageViewEl) return;
+  const pageIdx = state.activePageIdx ?? 0;
+  const page = state.pages[pageIdx];
+  if (!page) return;
+  pageViewEl.innerHTML = "";
+  page.boxes.forEach((box) => {
+    box.element = null;
+  });
+
+  const pageEl = document.createElement("article");
+  pageEl.className = "page";
+
+  const wrap = document.createElement("div");
+  wrap.className = "page-wrap";
+  wrap.draggable = false;
+  wrap.addEventListener("dragstart", (event) => event.preventDefault());
+
+  let img;
+  if (state.pdfUrl && window.pdfjsLib) {
+    img = document.createElement("canvas");
+    img.className = "pdf-canvas";
+  } else {
+    img = document.createElement("img");
     img.src = page.imageUrl;
     img.alt = `Page ${page.pageIndex + 1}`;
     img.draggable = false;
     img.addEventListener("dragstart", (event) => event.preventDefault());
-
-    const overlay = document.createElement("div");
-    overlay.className = "overlay";
-    overlay.draggable = false;
-    overlay.addEventListener("dragstart", (event) => event.preventDefault());
-
-    const selectionRect = document.createElement("div");
-    selectionRect.className = "selection-rect";
-    selectionRect.style.display = "none";
-    overlay.appendChild(selectionRect);
-
     img.addEventListener("load", () => {
-      updatePageLayout(page);
+      applyZoomToPage(page);
     });
+  }
 
-    window.addEventListener("resize", () => updatePageLayout(page));
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.draggable = false;
+  overlay.addEventListener("dragstart", (event) => event.preventDefault());
 
-    wrap.appendChild(img);
-    wrap.appendChild(overlay);
+  const selectionRect = document.createElement("div");
+  selectionRect.className = "selection-rect";
+  selectionRect.style.display = "none";
+  overlay.appendChild(selectionRect);
 
-    pageEl.appendChild(header);
-    pageEl.appendChild(wrap);
-    pagesEl.appendChild(pageEl);
+  wrap.appendChild(img);
+  wrap.appendChild(overlay);
+  pageEl.appendChild(wrap);
+  pageViewEl.appendChild(pageEl);
 
-    page.element = pageEl;
-    page.overlay = overlay;
-    page.image = img;
-    page.selectionRect = selectionRect;
+  page.element = pageEl;
+  page.overlay = overlay;
+  page.image = img;
+  page.selectionRect = selectionRect;
 
-    wrap.addEventListener("pointerdown", (event) => startRangeSelection(event, pageIdx));
-    wrap.addEventListener("pointermove", updateRangeSelection);
-    wrap.addEventListener("pointerup", endRangeSelection);
-    wrap.addEventListener("pointercancel", endRangeSelection);
-    wrap.addEventListener("wheel", (event) => {
-      if (state.selecting) {
-        updateRangeSelection(event);
-      }
-    }, { passive: true });
+  wrap.addEventListener("pointerdown", (event) => startRangeSelection(event, pageIdx));
+  wrap.addEventListener("pointermove", updateRangeSelection);
+  wrap.addEventListener("pointerup", endRangeSelection);
+  wrap.addEventListener("pointercancel", endRangeSelection);
+  wrap.addEventListener("wheel", (event) => {
+    if (state.selecting) {
+      updateRangeSelection(event);
+    }
+  }, { passive: true });
 
-    page.boxes.forEach((box, index) => {
-      createBoxElement(pageIdx, index);
-    });
+  page.boxes.forEach((box, index) => {
+    createBoxElement(pageIdx, index);
   });
+
+  bindViewerResize();
+  if (state.pdfDoc) {
+    renderPdfPage(pageIdx);
+  }
+}
+
+function renderPages() {
+  renderThumbnails();
+  renderActivePage();
 }
 
 function createBoxElement(pageIdx, boxIdx) {
@@ -899,6 +1114,9 @@ async function loadJobData(jobId) {
   const data = await res.json();
   buildState(data);
   renderPages();
+  if (state.pdfUrl && window.pdfjsLib) {
+    await loadPdfDocument(state.pdfUrl);
+  }
   updateEditedLink(data.edited_pdf_url);
   if (previewEditedBtn) {
     previewEditedBtn.disabled = !data.edited_pdf_url;
@@ -1013,6 +1231,65 @@ function bindControls() {
         updateBoxElement(page, box);
       });
     });
+  }
+
+  if (pageSelectEl) {
+    pageSelectEl.addEventListener("change", () => {
+      const idx = Number.parseInt(pageSelectEl.value, 10);
+      if (!Number.isFinite(idx)) return;
+      setActivePage(idx);
+      const page = state.pages[idx];
+      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  if (prevPageBtn) {
+    prevPageBtn.addEventListener("click", () => {
+      const idx = Math.max(0, (state.activePageIdx ?? 0) - 1);
+      setActivePage(idx);
+      const page = state.pages[idx];
+      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  if (nextPageBtn) {
+    nextPageBtn.addEventListener("click", () => {
+      const idx = Math.min(state.pages.length - 1, (state.activePageIdx ?? 0) + 1);
+      setActivePage(idx);
+      const page = state.pages[idx];
+      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  const applyZoomFromInput = (value) => {
+    if (!Number.isFinite(value)) return;
+    setZoomPercent(value);
+  };
+
+  if (zoomRangeEl) {
+    zoomRangeEl.addEventListener("input", () => {
+      applyZoomFromInput(Number(zoomRangeEl.value));
+    });
+  }
+
+  if (zoomNumberEl) {
+    zoomNumberEl.addEventListener("input", () => {
+      applyZoomFromInput(Number(zoomNumberEl.value));
+    });
+  }
+
+  if (pageViewEl) {
+    pageViewEl.addEventListener(
+      "wheel",
+      (event) => {
+        if (!event.ctrlKey) return;
+        event.preventDefault();
+        const step = event.deltaY < 0 ? 5 : -5;
+        const current = Number(zoomNumberEl?.value || Math.round((state.zoom || 1) * 100));
+        setZoomPercent(current + step);
+      },
+      { passive: false },
+    );
   }
 
   if (deleteBtn) {

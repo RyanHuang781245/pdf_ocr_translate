@@ -856,6 +856,7 @@ def job_data(job_id: str):
     edited_pdf_path = job_dir / "edited.pdf"
     payload = {
         "job_id": job_id,
+        "pdf_url": url_for("job_file", job_id=job_id, filename=f"{job_id}.pdf"),
         "debug_pdf_url": url_for("job_file", job_id=job_id, filename="overlay_debug.pdf"),
         "edited_pdf_url": url_for("job_file", job_id=job_id, filename="edited.pdf") if edited_pdf_path.exists() else None,
         "batch_status": _load_batch_status(job_dir),

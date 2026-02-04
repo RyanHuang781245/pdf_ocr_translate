@@ -192,6 +192,14 @@ select {
   width: 4.5rem;
 }
 
+.input-row select {
+  flex: 1;
+}
+
+.input-row button {
+  white-space: nowrap;
+}
+
 button,
 .ghost {
   font-family: var(--font-main);
@@ -292,6 +300,100 @@ button.primary:hover {
   gap: 2rem;
 }
 
+.viewer {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.thumbs {
+  background: var(--panel);
+  border-radius: var(--radius);
+  border: 1px solid var(--edge);
+  box-shadow: var(--shadow);
+  padding: 0.8rem;
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.thumbs-header {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.thumbs-list {
+  display: grid;
+  gap: 0.6rem;
+  overflow: auto;
+  padding-right: 0.2rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.thumb {
+  appearance: none;
+  border: 1px solid rgba(21, 36, 43, 0.2);
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 10px;
+  padding: 0.4rem;
+  display: grid;
+  gap: 0.3rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+  font-family: var(--font-main);
+  text-align: center;
+}
+
+.thumb:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+}
+
+.thumb.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 8px 16px rgba(47, 143, 78, 0.2);
+}
+
+.thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.thumb img,
+.thumb canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+}
+
+.thumb span {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.page-view {
+  overflow: auto;
+  max-height: 80vh;
+  padding-right: 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--edge);
+  background: rgba(238, 242, 246, 0.8);
+  padding: 1rem;
+}
+
+.page-view-inner {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
 .pdf-preview {
   background: var(--panel);
   border-radius: var(--radius);
@@ -372,6 +474,11 @@ button.primary:hover {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.page-wrap canvas.pdf-canvas {
+  display: block;
+  border-radius: 12px;
 }
 
 .overlay {
@@ -500,6 +607,14 @@ button.primary:hover {
 @media (max-width: 980px) {
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .viewer {
+    grid-template-columns: 1fr;
+  }
+
+  .thumbs {
+    max-height: none;
   }
 
   .topbar {

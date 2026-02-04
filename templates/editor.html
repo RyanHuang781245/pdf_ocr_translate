@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OCR Overlay Studio - Editor</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js" referrerpolicy="no-referrer"></script>
   </head>
   <body class="editor" data-job-id="{{ job_id }}">
     <header class="topbar">
@@ -25,6 +26,21 @@
     </header>
     <main class="workspace">
       <aside class="panel">
+        <section>
+          <h2>頁面</h2>
+          <div class="input-row">
+            <button id="prevPage" class="ghost" type="button">上一頁</button>
+            <select id="pageSelect"></select>
+            <button id="nextPage" class="ghost" type="button">下一頁</button>
+          </div>
+          <label>
+            <span>縮放 (%)</span>
+            <div class="input-row">
+              <input id="zoomRange" type="range" min="50" max="200" value="50" />
+              <input id="zoomNumber" type="number" min="50" max="200" value="50" />
+            </div>
+          </label>
+        </section>
         <section>
           <h2>編輯工具</h2>
           <label>
@@ -58,7 +74,15 @@
         </section>
       </aside>
       <section class="canvas">
-        <div id="pages" class="pages"></div>
+        <div class="viewer">
+          <aside class="thumbs">
+            <div class="thumbs-header">Pages</div>
+            <div id="thumbs" class="thumbs-list"></div>
+          </aside>
+          <div class="page-view">
+            <div id="pageView" class="page-view-inner"></div>
+          </div>
+        </div>
       </section>
     </main>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
