@@ -184,6 +184,16 @@ select {
   align-items: center;
 }
 
+.page-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.page-row > * {
+  width: 100%;
+}
+
 .input-row input[type="range"] {
   flex: 1;
 }
@@ -275,6 +285,8 @@ button.primary:hover {
   position: sticky;
   top: 1.5rem;
   align-self: start;
+  height: calc(100vh - 3.5rem);
+  overflow: hidden;
 }
 
 .panel h2 {
@@ -305,6 +317,7 @@ button.primary:hover {
   grid-template-columns: 170px minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
+  height: calc(100vh - 3.5rem);
 }
 
 .thumbs {
@@ -313,7 +326,7 @@ button.primary:hover {
   border: 1px solid var(--edge);
   box-shadow: var(--shadow);
   padding: 0.8rem;
-  max-height: 75vh;
+  height: calc(100vh - 3.5rem);
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -380,7 +393,7 @@ button.primary:hover {
 
 .viewer .pages {
   overflow: auto;
-  max-height: 80vh;
+  height: 100%;
   padding-right: 0.5rem;
   border-radius: var(--radius);
   border: 1px solid var(--edge);
@@ -620,6 +633,12 @@ button.primary:hover {
 
   .panel {
     position: static;
+    height: auto;
+    overflow: visible;
+  }
+
+  .thumbs {
+    height: auto;
   }
 }
 
@@ -627,4 +646,12 @@ button.primary:hover {
 #nextPage,
 #pageSelect {
   margin-bottom: 0.8rem;
+  height: 40px;
+}
+
+#prevPage,
+#nextPage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }

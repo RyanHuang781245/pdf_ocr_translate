@@ -503,7 +503,7 @@ function buildState(data) {
     state.pages.forEach((page, index) => {
       const option = document.createElement("option");
       option.value = String(index);
-      option.textContent = `Page ${page.pageIndex + 1}`;
+      option.textContent = `${page.pageIndex + 1}`;
       pageSelectEl.appendChild(option);
     });
   }
