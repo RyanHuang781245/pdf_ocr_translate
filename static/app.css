@@ -622,3 +622,9 @@ button.primary:hover {
     position: static;
   }
 }
+
+#prevPage,
+#nextPage,
+#pageSelect {
+  margin-bottom: 0.8rem;
+}

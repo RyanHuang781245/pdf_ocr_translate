@@ -5,6 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OCR Overlay Studio - Editor</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+    <style>
+      .topbar-actions a.ghost,
+      .topbar-actions button.ghost,
+      .topbar-actions button.primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 36px;
+        padding: 0 14px;
+        font-size: 0.9375rem;
+        line-height: 1;
+      }
+    </style>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js" referrerpolicy="no-referrer"></script> -->
     <script src="/static/pdfjs/pdf.min.js" referrerpolicy="no-referrer"></script>
   </head>
@@ -19,8 +32,8 @@
         <a class="ghost" href="{{ url_for('index') }}">回首頁</a>
         <a id="editedPdfLink" class="ghost" href="#" target="_blank" rel="noopener" style="display:none">預覽已編輯 PDF</a>
         <a class="ghost" href="{{ debug_pdf_url }}" target="_blank" rel="noopener">預覽除錯 PDF</a>
-        <button id="batchTranslateBtn" class="ghost">Batch 翻譯</button>
-        <button id="batchRestoreBtn" class="ghost">還原 Batch 翻譯</button>
+        <button id="batchTranslateBtn" class="ghost">重新翻譯</button>
+        <button id="batchRestoreBtn" class="ghost">還原翻譯內容/位置</button>
         <button id="saveBtn" class="primary">儲存編輯</button>
         <button id="downloadBtn" class="ghost">下載已編輯 PDF</button>
       </div>
@@ -31,8 +44,8 @@
           <h2>頁面</h2>
           <div class="input-row">
             <button id="prevPage" class="ghost" type="button">上一頁</button>
-            <select id="pageSelect"></select>
             <button id="nextPage" class="ghost" type="button">下一頁</button>
+            <select id="pageSelect"></select>
           </div>
           <label>
             <span>縮放 (%)</span>
