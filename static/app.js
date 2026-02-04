@@ -330,7 +330,7 @@ function applyZoomToPage(page) {
 }
 
 function applyZoom(zoom) {
-  const clamped = Math.max(0.5, Math.min(2, zoom));
+  const clamped = Math.max(0.25, Math.min(2, zoom));
   state.zoom = clamped;
   if (state.pdfDoc) {
     renderAllPdfPages();
@@ -342,7 +342,7 @@ function applyZoom(zoom) {
 }
 
 function setZoomPercent(percent) {
-  const value = Math.max(50, Math.min(200, Math.round(percent)));
+  const value = Math.max(25, Math.min(200, Math.round(percent)));
   if (zoomRangeEl) zoomRangeEl.value = String(value);
   if (zoomNumberEl) zoomNumberEl.value = String(value);
   applyZoom(value / 100);
@@ -1532,7 +1532,7 @@ function bindControls() {
 
   const applyZoomFromInput = (value, force = false) => {
     if (!Number.isFinite(value)) return;
-    const minValue = Number(zoomRangeEl?.min ?? 50);
+    const minValue = Number(zoomRangeEl?.min ?? 25);
     const maxValue = Number(zoomRangeEl?.max ?? 200);
     if (!force && (value < minValue || value > maxValue)) return;
     setZoomPercent(value);
