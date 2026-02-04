@@ -302,7 +302,7 @@ button.primary:hover {
 
 .viewer {
   display: grid;
-  grid-template-columns: 170px 1fr;
+  grid-template-columns: 170px minmax(0, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -378,7 +378,7 @@ button.primary:hover {
   text-align: center;
 }
 
-.page-view {
+.viewer .pages {
   overflow: auto;
   max-height: 80vh;
   padding-right: 0.5rem;
@@ -386,12 +386,8 @@ button.primary:hover {
   border: 1px solid var(--edge);
   background: rgba(238, 242, 246, 0.8);
   padding: 1rem;
-}
-
-.page-view-inner {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  display: grid;
+  justify-items: center;
 }
 
 .pdf-preview {

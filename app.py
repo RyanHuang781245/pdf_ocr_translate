@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import functools
 import json
 import logging
 import os
@@ -28,6 +29,8 @@ AZURE_API_KEY_ENV = os.getenv("AZURE_OPENAI_API_KEY_ENV", "UO_AZURE_OPENAI_API_K
 AZURE_BATCH_MODEL = os.getenv("AZURE_BATCH_MODEL", "gpt-4o-mini-global-batch")
 AZURE_BATCH_POLL_SECONDS = float(os.getenv("AZURE_BATCH_POLL_SECONDS", "60"))
 AZURE_BATCH_COMPLETION_WINDOW = os.getenv("AZURE_BATCH_COMPLETION_WINDOW", "24h")
+GLOSSARY_INSPECTION_PATH = os.getenv("GLOSSARY_INSPECTION_PATH", str((Path(__file__).resolve().parent / "output" / "inspection_terminology.json")))
+GLOSSARY_PROCESS_PATH = os.getenv("GLOSSARY_PROCESS_PATH", str((Path(__file__).resolve().parent / "output" / "process_terminology.json")))
 AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
     "AZURE_BATCH_SYSTEM_PROMPT",
     "\n".join(
@@ -140,9 +143,7 @@ def _build_jobs_list() -> list[dict[str, Any]]:
                 "edited_pdf_url": url_for("job_file", job_id=job_id, filename="edited.pdf")
                 if edited_pdf_path.exists()
                 else None,
-            }
-        )
-
+            })
     jobs.sort(key=lambda item: item["updated_at"], reverse=True)
     return jobs
 
@@ -328,6 +329,53 @@ def _extract_batch_translation(item: dict[str, Any]) -> str:
     return ""
 
 
+@functools.lru_cache(maxsize=1)
+def _load_glossary_entries() -> list[tuple[str, str]]:
+    entries: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw_path in (GLOSSARY_INSPECTION_PATH, GLOSSARY_PROCESS_PATH):
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parent / path
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, list):
+            continue
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            cn = str(item.get("cn") or "").strip()
+            en = str(item.get("en") or "").strip()
+            if not cn or not en:
+                continue
+            key = (cn, en)
+            if key in seen:
+                continue
+            entries.append(key)
+            seen.add(key)
+    entries.sort(key=lambda pair: len(pair[0]), reverse=True)
+    return entries
+
+
+def _apply_glossary(text: str) -> str:
+    if not text:
+        return text
+    entries = _load_glossary_entries()
+    if not entries:
+        return text
+    out = text
+    for cn, en in entries:
+        if cn in out:
+            out = out.replace(cn, en)
+    return out
+
+
 def _poly_to_bbox(poly: list[list[float]] | None) -> dict[str, float] | None:
     if not poly or len(poly) < 4:
         return None
@@ -383,6 +431,7 @@ def _build_batch_items(
             clean = _normalize_text(text)
             if not clean:
                 continue
+            clean = _apply_glossary(clean)
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
             items.append(
                 {

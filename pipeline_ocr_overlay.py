@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import functools
 import os
 import re
 import time
@@ -516,6 +517,7 @@ def translate_texts_with_openai(
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not set.")
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
     try:
         from openai import OpenAI
@@ -523,13 +525,61 @@ def translate_texts_with_openai(
         raise RuntimeError("openai package is required for translation.") from exc
 
     client = OpenAI(
-        base_url="https://bloom-checks-frog-boost.trycloudflare.com/v1",
-        api_key="ollama",
+        base_url=base_url,
+        api_key=api_key,
     )
     cache = cache if cache is not None else {}
 
     def normalize_line(text: str) -> str:
         return " ".join(str(text).split()).strip()
+
+    @functools.lru_cache(maxsize=1)
+    def _load_glossary_entries() -> list[tuple[str, str]]:
+        entries: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for raw_path in (
+            os.getenv("GLOSSARY_INSPECTION_PATH", "output/inspection_terminology.json"),
+            os.getenv("GLOSSARY_PROCESS_PATH", "output/process_terminology.json"),
+        ):
+            if not raw_path:
+                continue
+            path = Path(raw_path)
+            if not path.is_absolute():
+                path = Path(__file__).resolve().parent / path
+            if not path.exists():
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(data, list):
+                continue
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                cn = str(item.get("cn") or "").strip()
+                en = str(item.get("en") or "").strip()
+                if not cn or not en:
+                    continue
+                key = (cn, en)
+                if key in seen:
+                    continue
+                entries.append(key)
+                seen.add(key)
+        entries.sort(key=lambda pair: len(pair[0]), reverse=True)
+        return entries
+
+    def _apply_glossary(text: str) -> str:
+        if not text:
+            return text
+        entries = _load_glossary_entries()
+        if not entries:
+            return text
+        out = text
+        for cn, en in entries:
+            if cn in out:
+                out = out.replace(cn, en)
+        return out
 
     def chunk_list(items: list[str], size: int) -> list[list[str]]:
         return [items[i : i + size] for i in range(0, len(items), size)]
@@ -582,14 +632,20 @@ def translate_texts_with_openai(
         raise RuntimeError(f"OpenAI translation failed: {last_err}") from last_err
 
     uniq: list[str] = []
+    normalized: list[str] = []
     for text in texts:
         key = normalize_line(text)
+        if key:
+            key = _apply_glossary(key)
         if not key:
+            normalized.append("")
             continue
         if key in cache:
+            normalized.append(key)
             continue
         cache[key] = ""
         uniq.append(key)
+        normalized.append(key)
 
     for batch in chunk_list(uniq, batch_size):
         if cancel_event is not None and cancel_event.is_set():
@@ -599,8 +655,7 @@ def translate_texts_with_openai(
             cache[src] = (dst or "").strip()
 
     out: list[str] = []
-    for text in texts:
-        key = normalize_line(text)
+    for key in normalized:
         out.append(cache.get(key, "") if key else "")
     return out
 
