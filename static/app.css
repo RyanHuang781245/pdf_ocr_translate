@@ -178,6 +178,10 @@ select {
   font-family: var(--font-main);
 }
 
+input[type="range"] {
+  padding: 0;
+}
+
 .input-row {
   display: flex;
   gap: 0.6rem;
