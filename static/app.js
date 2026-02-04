@@ -44,9 +44,13 @@ const previewDebugBtn = document.getElementById("previewDebug");
 const previewEditedBtn = document.getElementById("previewEdited");
 const debugLinkEl = document.querySelector(".topbar-actions a[href*='overlay_debug.pdf']");
 
+// if (window.pdfjsLib) {
+//   window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+//     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js";
+// }
 if (window.pdfjsLib) {
   window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.js";
+    "/static/pdfjs/pdf.worker.min.js";
 }
 
 document.addEventListener("dragstart", (event) => {
