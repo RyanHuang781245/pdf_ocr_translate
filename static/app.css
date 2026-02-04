@@ -361,6 +361,9 @@ button.primary:hover {
   padding-right: 0.2rem;
   flex: 1;
   min-height: 0;
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
 }
 
 .thumb {
