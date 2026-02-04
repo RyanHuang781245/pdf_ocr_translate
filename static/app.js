@@ -18,6 +18,13 @@ const state = {
   pdfDoc: null,
 };
 
+const historyState = {
+  past: [],
+  future: [],
+  limit: 200,
+  isRestoring: false,
+};
+
 let controlsBound = false;
 
 const statusEl = document.getElementById("status");
@@ -128,6 +135,145 @@ function clearSelection() {
   state.selected = null;
   state.selectedBoxes.clear();
   applySelectionClasses();
+}
+
+function cloneBoxData(box) {
+  return {
+    id: box.id,
+    bbox: { ...box.bbox },
+    text: box.text,
+    fontSize: box.fontSize,
+    color: box.color,
+    deleted: !!box.deleted,
+  };
+}
+
+function findBox(pageIdx, boxId) {
+  return state.pages[pageIdx]?.boxes.find((box) => box.id === boxId) || null;
+}
+
+function applyBoxData(pageIdx, boxId, data) {
+  const page = state.pages[pageIdx];
+  const box = findBox(pageIdx, boxId);
+  if (!page || !box) return;
+  box.bbox = { ...data.bbox };
+  box.text = data.text;
+  box.fontSize = data.fontSize;
+  box.color = data.color;
+  box.deleted = !!data.deleted;
+  updateBoxElement(page, box);
+}
+
+function addBoxToPage(pageIdx, data) {
+  const page = state.pages[pageIdx];
+  if (!page) return;
+  const newBox = {
+    id: data.id,
+    bbox: { ...data.bbox },
+    text: data.text,
+    fontSize: data.fontSize,
+    color: data.color,
+    deleted: !!data.deleted,
+    element: null,
+  };
+  page.boxes.push(newBox);
+  const newIdx = page.boxes.length - 1;
+  createBoxElement(pageIdx, newIdx);
+  updateBoxElement(page, newBox);
+}
+
+function removeBoxFromPage(pageIdx, boxId) {
+  const page = state.pages[pageIdx];
+  if (!page) return;
+  const idx = page.boxes.findIndex((box) => box.id === boxId);
+  if (idx === -1) return;
+  const box = page.boxes[idx];
+  if (box.element) {
+    box.element.remove();
+  }
+  page.boxes.splice(idx, 1);
+}
+
+function pushAction(action) {
+  if (historyState.isRestoring) return;
+  historyState.past.push(action);
+  historyState.future = [];
+  if (historyState.past.length > historyState.limit) {
+    historyState.past.shift();
+  }
+}
+
+function applyAction(action) {
+  switch (action.type) {
+    case "batch":
+      action.actions.forEach(applyAction);
+      break;
+    case "update_boxes":
+      action.updates.forEach((update) => {
+        applyBoxData(update.pageIdx, update.boxId, update.after);
+      });
+      break;
+    case "add_boxes":
+      action.boxes.forEach((entry) => addBoxToPage(entry.pageIdx, entry.box));
+      break;
+    case "delete_boxes":
+      action.boxes.forEach((entry) => {
+        applyBoxData(entry.pageIdx, entry.box.id, { ...entry.box, deleted: true });
+      });
+      break;
+    default:
+      break;
+  }
+}
+
+function revertAction(action) {
+  switch (action.type) {
+    case "batch":
+      [...action.actions].reverse().forEach(revertAction);
+      break;
+    case "update_boxes":
+      action.updates.forEach((update) => {
+        applyBoxData(update.pageIdx, update.boxId, update.before);
+      });
+      break;
+    case "add_boxes":
+      action.boxes.forEach((entry) => removeBoxFromPage(entry.pageIdx, entry.box.id));
+      break;
+    case "delete_boxes":
+      action.boxes.forEach((entry) => {
+        applyBoxData(entry.pageIdx, entry.box.id, entry.box);
+      });
+      break;
+    default:
+      break;
+  }
+}
+
+function resetHistory() {
+  historyState.past = [];
+  historyState.future = [];
+}
+
+function undoHistory() {
+  const action = historyState.past.pop();
+  if (!action) return;
+  historyState.isRestoring = true;
+  revertAction(action);
+  historyState.future.push(action);
+  historyState.isRestoring = false;
+  clearSelection();
+  setStatus("Undo.");
+}
+
+function redoHistory() {
+  const action = historyState.future.pop();
+  if (!action) return;
+  historyState.isRestoring = true;
+  applyAction(action);
+  historyState.past.push(action);
+  historyState.isRestoring = false;
+  clearSelection();
+  setStatus("Redo.");
 }
 
 function setActivePage(pageIdx, options = {}) {
@@ -242,12 +388,20 @@ function boxesIntersect(a, b) {
 function deleteSelectedBoxes() {
   const selected = getSelectedBoxes();
   if (!selected.length) return;
+  const action = {
+    type: "delete_boxes",
+    boxes: selected.map(({ pageIdx, box }) => ({
+      pageIdx,
+      box: cloneBoxData(box),
+    })),
+  };
   selected.forEach(({ page, box }) => {
     box.deleted = true;
     updateBoxElement(page, box);
   });
   clearSelection();
   setStatus("Box deleted.");
+  pushAction(action);
 }
 
 function copySelectedBoxes() {
@@ -292,6 +446,7 @@ function pasteClipboardBoxes() {
   let nextId = baseNextId;
 
   const newSelections = [];
+  const addedBoxes = [];
   items.forEach((item) => {
     const bbox = {
       x: item.bbox.x + dx,
@@ -321,6 +476,7 @@ function pasteClipboardBoxes() {
     const newIndex = targetPage.boxes.length - 1;
     createBoxElement(targetPageIdx, newIndex);
     newSelections.push({ pageIdx: targetPageIdx, boxIdx: newIndex });
+    addedBoxes.push({ pageIdx: targetPageIdx, box: cloneBoxData(newBox) });
   });
 
   state.clipboard.pasteCount += 1;
@@ -335,6 +491,9 @@ function pasteClipboardBoxes() {
   });
   applySelectionClasses();
   setStatus(`Pasted ${items.length} box${items.length > 1 ? "es" : ""}.`);
+  if (addedBoxes.length) {
+    pushAction({ type: "add_boxes", boxes: addedBoxes });
+  }
 }
 
 function duplicateSelectedBoxes() {
@@ -350,6 +509,7 @@ function duplicateSelectedBoxes() {
   const nextIdByPage = new Map();
   const offsetCountByPage = new Map();
   const newSelections = [];
+  const addedBoxes = [];
 
   selected.forEach(({ pageIdx, page, box }) => {
     const sourcePageIdx = pageIdx;
@@ -376,24 +536,25 @@ function duplicateSelectedBoxes() {
       bbox.y = Math.min(Math.max(0, bbox.y), maxY);
     }
 
-    const newBox = {
-      id: nextId,
-      bbox,
-      text: box.text,
-      fontSize: box.fontSize,
-      color: box.color,
-      deleted: false,
-      element: null,
-    };
+      const newBox = {
+        id: nextId,
+        bbox,
+        text: box.text,
+        fontSize: box.fontSize,
+        color: box.color,
+        deleted: false,
+        element: null,
+      };
 
-    targetPage.boxes.push(newBox);
-    nextIdByPage.set(targetPageIdx, nextId + 1);
-    offsetCountByPage.set(targetPageIdx, offsetCount + 1);
+      targetPage.boxes.push(newBox);
+      nextIdByPage.set(targetPageIdx, nextId + 1);
+      offsetCountByPage.set(targetPageIdx, offsetCount + 1);
 
-    const newIndex = targetPage.boxes.length - 1;
-    createBoxElement(targetPageIdx, newIndex);
-    newSelections.push({ pageIdx: targetPageIdx, boxIdx: newIndex });
-  });
+      const newIndex = targetPage.boxes.length - 1;
+      createBoxElement(targetPageIdx, newIndex);
+      newSelections.push({ pageIdx: targetPageIdx, boxIdx: newIndex });
+      addedBoxes.push({ pageIdx: targetPageIdx, box: cloneBoxData(newBox) });
+    });
 
   clearSelection();
   newSelections.forEach(({ pageIdx, boxIdx }, idx) => {
@@ -404,9 +565,12 @@ function duplicateSelectedBoxes() {
       setActivePage(pageIdx);
     }
   });
-  applySelectionClasses();
-  setStatus("Box duplicated.");
-}
+    applySelectionClasses();
+    setStatus("Box duplicated.");
+    if (addedBoxes.length) {
+      pushAction({ type: "add_boxes", boxes: addedBoxes });
+    }
+  }
 
 function updateEditedLink(url) {
   if (!editedLink) return;
@@ -682,18 +846,28 @@ function onDragStart(event, pageIdx, boxIndex, groupMode = false) {
     }
     state.selected = { pageIdx, boxIdx: boxIndex };
     syncInspectorFromBox(box);
-  } else {
-    selectBox(pageIdx, boxIndex);
-  }
-  const group = shouldGroup ? buildDragGroup(pageIdx, boxIndex) : [{ pageIdx, boxIdx: boxIndex, originX: box.bbox.x, originY: box.bbox.y }];
-  state.dragging = {
-    pageIdx,
-    boxIndex,
-    startX: event.clientX,
-    startY: event.clientY,
-    groupMode: shouldGroup,
-    group,
-  };
+    } else {
+      selectBox(pageIdx, boxIndex);
+    }
+    const group = shouldGroup ? buildDragGroup(pageIdx, boxIndex) : [{ pageIdx, boxIdx: boxIndex, originX: box.bbox.x, originY: box.bbox.y }];
+    const beforeUpdates = group.map((item) => {
+      const sourcePage = state.pages[item.pageIdx];
+      const sourceBox = sourcePage?.boxes[item.boxIdx];
+      return {
+        pageIdx: item.pageIdx,
+        boxId: sourceBox?.id,
+        before: sourceBox ? cloneBoxData(sourceBox) : null,
+      };
+    }).filter((update) => Number.isFinite(update.boxId) && update.before);
+    state.dragging = {
+      pageIdx,
+      boxIndex,
+      startX: event.clientX,
+      startY: event.clientY,
+      groupMode: shouldGroup,
+      group,
+      beforeUpdates,
+    };
   box.element.setPointerCapture(event.pointerId);
 }
 
@@ -707,18 +881,21 @@ function onDragMove(event) {
   const dx = (event.clientX - startX) / scale;
   const dy = (event.clientY - startY) / scale;
 
-  if (group && group.length) {
-    group.forEach((item) => {
-      const targetPage = state.pages[item.pageIdx];
-      const targetBox = targetPage?.boxes[item.boxIdx];
-      if (!targetPage || !targetBox) return;
-      targetBox.bbox.x = Math.max(0, item.originX + dx);
-      targetBox.bbox.y = Math.max(0, item.originY + dy);
-      updateBoxElement(targetPage, targetBox);
-    });
-    return;
+    if (group && group.length) {
+      group.forEach((item) => {
+        const targetPage = state.pages[item.pageIdx];
+        const targetBox = targetPage?.boxes[item.boxIdx];
+        if (!targetPage || !targetBox) return;
+        targetBox.bbox.x = Math.max(0, item.originX + dx);
+        targetBox.bbox.y = Math.max(0, item.originY + dy);
+        updateBoxElement(targetPage, targetBox);
+      });
+      if (dx !== 0 || dy !== 0) {
+        state.dragging.moved = true;
+      }
+      return;
+    }
   }
-}
 
 function onDragEnd(event) {
   if (!state.dragging) return;
@@ -727,6 +904,15 @@ function onDragEnd(event) {
   const box = page?.boxes[boxIndex];
   if (box?.element) {
     box.element.releasePointerCapture(event.pointerId);
+  }
+  if (state.dragging.moved) {
+    const updates = (state.dragging.beforeUpdates || []).map((update) => {
+      const current = findBox(update.pageIdx, update.boxId);
+      return current ? { ...update, after: cloneBoxData(current) } : null;
+    }).filter(Boolean);
+    if (updates.length) {
+      pushAction({ type: "update_boxes", updates });
+    }
   }
   state.dragging = null;
 }
@@ -748,6 +934,7 @@ function onResizeStart(event, pageIdx, boxIdx) {
     originH: box.bbox.h,
     originX: box.bbox.x,
     originY: box.bbox.y,
+    beforeUpdate: { pageIdx, boxId: box.id, before: cloneBoxData(box) },
   };
   event.currentTarget.setPointerCapture(event.pointerId);
 }
@@ -775,6 +962,9 @@ function onResizeMove(event) {
   box.bbox.w = newW;
   box.bbox.h = newH;
   updateBoxElement(page, box);
+  if (newW !== originW || newH !== originH) {
+    state.resizing.changed = true;
+  }
 }
 
 function onResizeEnd(event) {
@@ -784,6 +974,16 @@ function onResizeEnd(event) {
   const box = page?.boxes[boxIdx];
   if (box?.element) {
     box.element.releasePointerCapture(event.pointerId);
+  }
+  if (state.resizing.changed) {
+    const update = state.resizing.beforeUpdate;
+    const current = update ? findBox(update.pageIdx, update.boxId) : null;
+    if (update && current) {
+      pushAction({
+        type: "update_boxes",
+        updates: [{ ...update, after: cloneBoxData(current) }],
+      });
+    }
   }
   state.resizing = null;
 }
@@ -1031,6 +1231,9 @@ function createBoxElement(pageIdx, boxIdx) {
   textEl.addEventListener("focus", () => {
     selectBox(pageIdx, boxIdx, state.lastShiftKey);
     state.lastShiftKey = false;
+    if (!box._editBefore) {
+      box._editBefore = cloneBoxData(box);
+    }
   });
   textEl.addEventListener("input", () => {
     const raw = textEl.textContent.replace(/\n+/g, " ");
@@ -1041,6 +1244,17 @@ function createBoxElement(pageIdx, boxIdx) {
     box.text = normalized;
     if (textEl.textContent !== normalized) {
       textEl.textContent = normalized;
+    }
+    if (box._editBefore) {
+      const before = box._editBefore;
+      delete box._editBefore;
+      const after = cloneBoxData(box);
+      if (before.text !== after.text) {
+        pushAction({
+          type: "update_boxes",
+          updates: [{ pageIdx, boxId: box.id, before, after }],
+        });
+      }
     }
   });
 
@@ -1098,6 +1312,7 @@ function addNewBox() {
     textEl.focus();
   }
   setStatus("Text box added.");
+  pushAction({ type: "add_boxes", boxes: [{ pageIdx: targetPageIdx, box: cloneBoxData(box) }] });
 }
 
 function buildSavePayload() {
@@ -1134,6 +1349,7 @@ async function loadJobData(jobId) {
     previewEditedBtn.disabled = !data.edited_pdf_url;
   }
   renderBatchStatus(data.batch_status);
+  resetHistory();
   return data;
 }
 
@@ -1215,10 +1431,22 @@ function bindControls() {
 
     const selected = getSelectedBoxes();
     if (!selected.length) return;
+    const updates = selected.map(({ pageIdx, box }) => ({
+      pageIdx,
+      boxId: box.id,
+      before: cloneBoxData(box),
+    }));
     selected.forEach(({ page, box }) => {
       box.fontSize = clamped;
       updateBoxElement(page, box);
     });
+    const finalized = updates.map((update) => {
+      const current = findBox(update.pageIdx, update.boxId);
+      return current ? { ...update, after: cloneBoxData(current) } : null;
+    }).filter(Boolean).filter((update) => update.before.fontSize !== update.after.fontSize);
+    if (finalized.length) {
+      pushAction({ type: "update_boxes", updates: finalized });
+    }
   };
 
   const tryApplyFontSizeInput = (value) => {
@@ -1254,11 +1482,23 @@ function bindControls() {
     fontColorEl.addEventListener("input", () => {
       const selected = getSelectedBoxes();
       if (!selected.length) return;
+      const updates = selected.map(({ pageIdx, box }) => ({
+        pageIdx,
+        boxId: box.id,
+        before: cloneBoxData(box),
+      }));
       const value = fontColorEl.value;
       selected.forEach(({ page, box }) => {
         box.color = value;
         updateBoxElement(page, box);
       });
+      const finalized = updates.map((update) => {
+        const current = findBox(update.pageIdx, update.boxId);
+        return current ? { ...update, after: cloneBoxData(current) } : null;
+      }).filter(Boolean).filter((update) => update.before.color !== update.after.color);
+      if (finalized.length) {
+        pushAction({ type: "update_boxes", updates: finalized });
+      }
     });
   }
 
@@ -1427,6 +1667,20 @@ function bindControls() {
 
     if ((event.ctrlKey || event.metaKey) && !isEditing) {
       const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redoHistory();
+        } else {
+          undoHistory();
+        }
+        return;
+      }
+      if (key === "y") {
+        event.preventDefault();
+        redoHistory();
+        return;
+      }
       if (key === "c") {
         event.preventDefault();
         copySelectedBoxes();
