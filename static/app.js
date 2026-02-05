@@ -743,7 +743,7 @@ function buildState(data) {
       const text = page.edit_texts[index] ?? page.rec_texts[index] ?? "";
       const baseSize = Math.max(10, Math.min(28, bbox.h * 0.6));
       const fontSize = Number(page.font_sizes?.[index]);
-      const color = page.colors?.[index] ?? "#1c3c5a";
+      const color = page.colors?.[index] ?? "#0000ff";
       const id = page.box_ids?.[index] ?? index;
       return {
         id,
@@ -1409,7 +1409,7 @@ function addNewBox() {
     bbox: { x, y, w: defaultW, h: defaultH },
     text: "",
     fontSize: Math.max(10, Math.min(28, defaultH * 0.6)),
-    color: "#1c3c5a",
+    color: "#0000ff",
     deleted: false,
     element: null,
   };

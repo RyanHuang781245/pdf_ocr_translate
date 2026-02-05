@@ -317,7 +317,7 @@ def _load_page_data(
             edit_texts.append(text)
             rec_scores.append(1.0)
             font_sizes.append(float(box.get("font_size") or 0.0))
-            colors.append(str(box.get("color") or "#1c3c5a"))
+            colors.append(str(box.get("color") or "#0000ff"))
             box_ids.append(int(box.get("id") or len(box_ids)))
         count = len(rec_polys)
     else:
@@ -893,65 +893,86 @@ def index() -> str:
 
 @app.route("/upload", methods=["POST"])
 def upload() -> str:
-    file = request.files.get("pdf")
-    if not file or file.filename == "":
-        abort(400, "Missing PDF file.")
-
-    ext = Path(file.filename).suffix.lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        abort(400, "Only PDF files are supported.")
+    files = request.files.getlist("pdf")
+    folder_path = (request.form.get("folder_path") or "").strip()
+    if (not files or all(f.filename == "" for f in files)) and not folder_path:
+        abort(400, "Missing PDF file or folder path.")
 
     JOB_ROOT.mkdir(parents=True, exist_ok=True)
     UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
-
-    job_id = uuid.uuid4().hex
-    job_dir = _job_dir(job_id)
-    job_dir.mkdir(parents=True, exist_ok=True)
-
-    original_name = Path(file.filename).stem
-    safe_name = secure_filename(original_name) or "job"
-    job_name = f"{safe_name}_{job_id[:8]}"
-    _write_job_meta(job_dir, {"job_name": job_name})
-
-    pdf_filename = secure_filename(f"{job_id}.pdf")
-    pdf_path = job_dir / pdf_filename
-    file.save(pdf_path)
-    _notify_jobs_update()
 
     dpi = 200
     start_page = int(request.form.get("start", 1))
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
     enable_translate = request.form.get("translate") == "on"
-    # enable_translate = True
     translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
     translate_model = request.form.get("model", AZURE_BATCH_MODEL).strip() or AZURE_BATCH_MODEL
     keep_lang = request.form.get("keep_lang", "all").strip().lower() or "all"
     if keep_lang not in {"all", "zh", "en"}:
         keep_lang = "all"
 
-    cancel_event = threading.Event()
-    global ACTIVE_UPLOAD
-    with ACTIVE_UPLOAD_LOCK:
-        ACTIVE_UPLOAD = {"event": cancel_event, "job_id": job_id, "started_at": time.time()}
+    def enqueue_job(source_pdf: Path, display_name: str) -> None:
+        job_id = uuid.uuid4().hex
+        job_dir = _job_dir(job_id)
+        job_dir.mkdir(parents=True, exist_ok=True)
+        job_name = f"{display_name}_{job_id[:8]}"
+        _write_job_meta(job_dir, {"job_name": job_name})
 
-    threading.Thread(
-        target=_run_ocr_pipeline_job,
-        args=(
-            job_id,
-            job_dir,
-            pdf_path,
-            dpi,
-            start_page,
-            end_page,
-            translate_target_lang,
-            translate_model,
-            keep_lang,
-            enable_translate,
-            cancel_event,
-        ),
-        daemon=True,
-    ).start()
+        pdf_filename = secure_filename(f"{job_id}.pdf")
+        pdf_path = job_dir / pdf_filename
+        if source_pdf.exists():
+            shutil.copy2(source_pdf, pdf_path)
+        else:
+            raise FileNotFoundError(f"Missing PDF: {source_pdf}")
+
+        cancel_event = threading.Event()
+        global ACTIVE_UPLOAD
+        with ACTIVE_UPLOAD_LOCK:
+            ACTIVE_UPLOAD = {"event": cancel_event, "job_id": job_id, "started_at": time.time()}
+
+        threading.Thread(
+            target=_run_ocr_pipeline_job,
+            args=(
+                job_id,
+                job_dir,
+                pdf_path,
+                dpi,
+                start_page,
+                end_page,
+                translate_target_lang,
+                translate_model,
+                keep_lang,
+                enable_translate,
+                cancel_event,
+            ),
+            daemon=True,
+        ).start()
+
+    if folder_path:
+        folder = Path(folder_path)
+        if not folder.exists() or not folder.is_dir():
+            abort(400, "Folder path not found.")
+        for pdf in sorted(folder.glob("*.pdf")):
+            display_name = secure_filename(pdf.stem) or "job"
+            enqueue_job(pdf, display_name)
+
+    for file in files:
+        if not file or file.filename == "":
+            continue
+        ext = Path(file.filename).suffix.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            continue
+        tmp_path = UPLOAD_ROOT / secure_filename(file.filename)
+        file.save(tmp_path)
+        display_name = secure_filename(Path(file.filename).stem) or "job"
+        enqueue_job(tmp_path, display_name)
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    _notify_jobs_update()
 
     return redirect(url_for("index"))
 
