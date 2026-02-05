@@ -1,6 +1,7 @@
 *.pdf
 output/
 out/
+glossary/
 .vscode/
 .env
 .coverage
