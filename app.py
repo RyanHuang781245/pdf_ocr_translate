@@ -29,9 +29,9 @@ AZURE_API_KEY_ENV = os.getenv("AZURE_OPENAI_API_KEY_ENV", "UO_AZURE_OPENAI_API_K
 AZURE_BATCH_MODEL = os.getenv("AZURE_BATCH_MODEL", "gpt-4o-mini-global-batch")
 AZURE_BATCH_POLL_SECONDS = float(os.getenv("AZURE_BATCH_POLL_SECONDS", "60"))
 AZURE_BATCH_COMPLETION_WINDOW = os.getenv("AZURE_BATCH_COMPLETION_WINDOW", "24h")
-GLOSSARY_INSPECTION_PATH = os.getenv("GLOSSARY_INSPECTION_PATH", str((Path(__file__).resolve().parent / "output" / "inspection_terminology.json")))
-GLOSSARY_PROCESS_PATH = os.getenv("GLOSSARY_PROCESS_PATH", str((Path(__file__).resolve().parent / "output" / "process_terminology.json")))
-GLOBAL_GLOSSARY_PATH = os.getenv("GLOBAL_GLOSSARY_PATH", str((Path(__file__).resolve().parent / "output" / "global_glossary.json")))
+GLOSSARY_INSPECTION_PATH = os.getenv("GLOSSARY_INSPECTION_PATH", str((Path(__file__).resolve().parent / "glossary" / "inspection_terminology.json")))
+GLOSSARY_PROCESS_PATH = os.getenv("GLOSSARY_PROCESS_PATH", str((Path(__file__).resolve().parent / "glossary" / "process_terminology.json")))
+GLOBAL_GLOSSARY_PATH = os.getenv("GLOBAL_GLOSSARY_PATH", str((Path(__file__).resolve().parent / "glossary" / "global_glossary.json")))
 AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
     "AZURE_BATCH_SYSTEM_PROMPT",
     "\n".join(
@@ -908,9 +908,10 @@ def upload() -> str:
     job_dir = _job_dir(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    job_name = request.form.get("job_name", "").strip()
-    if job_name:
-        _write_job_meta(job_dir, {"job_name": job_name})
+    original_name = Path(file.filename).stem
+    safe_name = secure_filename(original_name) or "job"
+    job_name = f"{safe_name}_{job_id[:8]}"
+    _write_job_meta(job_dir, {"job_name": job_name})
 
     pdf_filename = secure_filename(f"{job_id}.pdf")
     pdf_path = job_dir / pdf_filename
@@ -922,6 +923,7 @@ def upload() -> str:
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
     enable_translate = request.form.get("translate") == "on"
+    # enable_translate = True
     translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
     translate_model = request.form.get("model", AZURE_BATCH_MODEL).strip() or AZURE_BATCH_MODEL
     keep_lang = request.form.get("keep_lang", "all").strip().lower() or "all"
