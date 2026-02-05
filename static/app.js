@@ -50,6 +50,15 @@ const previewEl = document.getElementById("pdfPreview");
 const previewDebugBtn = document.getElementById("previewDebug");
 const previewEditedBtn = document.getElementById("previewEdited");
 const debugLinkEl = document.querySelector(".topbar-actions a[href*='overlay_debug.pdf']");
+const glossaryCnEl = document.getElementById("glossaryCn");
+const glossaryEnEl = document.getElementById("glossaryEn");
+const addGlossaryBtn = document.getElementById("addGlossaryBtn");
+const glossaryListEl = document.getElementById("glossaryList");
+const systemPromptEl = document.getElementById("systemPrompt");
+const savePromptBtn = document.getElementById("savePromptBtn");
+const glossaryPromptBtn = document.getElementById("glossaryPromptBtn");
+const glossaryPromptModal = document.getElementById("glossaryPromptModal");
+const closeGlossaryPrompt = document.getElementById("closeGlossaryPrompt");
 
 // if (window.pdfjsLib) {
 //   window.pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -70,6 +79,105 @@ function setStatus(message) {
   if (statusEl) {
     statusEl.textContent = message;
   }
+}
+
+let glossaryEntries = [];
+let currentJobId = null;
+
+function renderGlossary() {
+  if (!glossaryListEl) return;
+  glossaryListEl.innerHTML = "";
+  if (!glossaryEntries.length) {
+    const empty = document.createElement("div");
+    empty.className = "hint";
+    empty.textContent = "尚未加入詞彙對照。";
+    glossaryListEl.appendChild(empty);
+    return;
+  }
+  glossaryEntries.forEach((entry, index) => {
+    const row = document.createElement("div");
+    row.className = "glossary-item";
+    const cn = document.createElement("span");
+    cn.textContent = entry.cn;
+    const en = document.createElement("span");
+    en.textContent = entry.en;
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "ghost";
+    del.textContent = "刪除";
+    del.addEventListener("click", () => {
+      glossaryEntries.splice(index, 1);
+      renderGlossary();
+      saveGlossary();
+    });
+    row.appendChild(cn);
+    row.appendChild(en);
+    row.appendChild(del);
+    glossaryListEl.appendChild(row);
+  });
+}
+
+async function loadGlossary() {
+  try {
+    const res = await fetch(`/api/glossary`);
+    if (!res.ok) return;
+    const payload = await res.json();
+    glossaryEntries = Array.isArray(payload.glossary) ? payload.glossary : [];
+    renderGlossary();
+  } catch (error) {
+    // ignore
+  }
+}
+
+async function saveGlossary() {
+  try {
+    await fetch(`/api/glossary`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ glossary: glossaryEntries }),
+    });
+  } catch (error) {
+    // ignore
+  }
+}
+
+async function saveSystemPrompt(jobId) {
+  if (!jobId) return;
+  const prompt = systemPromptEl?.value ?? "";
+  try {
+    await fetch(`/api/job/${jobId}/system-prompt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system_prompt: prompt }),
+    });
+    setStatus("已儲存提示詞。");
+  } catch (error) {
+    setStatus("儲存提示詞失敗。");
+  }
+}
+
+function addGlossaryEntry() {
+  const cn = glossaryCnEl?.value?.trim();
+  const en = glossaryEnEl?.value?.trim();
+  if (!cn || !en) {
+    setStatus("請輸入中文與英文詞彙。");
+    return;
+  }
+  glossaryEntries.unshift({ cn, en });
+  glossaryCnEl.value = "";
+  glossaryEnEl.value = "";
+  renderGlossary();
+  saveGlossary();
+}
+
+function openGlossaryModal() {
+  if (!glossaryPromptModal) return;
+  glossaryPromptModal.hidden = false;
+}
+
+function closeGlossaryModal() {
+  if (!glossaryPromptModal) return;
+  glossaryPromptModal.hidden = true;
 }
 
 function setBatchButtonState(status) {
@@ -1589,6 +1697,62 @@ function bindControls() {
     });
   }
 
+  if (addGlossaryBtn) {
+    addGlossaryBtn.addEventListener("click", () => {
+      addGlossaryEntry();
+    });
+  }
+
+  if (savePromptBtn) {
+    savePromptBtn.addEventListener("click", () => {
+      saveSystemPrompt(currentJobId);
+    });
+  }
+
+  if (glossaryPromptBtn) {
+    glossaryPromptBtn.addEventListener("click", () => {
+      openGlossaryModal();
+    });
+  }
+
+  if (closeGlossaryPrompt) {
+    closeGlossaryPrompt.addEventListener("click", () => {
+      closeGlossaryModal();
+    });
+  }
+
+  if (glossaryPromptModal) {
+    glossaryPromptModal.addEventListener("click", (event) => {
+      if (event.target === glossaryPromptModal) {
+        closeGlossaryModal();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeGlossaryModal();
+    }
+  });
+
+  if (glossaryCnEl) {
+    glossaryCnEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addGlossaryEntry();
+      }
+    });
+  }
+
+  if (glossaryEnEl) {
+    glossaryEnEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        addGlossaryEntry();
+      }
+    });
+  }
+
   if (saveBtn) {
     saveBtn.addEventListener("click", (event) => {
       event.preventDefault();
@@ -1702,9 +1866,16 @@ function bindControls() {
 async function init() {
   const jobId = document.body.dataset.jobId;
   if (!jobId) return;
+  currentJobId = jobId;
   bindControls();
   const data = await loadJobData(jobId);
   if (!data) return;
+  glossaryEntries = Array.isArray(data.glossary) ? data.glossary : [];
+  renderGlossary();
+  loadGlossary();
+  if (systemPromptEl) {
+    systemPromptEl.value = data.system_prompt || "";
+  }
   const status = data.batch_status?.status;
   if (status === "running" || status === "queued") {
     setTimeout(() => pollBatchStatus(jobId), 5000);

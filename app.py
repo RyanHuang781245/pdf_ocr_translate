@@ -31,6 +31,7 @@ AZURE_BATCH_POLL_SECONDS = float(os.getenv("AZURE_BATCH_POLL_SECONDS", "60"))
 AZURE_BATCH_COMPLETION_WINDOW = os.getenv("AZURE_BATCH_COMPLETION_WINDOW", "24h")
 GLOSSARY_INSPECTION_PATH = os.getenv("GLOSSARY_INSPECTION_PATH", str((Path(__file__).resolve().parent / "output" / "inspection_terminology.json")))
 GLOSSARY_PROCESS_PATH = os.getenv("GLOSSARY_PROCESS_PATH", str((Path(__file__).resolve().parent / "output" / "process_terminology.json")))
+GLOBAL_GLOSSARY_PATH = os.getenv("GLOBAL_GLOSSARY_PATH", str((Path(__file__).resolve().parent / "output" / "global_glossary.json")))
 AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
     "AZURE_BATCH_SYSTEM_PROMPT",
     "\n".join(
@@ -165,6 +166,9 @@ def _batch_config_path(job_dir: Path) -> Path:
 def _job_meta_path(job_dir: Path) -> Path:
     return job_dir / "job_meta.json"
 
+def _global_glossary_path() -> Path:
+    return Path(GLOBAL_GLOSSARY_PATH)
+
 def _write_job_meta(job_dir: Path, meta: dict[str, Any]) -> None:
     _job_meta_path(job_dir).write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -210,6 +214,48 @@ def _load_batch_status(job_dir: Path) -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
+
+
+def _load_global_glossary() -> list[dict[str, str]]:
+    path = _global_glossary_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    cleaned: list[dict[str, str]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        cn = str(item.get("cn") or "").strip()
+        en = str(item.get("en") or "").strip()
+        if not cn or not en:
+            continue
+        cleaned.append({"cn": cn, "en": en})
+    return cleaned
+
+
+def _write_global_glossary(items: list[dict[str, str]]) -> None:
+    payload: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        cn = str(item.get("cn") or "").strip()
+        en = str(item.get("en") or "").strip()
+        if not cn or not en:
+            continue
+        key = (cn, en)
+        if key in seen:
+            continue
+        payload.append({"cn": cn, "en": en})
+        seen.add(key)
+    _global_glossary_path().write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def _load_edits_map(job_dir: Path) -> dict[int, list[dict[str, Any]]]:
@@ -351,11 +397,10 @@ def _extract_batch_translation(item: dict[str, Any]) -> str:
     return ""
 
 
-@functools.lru_cache(maxsize=1)
 def _load_glossary_entries() -> list[tuple[str, str]]:
     entries: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for raw_path in (GLOSSARY_INSPECTION_PATH, GLOSSARY_PROCESS_PATH):
+    for raw_path in (GLOSSARY_INSPECTION_PATH, GLOSSARY_PROCESS_PATH, GLOBAL_GLOSSARY_PATH):
         if not raw_path:
             continue
         path = Path(raw_path)
@@ -385,10 +430,14 @@ def _load_glossary_entries() -> list[tuple[str, str]]:
     return entries
 
 
-def _apply_glossary(text: str) -> str:
+def _load_combined_glossary() -> list[tuple[str, str]]:
+    return _load_glossary_entries()
+
+
+def _apply_glossary(text: str, entries: list[tuple[str, str]] | None = None) -> str:
     if not text:
         return text
-    entries = _load_glossary_entries()
+    entries = entries or _load_glossary_entries()
     if not entries:
         return text
     out = text
@@ -450,6 +499,7 @@ def _build_batch_items(
     ocr_pages: list[dict[str, Any]],
     model_name: str,
     system_prompt: str,
+    glossary_entries: list[tuple[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for page in ocr_pages:
@@ -459,7 +509,7 @@ def _build_batch_items(
             clean = _normalize_text(text)
             if not clean:
                 continue
-            clean = _apply_glossary(clean)
+            clean = _apply_glossary(clean, glossary_entries)
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
             items.append(
                 {
@@ -551,7 +601,13 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
     _write_batch_status(job_dir, "running", **status_meta)
     try:
         ocr_pages = _load_ocr_pages(job_dir)
-        batch_items = _build_batch_items(ocr_pages, model_name=model_name, system_prompt=system_prompt)
+        glossary_entries = _load_combined_glossary()
+        batch_items = _build_batch_items(
+            ocr_pages,
+            model_name=model_name,
+            system_prompt=system_prompt,
+            glossary_entries=glossary_entries,
+        )
         logger.info("Batch translate collected pages=%s lines=%s", len(ocr_pages), len(batch_items))
         if not batch_items:
             raise RuntimeError("No OCR text lines found to translate.")
@@ -935,12 +991,17 @@ def job_data(job_id: str):
         pages.append(page)
 
     edited_pdf_path = job_dir / "edited.pdf"
+    config = _load_batch_config(job_dir) or {}
+    target_lang = str(config.get("target_lang") or "en")
+    system_prompt = config.get("system_prompt") or _resolve_batch_prompt(target_lang)
     payload = {
         "job_id": job_id,
         "pdf_url": url_for("job_file", job_id=job_id, filename=f"{job_id}.pdf"),
         "debug_pdf_url": url_for("job_file", job_id=job_id, filename="overlay_debug.pdf"),
         "edited_pdf_url": url_for("job_file", job_id=job_id, filename="edited.pdf") if edited_pdf_path.exists() else None,
         "batch_status": _load_batch_status(job_dir),
+        "glossary": _load_global_glossary(),
+        "system_prompt": system_prompt,
         "pages": pages,
     }
     return jsonify(payload)
@@ -998,6 +1059,38 @@ def batch_restore(job_id: str):
         return jsonify({"ok": False, "error": str(exc)}), 500
 
     return jsonify({"ok": True})
+
+
+@app.route("/api/job/<job_id>/system-prompt", methods=["POST"])
+def save_system_prompt(job_id: str):
+    if not _safe_job_id(job_id):
+        abort(404)
+    job_dir = _job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+    payload = request.get_json(force=True) or {}
+    system_prompt = str(payload.get("system_prompt") or "").strip()
+    config = _load_batch_config(job_dir) or {}
+    if system_prompt:
+        config["system_prompt"] = system_prompt
+    else:
+        config.pop("system_prompt", None)
+    _write_batch_config(job_dir, config)
+    _notify_jobs_update()
+    return jsonify({"ok": True, "system_prompt": config.get("system_prompt")})
+
+
+@app.route("/api/glossary", methods=["GET", "POST"])
+def global_glossary():
+    if request.method == "GET":
+        return jsonify({"ok": True, "glossary": _load_global_glossary()})
+    payload = request.get_json(force=True) or {}
+    items = payload.get("glossary", [])
+    if not isinstance(items, list):
+        return jsonify({"ok": False, "error": "Invalid glossary payload."}), 400
+    _write_global_glossary(items)
+    _notify_jobs_update()
+    return jsonify({"ok": True, "glossary": _load_global_glossary()})
 
 
 @app.route("/api/jobs", methods=["GET"])

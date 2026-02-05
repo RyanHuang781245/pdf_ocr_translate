@@ -189,6 +189,15 @@ select {
   font-family: var(--font-main);
 }
 
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(21, 36, 43, 0.2);
+  font-family: var(--font-main);
+  resize: vertical;
+}
+
 input[type="range"] {
   padding: 0;
 }
@@ -301,7 +310,7 @@ button.primary:hover {
   top: 1.5rem;
   align-self: start;
   height: calc(100vh - 3.5rem);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .panel h2 {
@@ -313,6 +322,80 @@ button.primary:hover {
   display: flex;
   justify-content: flex-start;
   margin-top: 0.6rem;
+}
+
+.glossary-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.glossary-item {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid rgba(21, 36, 43, 0.15);
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
+}
+
+.glossary-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossary-item button {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 28, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 1.5rem;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-card {
+  width: min(720px, 92vw);
+  max-height: 85vh;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--edge);
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.2rem 0.6rem;
+  border-bottom: 1px solid var(--edge);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.modal-body {
+  padding: 1rem 1.2rem 1.2rem;
+  display: grid;
+  gap: 1rem;
+  overflow: auto;
 }
 
 .status {

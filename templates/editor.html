@@ -34,6 +34,7 @@
         <a class="ghost" href="{{ debug_pdf_url }}" target="_blank" rel="noopener">預覽除錯 PDF</a>
         <button id="batchTranslateBtn" class="ghost">重新翻譯</button>
         <button id="batchRestoreBtn" class="ghost">還原翻譯內容/位置</button>
+        <button id="glossaryPromptBtn" class="ghost" type="button">詞彙/提示詞</button>
         <button id="saveBtn" class="primary">儲存編輯</button>
         <button id="downloadBtn" class="ghost">下載已編輯 PDF</button>
       </div>
@@ -79,6 +80,7 @@
             <button id="deleteBox" class="danger">刪除文字框</button>
           </div>
         </section>
+        
         <section>
           <h2>快捷鍵</h2>
           <p class="hint">
@@ -87,6 +89,7 @@
             按 Delete 刪除選取的文字框。
           </p>
         </section>
+        
       </aside>
       <section class="canvas">
         <div class="viewer">
@@ -98,6 +101,37 @@
         </div>
       </section>
     </main>
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+        <div id="glossaryPromptModal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="glossaryPromptTitle">
+        <div class="modal-header">
+          <h2 id="glossaryPromptTitle">中英詞彙 / 提示詞</h2>
+          <button id="closeGlossaryPrompt" class="ghost" type="button">關閉</button>
+        </div>
+        <div class="modal-body">
+          <section>
+            <h3>詞彙對照</h3>
+            <div class="input-row">
+              <input id="glossaryCn" type="text" placeholder="中文" />
+              <input id="glossaryEn" type="text" placeholder="英文" />
+            </div>
+            <div class="button-row">
+              <button id="addGlossaryBtn" class="ghost" type="button">加入詞彙</button>
+            </div>
+            <div id="glossaryList" class="glossary-list"></div>
+          </section>
+          <section>
+            <h3>翻譯提示詞</h3>
+            <label>
+              <span>自訂系統提示詞</span>
+              <textarea id="systemPrompt" rows="6" placeholder="輸入自訂提示詞（留空則使用預設值）"></textarea>
+            </label>
+            <div class="button-row">
+              <button id="savePromptBtn" class="ghost" type="button">儲存提示詞</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
   </body>
 </html>
