@@ -175,7 +175,7 @@ def run_layout_parsing_predict(
             raise RuntimeError(f"Triton OCR failed for {img_path}: {msg}")
 
         try:
-            pruned = output["result"]["layoutParsingResults"][0]["prunedResult"]
+            pruned = output["result"]["tableRecResults"][0]["prunedResult"]
         except Exception as exc:
             raise RuntimeError(f"Unexpected Triton output for {img_path}") from exc
 
