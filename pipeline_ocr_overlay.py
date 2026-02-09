@@ -6,6 +6,7 @@ import functools
 import os
 import re
 import time
+import cv2
 from pathlib import Path
 from typing import Any, Callable, List, Tuple
 
@@ -18,6 +19,7 @@ import requests
 # Font (Windows CJK default)
 # -----------------------------
 DEFAULT_FONTFILE = r"C:\Windows\Fonts\msjh.ttc"
+MERGE_SERVICE_URL = os.getenv("MERGE_SERVICE_URL", "").strip()
 
 
 # -----------------------------
@@ -157,6 +159,8 @@ def run_layout_parsing_predict(
     out_jsons: list[Path] = []
     total = len(images)
     for idx, img_path in enumerate(images, start=1):
+        img = cv2.imread(img_path)
+        height, width = img.shape[:2]
         if cancel_event is not None and cancel_event.is_set():
             raise PipelineCancelled("Cancelled during OCR.")
 
@@ -176,6 +180,8 @@ def run_layout_parsing_predict(
 
         try:
             pruned = output["result"]["tableRecResults"][0]["prunedResult"]
+            pruned["width"] = width
+            pruned["height"] = height
         except Exception as exc:
             raise RuntimeError(f"Unexpected Triton output for {img_path}") from exc
 
@@ -204,6 +210,40 @@ def run_layout_parsing_predict(
     if not uniq:
         raise RuntimeError(f"No layout-parsing JSON output: {json_out_dir}")
     return uniq
+
+
+def merge_pp_json_via_service(pp_json_paths: list[Path], merge_url: str | None) -> list[Path]:
+    if not merge_url:
+        return pp_json_paths
+    base = merge_url.rstrip("/")
+    merged_paths: list[Path] = []
+    for js_path in pp_json_paths:
+        try:
+            with js_path.open("rb") as f:
+                files = {"file": (js_path.name, f, "application/json")}
+                resp = requests.post(f"{base}/merge-and-save", files=files, timeout=120)
+            if resp.status_code != 200:
+                print(f"[WARN] merge_service failed {resp.status_code} for {js_path.name}")
+                merged_paths.append(js_path)
+                continue
+            payload = resp.json()
+            out_file = payload.get("output_file")
+            if not out_file:
+                merged_paths.append(js_path)
+                continue
+            out_path = Path(out_file)
+            if not out_path.is_absolute():
+                out_path = Path.cwd() / out_path
+            if not out_path.exists():
+                print(f"[WARN] merge_service output not found: {out_path}")
+                merged_paths.append(js_path)
+                continue
+            js_path.write_text(out_path.read_text(encoding="utf-8"), encoding="utf-8")
+            merged_paths.append(js_path)
+        except Exception as exc:
+            print(f"[WARN] merge_service error for {js_path.name}: {exc}")
+            merged_paths.append(js_path)
+    return merged_paths
 
 
 # -----------------------------
@@ -984,6 +1024,7 @@ def run_pipeline(
         progress_cb=progress_cb,
         cancel_event=cancel_event,
     )
+    pp_json_paths = merge_pp_json_via_service(pp_json_paths, MERGE_SERVICE_URL)
 
     norm_json_dir.mkdir(parents=True, exist_ok=True)
     per_page_with_coords_jsons: list[Path] = []
