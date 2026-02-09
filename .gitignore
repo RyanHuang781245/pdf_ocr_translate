@@ -10,4 +10,4 @@ glossary/
 *.jpeg
 __pycache__/
 test.ipynb
-paddleocr_demo.py
+test.py
