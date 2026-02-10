@@ -894,9 +894,8 @@ def index() -> str:
 @app.route("/upload", methods=["POST"])
 def upload() -> str:
     files = request.files.getlist("pdf")
-    folder_path = (request.form.get("folder_path") or "").strip()
-    if (not files or all(f.filename == "" for f in files)) and not folder_path:
-        abort(400, "Missing PDF file or folder path.")
+    if not files or all(f.filename == "" for f in files):
+        abort(400, "Missing PDF file.")
 
     JOB_ROOT.mkdir(parents=True, exist_ok=True)
     UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
@@ -905,7 +904,7 @@ def upload() -> str:
     start_page = int(request.form.get("start", 1))
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
-    enable_translate = request.form.get("translate") == "on"
+    enable_translate = True
     translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
     translate_model = request.form.get("model", AZURE_BATCH_MODEL).strip() or AZURE_BATCH_MODEL
     keep_lang = request.form.get("keep_lang", "all").strip().lower() or "all"
@@ -948,14 +947,6 @@ def upload() -> str:
             ),
             daemon=True,
         ).start()
-
-    if folder_path:
-        folder = Path(folder_path)
-        if not folder.exists() or not folder.is_dir():
-            abort(400, "Folder path not found.")
-        for pdf in sorted(folder.glob("*.pdf")):
-            display_name = secure_filename(pdf.stem) or "job"
-            enqueue_job(pdf, display_name)
 
     for file in files:
         if not file or file.filename == "":
