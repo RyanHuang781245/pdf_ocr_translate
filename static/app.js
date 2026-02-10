@@ -741,7 +741,7 @@ function buildState(data) {
     const boxes = page.rec_polys.map((poly, index) => {
       const bbox = polyToBbox(poly);
       const text = page.edit_texts[index] ?? page.rec_texts[index] ?? "";
-      const baseSize = Math.max(10, Math.min(28, bbox.h * 0.6));
+      const baseSize = 25;
       const fontSize = Number(page.font_sizes?.[index]);
       const color = page.colors?.[index] ?? "#0000ff";
       const id = page.box_ids?.[index] ?? index;
