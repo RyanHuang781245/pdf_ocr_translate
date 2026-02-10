@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import functools
+import io
 import json
 import logging
 import os
@@ -11,11 +12,12 @@ import threading
 import time
 import uuid
 import unicodedata
+import zipfile
 from pathlib import Path
 from typing import Any
 
 import fitz
-from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory, stream_with_context, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, stream_with_context, url_for
 from werkzeug.utils import secure_filename
 
 from pipeline_ocr_overlay import PipelineCancelled, run_pipeline, px_point_to_pdf_pt
@@ -994,14 +996,25 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
         _write_batch_alias_map(job_dir, alias_map)
         _write_batch_prefill_map(job_dir, prefilled)
         logger.info(
-            "Batch translate collected pages=%s lines=%s unique=%s tm_prefill=%s",
+            "Batch translate collected pages=%s unique=%s dup_alias=%s tm_prefill=%s",
             len(ocr_pages),
             len(batch_items),
             len(alias_map),
             len(prefilled),
         )
-        if not batch_items:
+        if not batch_items and not prefilled:
             raise RuntimeError("No OCR text lines found to translate.")
+        if not batch_items and prefilled:
+            translations = _build_translations_from_jsonl_text("", alias_map=alias_map, prefilled=prefilled)
+            edits_payload = _build_edits_payload_from_translations(ocr_pages, translations, pp_pages=pp_pages)
+            edits_path = job_dir / "edits.json"
+            edits_path.write_text(json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            logger.info("Batch translate skipped remote call; wrote edits.json=%s", edits_path.resolve())
+            _apply_edits_to_pdf(job_id, job_dir, edits_payload)
+            logger.info("Batch translate wrote edited.pdf job_id=%s", job_id)
+            _write_batch_status(job_dir, "completed", **status_meta, batch_id="prefill_only")
+            logger.info("Batch translate completed from translation memory job_id=%s", job_id)
+            return
 
         batch_input_path = job_dir / BATCH_INPUT_NAME
         _write_jsonl(batch_input_path, batch_items)
@@ -1515,6 +1528,65 @@ def global_glossary():
 def list_jobs():
     jobs = _build_jobs_list()
     return jsonify({"jobs": jobs})
+
+
+def _build_translated_zip(job_ids: set[str] | None) -> tuple[io.BytesIO, int]:
+    JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    buf = io.BytesIO()
+    names: set[str] = set()
+    count = 0
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for job_dir in sorted(JOB_ROOT.iterdir()):
+            if not job_dir.is_dir():
+                continue
+            job_id = job_dir.name
+            if not _safe_job_id(job_id):
+                continue
+            if job_ids is not None and job_id not in job_ids:
+                continue
+            edited_path = job_dir / "edited.pdf"
+            if not edited_path.exists():
+                continue
+            job_meta = _load_job_meta(job_dir) or {}
+            job_name = job_meta.get("job_name")
+            if isinstance(job_name, str):
+                job_name = job_name.strip() or None
+            else:
+                job_name = None
+            base = job_name or job_id
+            safe_name = secure_filename(base) or job_id
+            filename = f"{safe_name}.pdf"
+            if filename in names:
+                filename = f"{safe_name}_{job_id[:8]}.pdf"
+            names.add(filename)
+            zf.write(edited_path, arcname=filename)
+            count += 1
+    buf.seek(0)
+    return buf, count
+
+
+@app.route("/api/jobs/download-translated", methods=["GET", "POST"])
+def download_translated_batch():
+    job_ids: set[str] | None = None
+    if request.method == "POST":
+        payload = request.get_json(force=True, silent=True) or {}
+        raw_ids = payload.get("job_ids")
+        if not isinstance(raw_ids, list):
+            return jsonify({"ok": False, "error": "Invalid job_ids payload."}), 400
+        job_ids = {str(item) for item in raw_ids if isinstance(item, str) and _safe_job_id(item)}
+        if not job_ids:
+            return jsonify({"ok": False, "error": "No valid job IDs selected."}), 400
+
+    buf, count = _build_translated_zip(job_ids)
+    if count == 0:
+        msg = "No translated PDFs found for selected jobs." if job_ids else "No translated PDFs found."
+        return jsonify({"ok": False, "error": msg}), 400
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="translated_pdfs.zip",
+    )
 
 
 @app.route("/api/jobs/stream", methods=["GET"])

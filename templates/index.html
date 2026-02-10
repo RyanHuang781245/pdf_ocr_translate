@@ -64,7 +64,12 @@
             <p class="eyebrow">Manage</p>
             <h2>任務列表</h2>
           </div>
-          <button id="jobsRefresh" class="ghost" type="button">重新整理</button>
+          <div class="jobs-actions">
+            <button id="jobsSelectAll" class="ghost" type="button">全選</button>
+            <button id="jobsSelectNone" class="ghost" type="button">取消全選</button>
+            <button id="jobsDownload" class="ghost" type="button">下載翻譯文件</button>
+            <button id="jobsRefresh" class="ghost" type="button">重新整理</button>
+          </div>
         </div>
         <div id="jobsEmpty" class="hint">No processed files yet.</div>
         <div id="jobsList" class="jobs-list"></div>
@@ -74,6 +79,10 @@
       const jobsList = document.getElementById("jobsList");
       const jobsEmpty = document.getElementById("jobsEmpty");
       const jobsRefresh = document.getElementById("jobsRefresh");
+      const jobsDownload = document.getElementById("jobsDownload");
+      const jobsSelectAll = document.getElementById("jobsSelectAll");
+      const jobsSelectNone = document.getElementById("jobsSelectNone");
+      const selectedJobs = new Set();
       let jobsLoading = false;
       let jobsSource = null;
 
@@ -91,9 +100,27 @@
           return;
         }
         if (jobsEmpty) jobsEmpty.style.display = "none";
+        const available = new Set();
         jobs.forEach((job) => {
+          available.add(job.job_id);
           const card = document.createElement("article");
           card.className = "job-card";
+
+          const selectWrap = document.createElement("label");
+          selectWrap.className = "job-select";
+          const selectInput = document.createElement("input");
+          selectInput.type = "checkbox";
+          selectInput.className = "job-check";
+          selectInput.dataset.jobId = job.job_id;
+          selectInput.checked = selectedJobs.has(job.job_id);
+          selectInput.addEventListener("change", () => {
+            if (selectInput.checked) {
+              selectedJobs.add(job.job_id);
+            } else {
+              selectedJobs.delete(job.job_id);
+            }
+          });
+          selectWrap.appendChild(selectInput);
 
           const idTag = document.createElement("div");
           idTag.className = "job-id";
@@ -127,28 +154,17 @@
             actions.appendChild(pendingEdit);
           }
 
-          if (job.debug_pdf_url) {
-            const debugLink = document.createElement("a");
-            debugLink.href = job.debug_pdf_url;
-            debugLink.textContent = "預覽除錯 PDF";
-            debugLink.className = "ghost";
-            debugLink.target = "_blank";
-            debugLink.rel = "noopener";
-            actions.appendChild(debugLink);
-          }
-
           if (job.edited_pdf_url) {
-            const editedLink = document.createElement("a");
-            editedLink.href = job.edited_pdf_url;
-            editedLink.textContent = "預覽已編輯 PDF";
-            editedLink.className = "ghost";
-            editedLink.target = "_blank";
-            editedLink.rel = "noopener";
-            actions.appendChild(editedLink);
+            const downloadLink = document.createElement("a");
+            downloadLink.href = job.edited_pdf_url;
+            downloadLink.textContent = "下載已翻譯文件";
+            downloadLink.className = "ghost";
+            downloadLink.download = "";
+            actions.appendChild(downloadLink);
           } else {
             const pending = document.createElement("span");
             pending.className = "job-muted";
-            pending.textContent = "Edited PDF pending";
+            pending.textContent = "已翻譯文件處理中";
             actions.appendChild(pending);
           }
 
@@ -174,11 +190,17 @@
           });
           actions.appendChild(deleteBtn);
 
+          card.appendChild(selectWrap);
           card.appendChild(idTag);
           card.appendChild(title);
           card.appendChild(meta);
           card.appendChild(actions);
           jobsList.appendChild(card);
+        });
+        Array.from(selectedJobs).forEach((jobId) => {
+          if (!available.has(jobId)) {
+            selectedJobs.delete(jobId);
+          }
         });
       }
 
@@ -202,13 +224,88 @@
         }
       }
 
+      async function downloadTranslatedBatch() {
+        if (!jobsDownload) return;
+        if (selectedJobs.size === 0) {
+          alert("請先勾選要下載的任務。");
+          return;
+        }
+        jobsDownload.disabled = true;
+        try {
+          const res = await fetch("/api/jobs/download-translated", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_ids: Array.from(selectedJobs) }),
+          });
+          if (!res.ok) {
+            let msg = "下載失敗，沒有可用的已翻譯文件。";
+            try {
+              const body = await res.json();
+              if (body && body.error) {
+                msg = body.error;
+              }
+            } catch (error) {
+              msg = "下載失敗，請稍後再試。";
+            }
+            alert(msg);
+            return;
+          }
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = "translated_pdfs.zip";
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          alert("下載失敗，請稍後再試。");
+        } finally {
+          jobsDownload.disabled = false;
+        }
+      }
+
       function bindJobsRefresh() {
         if (!jobsRefresh) return;
         jobsRefresh.addEventListener("click", () => loadJobs());
       }
 
+      function bindJobsDownload() {
+        if (!jobsDownload) return;
+        jobsDownload.addEventListener("click", () => downloadTranslatedBatch());
+      }
+
+      function setAllSelections(checked) {
+        if (!jobsList) return;
+        const inputs = jobsList.querySelectorAll("input.job-check");
+        inputs.forEach((input) => {
+          const jobId = input.dataset.jobId;
+          if (!jobId) return;
+          input.checked = checked;
+          if (checked) {
+            selectedJobs.add(jobId);
+          } else {
+            selectedJobs.delete(jobId);
+          }
+        });
+      }
+
+      function bindJobsSelectAll() {
+        if (!jobsSelectAll) return;
+        jobsSelectAll.addEventListener("click", () => setAllSelections(true));
+      }
+
+      function bindJobsSelectNone() {
+        if (!jobsSelectNone) return;
+        jobsSelectNone.addEventListener("click", () => setAllSelections(false));
+      }
+
       loadJobs();
       bindJobsRefresh();
+      bindJobsDownload();
+      bindJobsSelectAll();
+      bindJobsSelectNone();
     </script>
   </body>
 </html>

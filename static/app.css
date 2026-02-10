@@ -82,6 +82,13 @@ code {
   gap: 1rem;
 }
 
+.jobs-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .jobs-header h2 {
   margin: 0.3rem 0 0;
   font-size: 1.4rem;
@@ -95,11 +102,25 @@ code {
 .job-card {
   border: 1px solid var(--edge);
   border-radius: 14px;
-  padding: 1rem 1.2rem;
+  padding: 1rem 1.2rem 1rem 2.6rem;
   display: grid;
   gap: 0.5rem;
   background: rgba(255, 255, 255, 0.6);
   position: relative;
+}
+
+.job-select {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.job-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
 }
 
 .job-id {
