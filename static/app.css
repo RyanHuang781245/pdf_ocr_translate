@@ -70,6 +70,38 @@ code {
   border: 1px solid var(--edge);
 }
 
+.upload-files {
+  margin-top: 0.6rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.upload-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.upload-files-list {
+  margin-top: 0.4rem;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  padding: 0.4rem 0.6rem;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.upload-files ul {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.upload-files li {
+  line-height: 1.4;
+}
+
 .jobs-board {
   display: grid;
   gap: 1.2rem;

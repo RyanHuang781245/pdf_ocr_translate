@@ -18,6 +18,13 @@
             <span>選擇 PDF（可多選）</span>
             <input type="file" name="pdf" accept="application/pdf" multiple />
           </label>
+          <div id="uploadFiles" class="upload-files">
+            <div class="upload-files-header">
+              <span id="uploadFilesSummary">尚未選擇檔案</span>
+              <button id="uploadFilesToggle" class="ghost" type="button" style="display:none">展開</button>
+            </div>
+            <div id="uploadFilesList" class="upload-files-list" style="display:none"></div>
+          </div>
           <div class="form-grid">
             <label>
               <span>開始頁</span>
@@ -82,6 +89,11 @@
       const jobsDownload = document.getElementById("jobsDownload");
       const jobsSelectAll = document.getElementById("jobsSelectAll");
       const jobsSelectNone = document.getElementById("jobsSelectNone");
+      const uploadFiles = document.getElementById("uploadFiles");
+      const uploadInput = document.querySelector("input[type='file'][name='pdf']");
+      const uploadFilesSummary = document.getElementById("uploadFilesSummary");
+      const uploadFilesToggle = document.getElementById("uploadFilesToggle");
+      const uploadFilesList = document.getElementById("uploadFilesList");
       const selectedJobs = new Set();
       let jobsLoading = false;
       let jobsSource = null;
@@ -336,6 +348,40 @@
       bindJobsSelectAll();
       bindJobsSelectNone();
       connectJobsStream();
+
+      if (uploadInput && uploadFiles && uploadFilesSummary && uploadFilesToggle && uploadFilesList) {
+        let filesExpanded = false;
+        const renderUploadFiles = () => {
+          const files = Array.from(uploadInput.files || []);
+          const count = files.length;
+          if (!count) {
+            uploadFilesSummary.textContent = "尚未選擇檔案";
+            uploadFilesToggle.style.display = "none";
+            uploadFilesList.style.display = "none";
+            uploadFilesList.innerHTML = "";
+            filesExpanded = false;
+            uploadFilesToggle.textContent = "展開";
+            return;
+          }
+          uploadFilesSummary.textContent = `已選 ${count} 個檔案`;
+          uploadFilesToggle.style.display = "inline-flex";
+          uploadFilesToggle.textContent = filesExpanded ? "收合" : "展開";
+          if (!filesExpanded) {
+            uploadFilesList.style.display = "none";
+            uploadFilesList.innerHTML = "";
+            return;
+          }
+          const items = files.map((file) => `<li>${file.name}</li>`).join("");
+          uploadFilesList.innerHTML = `<ul>${items}</ul>`;
+          uploadFilesList.style.display = "block";
+        };
+        uploadFilesToggle.addEventListener("click", () => {
+          filesExpanded = !filesExpanded;
+          renderUploadFiles();
+        });
+        uploadInput.addEventListener("change", renderUploadFiles);
+        renderUploadFiles();
+      }
     </script>
   </body>
 </html>
