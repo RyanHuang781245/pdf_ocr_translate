@@ -10,6 +10,7 @@ import shutil
 import threading
 import time
 import uuid
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,8 @@ AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
 BATCH_INPUT_NAME = "azure_batch_input.jsonl"
 BATCH_OUTPUT_NAME = "azure_batch_output.jsonl"
 BATCH_STATUS_NAME = "batch_status.json"
+BATCH_ALIAS_NAME = "batch_alias_map.json"
+BATCH_PREFILL_NAME = "batch_prefill_map.json"
 ALLOWED_EXTENSIONS = {".pdf"}
 FONT_CANDIDATES = [
     r"C:\Windows\Fonts\msjh.ttf",
@@ -58,6 +61,8 @@ FONT_CANDIDATES = [
     r"C:\Windows\Fonts\mingliu.ttc",
     r"C:\Windows\Fonts\simsun.ttc",
 ]
+TRANSLATION_MEMORY_PATH = Path(os.getenv("TRANSLATION_MEMORY_PATH", str(OUT_ROOT / "translation_memory.json")))
+TRANSLATION_MEMORY_LOCK = threading.Lock()
 NUMERIC_ONLY_RE = re.compile(r"^[0-9]+([,./:-][0-9]+)*%?$")
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -164,6 +169,14 @@ def _batch_status_path(job_dir: Path) -> Path:
 def _batch_config_path(job_dir: Path) -> Path:
     return job_dir / "batch_config.json"
 
+
+def _batch_alias_path(job_dir: Path) -> Path:
+    return job_dir / BATCH_ALIAS_NAME
+
+
+def _batch_prefill_path(job_dir: Path) -> Path:
+    return job_dir / BATCH_PREFILL_NAME
+
 def _job_meta_path(job_dir: Path) -> Path:
     return job_dir / "job_meta.json"
 
@@ -217,6 +230,50 @@ def _load_batch_status(job_dir: Path) -> dict[str, Any] | None:
         return None
 
 
+def _write_batch_alias_map(job_dir: Path, alias_map: dict[str, str]) -> None:
+    _batch_alias_path(job_dir).write_text(json.dumps(alias_map, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_batch_alias_map(job_dir: Path) -> dict[str, str]:
+    path = _batch_alias_path(job_dir)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    cleaned: dict[str, str] = {}
+    for k, v in data.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            continue
+        cleaned[k] = v
+    return cleaned
+
+
+def _write_batch_prefill_map(job_dir: Path, prefill: dict[str, str]) -> None:
+    _batch_prefill_path(job_dir).write_text(json.dumps(prefill, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_batch_prefill_map(job_dir: Path) -> dict[str, str]:
+    path = _batch_prefill_path(job_dir)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    cleaned: dict[str, str] = {}
+    for k, v in data.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            continue
+        cleaned[k] = v
+    return cleaned
+
+
 def _load_global_glossary() -> list[dict[str, str]]:
     path = _global_glossary_path()
     if not path.exists():
@@ -237,6 +294,30 @@ def _load_global_glossary() -> list[dict[str, str]]:
             continue
         cleaned.append({"cn": cn, "en": en})
     return cleaned
+
+
+def _load_translation_memory() -> dict[str, str]:
+    path = TRANSLATION_MEMORY_PATH
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    cleaned: dict[str, str] = {}
+    for k, v in data.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            continue
+        cleaned[k] = v
+    return cleaned
+
+
+def _write_translation_memory(memory: dict[str, str]) -> None:
+    path = TRANSLATION_MEMORY_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(memory, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _update_pp_json_should_translate(job_dir: Path) -> None:
@@ -403,6 +484,45 @@ def _normalize_text(text: str) -> str:
     return " ".join((text or "").strip().split())
 
 
+_PUNCT_TRANSLATION = str.maketrans(
+    {
+        "，": ",",
+        "。": ".",
+        "；": ";",
+        "：": ":",
+        "？": "?",
+        "！": "!",
+        "（": "(",
+        "）": ")",
+        "【": "[",
+        "】": "]",
+        "「": "\"",
+        "」": "\"",
+        "『": "\"",
+        "』": "\"",
+        "、": ",",
+        "．": ".",
+        "／": "/",
+        "％": "%",
+        "＋": "+",
+        "－": "-",
+        "～": "~",
+        "—": "-",
+        "–": "-",
+        "…": "...",
+    }
+)
+
+
+def _normalize_for_translation(text: str) -> str:
+    if text is None:
+        return ""
+    cleaned = unicodedata.normalize("NFKC", str(text))
+    cleaned = cleaned.translate(_PUNCT_TRANSLATION)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
 def _is_numeric_only(text: str) -> bool:
     clean = re.sub(r"\s+", "", str(text or ""))
     if not clean:
@@ -531,9 +651,50 @@ def _build_batch_items(
     system_prompt: str,
     glossary_entries: list[tuple[str, str]] | None = None,
     pp_pages: dict[int, dict[str, Any]] | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, str], dict[str, str]]:
     items: list[dict[str, Any]] = []
+    alias_map: dict[str, str] = {}
+    key_map: dict[str, str] = {}
+    prefilled: dict[str, str] = {}
+    seen: dict[str, str] = {}
     pp_pages = pp_pages or {}
+
+    with TRANSLATION_MEMORY_LOCK:
+        translation_memory = _load_translation_memory()
+
+    def _add_item(custom_id: str, raw_text: str) -> None:
+        clean = _normalize_for_translation(raw_text)
+        if not clean:
+            return
+        if _is_numeric_only(clean):
+            return
+        clean = _apply_glossary(clean, glossary_entries)
+        if not clean:
+            return
+        key = clean
+        if key in translation_memory:
+            prefilled[custom_id] = translation_memory[key]
+            return
+        if key in seen:
+            alias_map[custom_id] = seen[key]
+            return
+        seen[key] = custom_id
+        key_map[custom_id] = key
+        items.append(
+            {
+                "custom_id": custom_id,
+                "method": "POST",
+                "url": "/v1/chat/completions",
+                "body": {
+                    "model": model_name,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": clean},
+                    ],
+                },
+            }
+        )
+
     for page in ocr_pages:
         page_idx = int(page.get("page_index_0based", 0))
         pp_page = pp_pages.get(page_idx)
@@ -546,61 +707,19 @@ def _build_batch_items(
         for block in paragraph_blocks:
             if not block.get("should_translate"):
                 continue
-            clean = _normalize_text(block.get("text", ""))
-            if not clean:
-                continue
-            if _is_numeric_only(clean):
-                continue
-            clean = _apply_glossary(clean, glossary_entries)
             block_idx = int(block.get("block_index", 0))
             custom_id = f"p{page_idx:04d}-b{block_idx:04d}"
-            items.append(
-                {
-                    "custom_id": custom_id,
-                    "method": "POST",
-                    "url": "/v1/chat/completions",
-                    "body": {
-                        "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": clean},
-                        ],
-                    },
-                }
-            )
+            _add_item(custom_id, block.get("text", ""))
+
         for cell_idx, cell in enumerate(merged_cells):
             if not cell.get("should_translate"):
                 continue
-            clean = _normalize_text(cell.get("merged_text", ""))
-            if not clean:
-                continue
-            if _is_numeric_only(clean):
-                continue
-            clean = _apply_glossary(clean, glossary_entries)
             custom_id = f"p{page_idx:04d}-c{cell_idx:04d}"
-            items.append(
-                {
-                    "custom_id": custom_id,
-                    "method": "POST",
-                    "url": "/v1/chat/completions",
-                    "body": {
-                        "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": clean},
-                        ],
-                    },
-                }
-            )
+            _add_item(custom_id, cell.get("merged_text", ""))
 
         texts = page.get("rec_texts", []) or []
         rec_polys = page.get("rec_polys", []) or []
         for idx, text in enumerate(texts):
-            clean = _normalize_text(text)
-            if not clean:
-                continue
-            if _is_numeric_only(clean):
-                continue
             if has_paragraph_flags:
                 continue
             if skip_table_lines and table_bboxes and idx < len(rec_polys):
@@ -610,23 +729,10 @@ def _build_batch_items(
                     cy = float(bbox["y"]) + float(bbox["h"]) * 0.5
                     if any(tb[0] <= cx <= tb[2] and tb[1] <= cy <= tb[3] for tb in table_bboxes):
                         continue
-            clean = _apply_glossary(clean, glossary_entries)
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
-            items.append(
-                {
-                    "custom_id": custom_id,
-                    "method": "POST",
-                    "url": "/v1/chat/completions",
-                    "body": {
-                        "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": clean},
-                        ],
-                    },
-                }
-            )
-    return items
+            _add_item(custom_id, text)
+
+    return items, alias_map, key_map, prefilled
 
 
 def _write_jsonl(path: Path, items: list[dict[str, Any]]) -> None:
@@ -748,8 +854,14 @@ def _iter_merged_cells(pp_page: dict[str, Any] | None) -> list[dict[str, Any]]:
     return cells
 
 
-def _build_translations_from_jsonl_text(raw_text: str) -> dict[str, str]:
+def _build_translations_from_jsonl_text(
+    raw_text: str,
+    alias_map: dict[str, str] | None = None,
+    prefilled: dict[str, str] | None = None,
+) -> dict[str, str]:
     translations: dict[str, str] = {}
+    if prefilled:
+        translations.update(prefilled)
     for line in raw_text.splitlines():
         if not line.strip():
             continue
@@ -758,6 +870,12 @@ def _build_translations_from_jsonl_text(raw_text: str) -> dict[str, str]:
         translated = _extract_batch_translation(item)
         if translated:
             translations[custom_id] = translated
+    if alias_map:
+        for alias_id, canonical_id in alias_map.items():
+            if alias_id in translations:
+                continue
+            if canonical_id in translations:
+                translations[alias_id] = translations[canonical_id]
     return translations
 
 
@@ -866,14 +984,22 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
         ocr_pages = _load_ocr_pages(job_dir)
         pp_pages = _load_pp_pages(job_dir)
         glossary_entries = _load_combined_glossary()
-        batch_items = _build_batch_items(
+        batch_items, alias_map, key_map, prefilled = _build_batch_items(
             ocr_pages,
             model_name=model_name,
             system_prompt=system_prompt,
             glossary_entries=glossary_entries,
             pp_pages=pp_pages,
         )
-        logger.info("Batch translate collected pages=%s lines=%s", len(ocr_pages), len(batch_items))
+        _write_batch_alias_map(job_dir, alias_map)
+        _write_batch_prefill_map(job_dir, prefilled)
+        logger.info(
+            "Batch translate collected pages=%s lines=%s unique=%s tm_prefill=%s",
+            len(ocr_pages),
+            len(batch_items),
+            len(alias_map),
+            len(prefilled),
+        )
         if not batch_items:
             raise RuntimeError("No OCR text lines found to translate.")
 
@@ -924,7 +1050,15 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
         (job_dir / BATCH_OUTPUT_NAME).write_text(raw_text, encoding="utf-8")
         logger.info("Batch translate downloaded output file_id=%s", output_file_id)
 
-        translations = _build_translations_from_jsonl_text(raw_text)
+        translations = _build_translations_from_jsonl_text(raw_text, alias_map=alias_map, prefilled=prefilled)
+        if key_map:
+            with TRANSLATION_MEMORY_LOCK:
+                memory = _load_translation_memory()
+                for custom_id, key in key_map.items():
+                    translated = translations.get(custom_id)
+                    if translated:
+                        memory[key] = translated
+                _write_translation_memory(memory)
         edits_payload = _build_edits_payload_from_translations(ocr_pages, translations, pp_pages=pp_pages)
         edits_path = job_dir / "edits.json"
         edits_path.write_text(json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1327,7 +1461,9 @@ def batch_restore(job_id: str):
 
     try:
         raw_text = output_path.read_text(encoding="utf-8")
-        translations = _build_translations_from_jsonl_text(raw_text)
+        alias_map = _load_batch_alias_map(job_dir)
+        prefilled = _load_batch_prefill_map(job_dir)
+        translations = _build_translations_from_jsonl_text(raw_text, alias_map=alias_map, prefilled=prefilled)
         ocr_pages = _load_ocr_pages(job_dir)
         pp_pages = _load_pp_pages(job_dir)
         edits_payload = _build_edits_payload_from_translations(ocr_pages, translations, pp_pages=pp_pages)
