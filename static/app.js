@@ -6,7 +6,7 @@ const state = {
   previewMode: "debug",
   selectedBoxes: new Set(),
   selecting: null,
-  lastShiftKey: false,
+  lastCtrlKey: false,
   activePageIdx: 0,
   clipboard: {
     boxes: [],
@@ -741,7 +741,7 @@ function buildState(data) {
     const boxes = page.rec_polys.map((poly, index) => {
       const bbox = polyToBbox(poly);
       const text = page.edit_texts[index] ?? page.rec_texts[index] ?? "";
-      const baseSize = Math.max(10, Math.min(28, bbox.h * 0.6));
+      const baseSize = 25;
       const fontSize = Number(page.font_sizes?.[index]);
       const color = page.colors?.[index] ?? "#0000ff";
       const id = page.box_ids?.[index] ?? index;
@@ -1107,7 +1107,7 @@ function startRangeSelection(event, pageIdx) {
   const startY = event.clientY - bounds.top;
   const rectEl = page.selectionRect;
   if (!rectEl) return;
-  const additive = event.shiftKey;
+  const additive = event.ctrlKey;
 
   rectEl.style.display = "block";
   rectEl.style.left = `${startX}px`;
@@ -1312,15 +1312,15 @@ function createBoxElement(pageIdx, boxIdx) {
   boxEl.addEventListener("dragstart", (event) => event.preventDefault());
 
   boxEl.addEventListener("pointerdown", (event) => {
-    state.lastShiftKey = event.shiftKey;
+    state.lastCtrlKey = event.ctrlKey;
     if (event.target.closest(".resize-handle")) {
       return;
     }
     if (event.target.closest(".text")) {
-      selectBox(pageIdx, boxIdx, event.shiftKey);
+      selectBox(pageIdx, boxIdx, event.ctrlKey);
       return;
     }
-    if (event.shiftKey) {
+    if (event.ctrlKey) {
       const key = boxKey(pageIdx, boxIdx);
       const wasSelected = state.selectedBoxes.has(key);
       selectBox(pageIdx, boxIdx, true);
@@ -1337,8 +1337,8 @@ function createBoxElement(pageIdx, boxIdx) {
   boxEl.addEventListener("pointercancel", onDragEnd);
 
   textEl.addEventListener("focus", () => {
-    selectBox(pageIdx, boxIdx, state.lastShiftKey);
-    state.lastShiftKey = false;
+    selectBox(pageIdx, boxIdx, state.lastCtrlKey);
+    state.lastCtrlKey = false;
     if (!box._editBefore) {
       box._editBefore = cloneBoxData(box);
     }
