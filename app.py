@@ -63,6 +63,7 @@ FONT_CANDIDATES = [
     r"C:\Windows\Fonts\mingliu.ttc",
     r"C:\Windows\Fonts\simsun.ttc",
 ]
+DEFAULT_TEXT_COLOR = "#0000ff"
 TRANSLATION_MEMORY_PATH = Path(os.getenv("TRANSLATION_MEMORY_PATH", str(OUT_ROOT / "translation_memory.json")))
 TRANSLATION_MEMORY_LOCK = threading.Lock()
 NUMERIC_ONLY_RE = re.compile(r"^[0-9]+([,./:-][0-9]+)*%?$")
@@ -115,6 +116,7 @@ def _build_jobs_list() -> list[dict[str, Any]]:
 
         created_at = _job_timestamp(pdf_path) or _job_timestamp(job_dir)
         updated_at = max(_job_timestamp(debug_pdf_path), _job_timestamp(edited_pdf_path), created_at)
+        duration_seconds = max(0.0, updated_at - created_at)
 
         debug_ready = debug_pdf_path.exists()
         batch_status = _load_batch_status(job_dir)
@@ -148,6 +150,7 @@ def _build_jobs_list() -> list[dict[str, Any]]:
                 "job_id": job_id,
                 "created_at": created_at,
                 "updated_at": updated_at,
+                "duration_seconds": duration_seconds,
                 "status_code": status_code,
                 "status_label": status_label,
                 "status": status_label,
@@ -423,7 +426,7 @@ def _load_page_data(
             edit_texts.append(text)
             rec_scores.append(1.0)
             font_sizes.append(float(box.get("font_size") or 0.0))
-            colors.append(str(box.get("color") or "#0000ff"))
+            colors.append(str(box.get("color") or DEFAULT_TEXT_COLOR))
             box_ids.append(int(box.get("id") or len(box_ids)))
         count = len(rec_polys)
     else:
@@ -458,7 +461,7 @@ def _load_page_data(
     }
 
 
-def _hex_to_rgb(value: str | None, default: tuple[float, float, float] = (0.1, 0.2, 0.3)) -> tuple[float, float, float]:
+def _hex_to_rgb(value: str | None, default: tuple[float, float, float] = (0.0, 0.0, 1.0)) -> tuple[float, float, float]:
     if not value:
         return default
     value = value.strip().lstrip("#")
