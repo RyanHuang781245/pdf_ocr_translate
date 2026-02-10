@@ -145,19 +145,29 @@ def merge_cell_text(cell_box, rec_texts, rec_boxes):
 # 新增 merged_cells 欄位
 # =========================================================
 
-def add_merged_cells_field(data):
+def add_merged_cells_field(data, verbose: bool = False):
 
-    for table_idx, table in enumerate(data["table_res_list"]):
+    table_res_list = data.get("table_res_list")
+    if not isinstance(table_res_list, list) or not table_res_list:
+        return data
 
-        print(f"\n處理 Table {table_idx+1}")
+    for table_idx, table in enumerate(table_res_list):
 
-        cell_boxes = table["cell_box_list"]
-        rec_texts = table["table_ocr_pred"]["rec_texts"]
-        rec_boxes = table["table_ocr_pred"]["rec_boxes"]
+        if verbose:
+            print(f"\n處理 Table {table_idx+1}")
+
+        cell_boxes = table.get("cell_box_list") or []
+        table_ocr_pred = table.get("table_ocr_pred") or {}
+        rec_texts = table_ocr_pred.get("rec_texts") or []
+        rec_boxes = table_ocr_pred.get("rec_boxes") or []
+        if not isinstance(cell_boxes, list) or not isinstance(rec_texts, list) or not isinstance(rec_boxes, list):
+            continue
 
         merged_cells = []
 
         for cell_idx, cell_box in enumerate(cell_boxes):
+            if not (isinstance(cell_box, list) and len(cell_box) == 4):
+                continue
 
             merged_text = merge_cell_text(
                 cell_box,
@@ -173,7 +183,8 @@ def add_merged_cells_field(data):
                 "should_translate": translate_flag
             })
 
-            print(f"[Cell {cell_idx+1}] {merged_text} → {translate_flag}")
+            if verbose:
+                print(f"[Cell {cell_idx+1}] {merged_text} → {translate_flag}")
 
         # 新增欄位（不覆蓋原 OCR）
         table["merged_cells"] = merged_cells
@@ -192,7 +203,7 @@ if __name__ == "__main__":
 
     data = json.loads(input_path.read_text(encoding="utf-8"))
 
-    new_data = add_merged_cells_field(data)
+    new_data = add_merged_cells_field(data, verbose=True)
 
     output_path.write_text(
         json.dumps(new_data, ensure_ascii=False, indent=2),

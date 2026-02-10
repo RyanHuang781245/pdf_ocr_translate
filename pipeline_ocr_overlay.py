@@ -26,6 +26,12 @@ except Exception as exc:
     merge_keep_original_json = None
     print(f"[WARN] merge_keep_original_json unavailable: {exc}")
 
+try:
+    from table_process import add_merged_cells_field
+except Exception as exc:
+    add_merged_cells_field = None
+    print(f"[WARN] add_merged_cells_field unavailable: {exc}")
+
 
 # -----------------------------
 # Pipeline control
@@ -218,17 +224,21 @@ def run_layout_parsing_predict(
 
 
 def merge_pp_json_inprocess(pp_json_paths: list[Path]) -> list[Path]:
-    if merge_keep_original_json is None:
+    if merge_keep_original_json is None and add_merged_cells_field is None:
         return pp_json_paths
     merged_paths: list[Path] = []
     for js_path in pp_json_paths:
         try:
             data = json.loads(js_path.read_text(encoding="utf-8"))
-            merged = merge_keep_original_json(data)
+            merged = data
+            if merge_keep_original_json is not None:
+                merged = merge_keep_original_json(merged)
+            if add_merged_cells_field is not None:
+                merged = add_merged_cells_field(merged, verbose=False)
             js_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
             merged_paths.append(js_path)
         except Exception as exc:
-            print(f"[WARN] merge_keep_original_json error for {js_path.name}: {exc}")
+            print(f"[WARN] merge_pp_json_inprocess error for {js_path.name}: {exc}")
             merged_paths.append(js_path)
     return merged_paths
 
@@ -789,6 +799,37 @@ def overlay_one_page(
         tables = load_table_bboxes_fallback_layout(data)
     table_bboxes = [t["bbox"] for t in tables]
     paragraph_bboxes: list[list[float]] = []
+    merged_cells: list[tuple[list[float], str]] = []
+    merged_cells_all: list[list[float]] = []
+    for table in data.get("table_res_list", []) or []:
+        for cell in table.get("merged_cells", []) or []:
+            if not isinstance(cell, dict):
+                continue
+            box = cell.get("cell_box")
+            if not (isinstance(box, list) and len(box) == 4):
+                continue
+            text = str(cell.get("merged_text") or "").strip()
+            if not text:
+                continue
+            box_vals = [float(v) for v in box]
+            merged_cells_all.append(box_vals)
+            if bool(cell.get("should_translate")):
+                merged_cells.append((box_vals, text))
+    if merged_cells_all and not table_bboxes:
+        derived_tables: list[list[float]] = []
+        for table in data.get("table_res_list", []) or []:
+            cell_boxes = table.get("cell_box_list") or []
+            xs: list[float] = []
+            ys: list[float] = []
+            for box in cell_boxes:
+                if not (isinstance(box, list) and len(box) == 4):
+                    continue
+                xs.extend([float(box[0]), float(box[2])])
+                ys.extend([float(box[1]), float(box[3])])
+            if xs and ys:
+                derived_tables.append([min(xs), min(ys), max(xs), max(ys)])
+        table_bboxes = derived_tables
+    skip_for_tables = skip_text_inside_table or bool(merged_cells_all)
 
     dbg_shape = page.new_shape() if draw_boxes else None
 
@@ -804,7 +845,7 @@ def overlay_one_page(
             continue
         paragraph_bboxes.append(bb_px)
 
-        if skip_text_inside_table and table_bboxes:
+        if skip_for_tables and table_bboxes:
             cx, cy = bbox_center((bb_px[0], bb_px[1], bb_px[2], bb_px[3]))
             if any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
                 continue
@@ -830,6 +871,27 @@ def overlay_one_page(
             if not info.get("ok", True):
                 print("[WARN] paragraph overflow:", "page=", page.number, "len=", len(content), "bbox_px=", bb_px)
 
+    if merged_cells:
+        for cell_box, cell_text in merged_cells:
+            rect = px_bbox_to_rect(cell_box, img_w_px, img_h_px, page)
+            if rect.is_empty:
+                continue
+            if dbg_shape is not None:
+                dbg_shape.draw_rect(rect)
+                dbg_shape.finish(color=(1, 0.55, 0.1), width=0.6)
+            if draw_text:
+                fs_max = min(12.0, max(paragraph_min_fs, rect.height * 0.6))
+                insert_paragraph_autowrap_shrink(
+                    page=page,
+                    rect=rect,
+                    text=cell_text,
+                    fontfile=fontfile,
+                    max_fs=fs_max,
+                    min_fs=paragraph_min_fs,
+                    align=0,
+                    clip_ellipsis=paragraph_clip_ellipsis,
+                )
+
     overall = data.get("overall_ocr_res", {}) or data.get("overall_ocr", {})
     rec_polys = overall.get("rec_polys", [])
     rec_texts = overall.get("rec_texts", [])
@@ -852,6 +914,9 @@ def overlay_one_page(
         cx, cy = bbox_center(bbox)
         if any(point_in_bbox(cx, cy, pb) for pb in paragraph_bboxes):
             continue
+        if skip_for_tables and table_bboxes:
+            if any(point_in_bbox(cx, cy, tb) for tb in table_bboxes):
+                continue
 
         text = rec_texts[idx] if idx < len(rec_texts) else ""
         text = (text or "").strip()
@@ -883,7 +948,7 @@ def overlay_one_page(
     if dbg_shape is not None:
         dbg_shape.commit()
 
-    print(f"[DEBUG] page={page.number} tables={len(table_bboxes)} ocr_line_hits={hit}")
+    print(f"[DEBUG] page={page.number} tables={len(table_bboxes)} merged_cells={len(merged_cells)} ocr_line_hits={hit}")
 
 
 def overlay_debug_pdf(

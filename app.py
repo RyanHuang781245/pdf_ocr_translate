@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent
 OUT_ROOT = BASE_DIR / "out"
 JOB_ROOT = OUT_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
-TRITON_URL = os.getenv("TRITON_URL", "http://10.30.1.88:8080/table-recognition")
+TRITON_URL = os.getenv("TRITON_URL", "https://racks-editing-norm-timber.trycloudflare.com/table-recognition")
 AZURE_BASE_URL = os.getenv("AZURE_OPENAI_BASE_URL", "https://uocp-azure-openai.openai.azure.com/openai/v1/")
 AZURE_API_KEY_ENV = os.getenv("AZURE_OPENAI_API_KEY_ENV", "UO_AZURE_OPENAI_API_KEY")
 AZURE_BATCH_MODEL = os.getenv("AZURE_BATCH_MODEL", "gpt-4o-mini-global-batch")
@@ -500,15 +500,53 @@ def _build_batch_items(
     model_name: str,
     system_prompt: str,
     glossary_entries: list[tuple[str, str]] | None = None,
+    pp_pages: dict[int, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    pp_pages = pp_pages or {}
     for page in ocr_pages:
         page_idx = int(page.get("page_index_0based", 0))
+        pp_page = pp_pages.get(page_idx)
+        table_bboxes = _collect_table_bboxes(pp_page)
+
+        merged_cells = _iter_merged_cells(pp_page)
+        skip_table_lines = bool(merged_cells)
+        for cell_idx, cell in enumerate(merged_cells):
+            if not cell.get("should_translate"):
+                continue
+            clean = _normalize_text(cell.get("merged_text", ""))
+            if not clean:
+                continue
+            clean = _apply_glossary(clean, glossary_entries)
+            custom_id = f"p{page_idx:04d}-c{cell_idx:04d}"
+            items.append(
+                {
+                    "custom_id": custom_id,
+                    "method": "POST",
+                    "url": "/v1/chat/completions",
+                    "body": {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": clean},
+                        ],
+                    },
+                }
+            )
+
         texts = page.get("rec_texts", []) or []
+        rec_polys = page.get("rec_polys", []) or []
         for idx, text in enumerate(texts):
             clean = _normalize_text(text)
             if not clean:
                 continue
+            if skip_table_lines and table_bboxes and idx < len(rec_polys):
+                bbox = _poly_to_bbox(rec_polys[idx])
+                if bbox:
+                    cx = float(bbox["x"]) + float(bbox["w"]) * 0.5
+                    cy = float(bbox["y"]) + float(bbox["h"]) * 0.5
+                    if any(tb[0] <= cx <= tb[2] and tb[1] <= cy <= tb[3] for tb in table_bboxes):
+                        continue
             clean = _apply_glossary(clean, glossary_entries)
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
             items.append(
@@ -544,6 +582,74 @@ def _load_ocr_pages(job_dir: Path) -> list[dict[str, Any]]:
     return [json.loads(path.read_text(encoding="utf-8")) for path in page_paths]
 
 
+def _infer_page_index_from_name(name: str) -> int | None:
+    match = re.search(r"_p(\d+)", name)
+    if not match:
+        return None
+    try:
+        return max(0, int(match.group(1)) - 1)
+    except ValueError:
+        return None
+
+
+def _load_pp_pages(job_dir: Path) -> dict[int, dict[str, Any]]:
+    pp_dir = job_dir / "pp_json"
+    if not pp_dir.exists():
+        return {}
+    pages: dict[int, dict[str, Any]] = {}
+    for path in sorted(pp_dir.glob("*.json")):
+        page_idx = _infer_page_index_from_name(path.name)
+        if page_idx is None:
+            continue
+        try:
+            pages[page_idx] = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+    return pages
+
+
+def _collect_table_bboxes(pp_page: dict[str, Any] | None) -> list[list[float]]:
+    if not pp_page:
+        return []
+    table_bboxes: list[list[float]] = []
+    for table in pp_page.get("table_res_list", []) or []:
+        cell_boxes = table.get("cell_box_list") or []
+        xs: list[float] = []
+        ys: list[float] = []
+        for box in cell_boxes:
+            if not (isinstance(box, list) and len(box) == 4):
+                continue
+            xs.extend([float(box[0]), float(box[2])])
+            ys.extend([float(box[1]), float(box[3])])
+        if xs and ys:
+            table_bboxes.append([min(xs), min(ys), max(xs), max(ys)])
+    return table_bboxes
+
+
+def _iter_merged_cells(pp_page: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not pp_page:
+        return []
+    cells: list[dict[str, Any]] = []
+    for table in pp_page.get("table_res_list", []) or []:
+        for cell in table.get("merged_cells", []) or []:
+            if not isinstance(cell, dict):
+                continue
+            box = cell.get("cell_box")
+            if not (isinstance(box, list) and len(box) == 4):
+                continue
+            text = str(cell.get("merged_text") or "").strip()
+            if not text:
+                continue
+            cells.append(
+                {
+                    "cell_box": [float(v) for v in box],
+                    "merged_text": text,
+                    "should_translate": bool(cell.get("should_translate")),
+                }
+            )
+    return cells
+
+
 def _build_translations_from_jsonl_text(raw_text: str) -> dict[str, str]:
     translations: dict[str, str] = {}
     for line in raw_text.splitlines():
@@ -560,10 +666,16 @@ def _build_translations_from_jsonl_text(raw_text: str) -> dict[str, str]:
 def _build_edits_payload_from_translations(
     ocr_pages: list[dict[str, Any]],
     translations: dict[str, str],
+    pp_pages: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     pages_payload: list[dict[str, Any]] = []
+    pp_pages = pp_pages or {}
     for page in ocr_pages:
         page_idx = int(page.get("page_index_0based", 0))
+        pp_page = pp_pages.get(page_idx)
+        table_bboxes = _collect_table_bboxes(pp_page)
+        merged_cells = _iter_merged_cells(pp_page)
+        skip_table_lines = bool(merged_cells)
         rec_polys = page.get("rec_polys", []) or []
         rec_texts = page.get("rec_texts", []) or []
         edit_texts = page.get("edit_texts", []) or []
@@ -579,7 +691,28 @@ def _build_edits_payload_from_translations(
             bbox = _poly_to_bbox(poly)
             if not bbox:
                 continue
+            if skip_table_lines and table_bboxes:
+                cx = float(bbox["x"]) + float(bbox["w"]) * 0.5
+                cy = float(bbox["y"]) + float(bbox["h"]) * 0.5
+                if any(tb[0] <= cx <= tb[2] and tb[1] <= cy <= tb[3] for tb in table_bboxes):
+                    continue
             boxes.append({"id": idx, "bbox": bbox, "text": text, "deleted": False})
+
+        if merged_cells:
+            base_id = 100000
+            for cell_idx, cell in enumerate(merged_cells):
+                if not cell.get("should_translate"):
+                    continue
+                custom_id = f"p{page_idx:04d}-c{cell_idx:04d}"
+                cell_text = translations.get(custom_id) or cell.get("merged_text", "")
+                cell_text = _normalize_text(cell_text)
+                if not cell_text:
+                    continue
+                box = cell.get("cell_box")
+                if not (isinstance(box, list) and len(box) == 4):
+                    continue
+                bbox = {"x": float(box[0]), "y": float(box[1]), "w": float(box[2] - box[0]), "h": float(box[3] - box[1])}
+                boxes.append({"id": base_id + cell_idx, "bbox": bbox, "text": cell_text, "deleted": False})
 
         pages_payload.append({"page_index_0based": page_idx, "boxes": boxes})
 
@@ -601,12 +734,14 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
     _write_batch_status(job_dir, "running", **status_meta)
     try:
         ocr_pages = _load_ocr_pages(job_dir)
+        pp_pages = _load_pp_pages(job_dir)
         glossary_entries = _load_combined_glossary()
         batch_items = _build_batch_items(
             ocr_pages,
             model_name=model_name,
             system_prompt=system_prompt,
             glossary_entries=glossary_entries,
+            pp_pages=pp_pages,
         )
         logger.info("Batch translate collected pages=%s lines=%s", len(ocr_pages), len(batch_items))
         if not batch_items:
@@ -660,7 +795,7 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
         logger.info("Batch translate downloaded output file_id=%s", output_file_id)
 
         translations = _build_translations_from_jsonl_text(raw_text)
-        edits_payload = _build_edits_payload_from_translations(ocr_pages, translations)
+        edits_payload = _build_edits_payload_from_translations(ocr_pages, translations, pp_pages=pp_pages)
         edits_path = job_dir / "edits.json"
         edits_path.write_text(json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         logger.info("Batch translate wrote edits.json=%s", edits_path.resolve())
@@ -1062,7 +1197,8 @@ def batch_restore(job_id: str):
         raw_text = output_path.read_text(encoding="utf-8")
         translations = _build_translations_from_jsonl_text(raw_text)
         ocr_pages = _load_ocr_pages(job_dir)
-        edits_payload = _build_edits_payload_from_translations(ocr_pages, translations)
+        pp_pages = _load_pp_pages(job_dir)
+        edits_payload = _build_edits_payload_from_translations(ocr_pages, translations, pp_pages=pp_pages)
         edits_path = job_dir / "edits.json"
         edits_path.write_text(json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         _apply_edits_to_pdf(job_id, job_dir, edits_payload)
