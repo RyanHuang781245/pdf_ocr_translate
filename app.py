@@ -58,6 +58,7 @@ FONT_CANDIDATES = [
     r"C:\Windows\Fonts\mingliu.ttc",
     r"C:\Windows\Fonts\simsun.ttc",
 ]
+NUMERIC_ONLY_RE = re.compile(r"^[0-9]+([,./:-][0-9]+)*%?$")
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
 if not logging.getLogger().handlers:
@@ -238,6 +239,28 @@ def _load_global_glossary() -> list[dict[str, str]]:
     return cleaned
 
 
+def _update_pp_json_should_translate(job_dir: Path) -> None:
+    pp_dir = job_dir / "pp_json"
+    if not pp_dir.exists():
+        return
+    try:
+        import paragraph_extract  # type: ignore
+    except Exception as exc:
+        logger.warning("paragraph_extract import failed: %s", exc)
+        return
+    align_fn = getattr(paragraph_extract, "align_and_update_json", None)
+    if not callable(align_fn):
+        logger.warning("paragraph_extract.align_and_update_json unavailable")
+        return
+    for path in sorted(pp_dir.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            updated = align_fn(data)
+            path.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.warning("paragraph_extract update failed for %s: %s", path.name, exc)
+
+
 def _write_global_glossary(items: list[dict[str, str]]) -> None:
     payload: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -380,6 +403,13 @@ def _normalize_text(text: str) -> str:
     return " ".join((text or "").strip().split())
 
 
+def _is_numeric_only(text: str) -> bool:
+    clean = re.sub(r"\s+", "", str(text or ""))
+    if not clean:
+        return False
+    return bool(NUMERIC_ONLY_RE.fullmatch(clean))
+
+
 def _parse_batch_custom_id(custom_id: str) -> tuple[int, int] | None:
     m = re.match(r"p(\d+)-l(\d+)$", custom_id or "")
     if not m:
@@ -511,11 +541,40 @@ def _build_batch_items(
 
         merged_cells = _iter_merged_cells(pp_page)
         skip_table_lines = bool(merged_cells)
+        has_paragraph_flags = _has_paragraph_translate_flags(pp_page)
+        paragraph_blocks = _iter_paragraph_blocks(pp_page)
+        for block in paragraph_blocks:
+            if not block.get("should_translate"):
+                continue
+            clean = _normalize_text(block.get("text", ""))
+            if not clean:
+                continue
+            if _is_numeric_only(clean):
+                continue
+            clean = _apply_glossary(clean, glossary_entries)
+            block_idx = int(block.get("block_index", 0))
+            custom_id = f"p{page_idx:04d}-b{block_idx:04d}"
+            items.append(
+                {
+                    "custom_id": custom_id,
+                    "method": "POST",
+                    "url": "/v1/chat/completions",
+                    "body": {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": clean},
+                        ],
+                    },
+                }
+            )
         for cell_idx, cell in enumerate(merged_cells):
             if not cell.get("should_translate"):
                 continue
             clean = _normalize_text(cell.get("merged_text", ""))
             if not clean:
+                continue
+            if _is_numeric_only(clean):
                 continue
             clean = _apply_glossary(clean, glossary_entries)
             custom_id = f"p{page_idx:04d}-c{cell_idx:04d}"
@@ -539,6 +598,10 @@ def _build_batch_items(
         for idx, text in enumerate(texts):
             clean = _normalize_text(text)
             if not clean:
+                continue
+            if _is_numeric_only(clean):
+                continue
+            if has_paragraph_flags:
                 continue
             if skip_table_lines and table_bboxes and idx < len(rec_polys):
                 bbox = _poly_to_bbox(rec_polys[idx])
@@ -606,6 +669,41 @@ def _load_pp_pages(job_dir: Path) -> dict[int, dict[str, Any]]:
         except json.JSONDecodeError:
             continue
     return pages
+
+
+def _has_paragraph_translate_flags(pp_page: dict[str, Any] | None) -> bool:
+    if not pp_page:
+        return False
+    for block in pp_page.get("parsing_res_list", []) or []:
+        if isinstance(block, dict) and "should_translate" in block:
+            return True
+    return False
+
+
+def _iter_paragraph_blocks(pp_page: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not pp_page:
+        return []
+    blocks = pp_page.get("parsing_res_list", []) or []
+    out: list[dict[str, Any]] = []
+    for idx, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            continue
+        text = str(block.get("block_content") or "").strip()
+        if not text:
+            continue
+        bbox = block.get("block_bbox")
+        if not (isinstance(bbox, list) and len(bbox) == 4):
+            continue
+        out.append(
+            {
+                "block_index": idx,
+                "text": text,
+                "bbox": [float(v) for v in bbox],
+                "should_translate": bool(block.get("should_translate")),
+                "label": block.get("block_label"),
+            }
+        )
+    return out
 
 
 def _collect_table_bboxes(pp_page: dict[str, Any] | None) -> list[list[float]]:
@@ -676,6 +774,7 @@ def _build_edits_payload_from_translations(
         table_bboxes = _collect_table_bboxes(pp_page)
         merged_cells = _iter_merged_cells(pp_page)
         skip_table_lines = bool(merged_cells)
+        has_paragraph_flags = _has_paragraph_translate_flags(pp_page)
         rec_polys = page.get("rec_polys", []) or []
         rec_texts = page.get("rec_texts", []) or []
         edit_texts = page.get("edit_texts", []) or []
@@ -688,8 +787,12 @@ def _build_edits_payload_from_translations(
             text = _normalize_text(text)
             if not text:
                 continue
+            if _is_numeric_only(text):
+                continue
             bbox = _poly_to_bbox(poly)
             if not bbox:
+                continue
+            if has_paragraph_flags:
                 continue
             if skip_table_lines and table_bboxes:
                 cx = float(bbox["x"]) + float(bbox["w"]) * 0.5
@@ -697,6 +800,31 @@ def _build_edits_payload_from_translations(
                 if any(tb[0] <= cx <= tb[2] and tb[1] <= cy <= tb[3] for tb in table_bboxes):
                     continue
             boxes.append({"id": idx, "bbox": bbox, "text": text, "deleted": False})
+
+        paragraph_blocks = _iter_paragraph_blocks(pp_page)
+        if paragraph_blocks:
+            base_id = 200000
+            for block in paragraph_blocks:
+                if not block.get("should_translate"):
+                    continue
+                block_idx = int(block.get("block_index", 0))
+                custom_id = f"p{page_idx:04d}-b{block_idx:04d}"
+                block_text = translations.get(custom_id) or block.get("text", "")
+                block_text = _normalize_text(block_text)
+                if not block_text:
+                    continue
+                if _is_numeric_only(block_text):
+                    continue
+                bbox_list = block.get("bbox")
+                if not (isinstance(bbox_list, list) and len(bbox_list) == 4):
+                    continue
+                bbox = {
+                    "x": float(bbox_list[0]),
+                    "y": float(bbox_list[1]),
+                    "w": float(bbox_list[2] - bbox_list[0]),
+                    "h": float(bbox_list[3] - bbox_list[1]),
+                }
+                boxes.append({"id": base_id + block_idx, "bbox": bbox, "text": block_text, "deleted": False})
 
         if merged_cells:
             base_id = 100000
@@ -707,6 +835,8 @@ def _build_edits_payload_from_translations(
                 cell_text = translations.get(custom_id) or cell.get("merged_text", "")
                 cell_text = _normalize_text(cell_text)
                 if not cell_text:
+                    continue
+                if _is_numeric_only(cell_text):
                     continue
                 box = cell.get("cell_box")
                 if not (isinstance(box, list) and len(box) == 4):
@@ -858,6 +988,7 @@ def _run_ocr_pipeline_job(
                 ACTIVE_UPLOAD = None
 
     logger.info("OCR pipeline completed job_id=%s", job_id)
+    _update_pp_json_should_translate(job_dir)
     _notify_jobs_update()
     if enable_translate:
         batch_config = {
@@ -1039,7 +1170,8 @@ def upload() -> str:
     start_page = int(request.form.get("start", 1))
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
-    enable_translate = True
+    # enable_translate = True
+    enable_translate = request.form.get("translate") == "on"
     translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
     translate_model = request.form.get("model", AZURE_BATCH_MODEL).strip() or AZURE_BATCH_MODEL
     keep_lang = request.form.get("keep_lang", "all").strip().lower() or "all"

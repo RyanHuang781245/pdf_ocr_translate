@@ -48,6 +48,7 @@ LATIN_RE = re.compile(r"[A-Za-z]")
 DIGIT_RE = re.compile(r"\d")
 REMOVE_LATIN_RE = re.compile(r"[A-Za-z]+")
 REMOVE_CJK_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
+NUMERIC_ONLY_RE = re.compile(r"^[0-9]+([,./:-][0-9]+)*%?$")
 
 
 def _filter_text_by_lang(text: str, keep_lang: str) -> str:
@@ -105,6 +106,13 @@ def filter_rec_entries_by_lang(
             new_scores.append(0.0)
 
     return new_polys, new_texts, new_scores
+
+
+def _is_numeric_only(text: str) -> bool:
+    clean = re.sub(r"\s+", "", str(text or ""))
+    if not clean:
+        return False
+    return bool(NUMERIC_ONLY_RE.fullmatch(clean))
 
 
 # -----------------------------
@@ -479,6 +487,8 @@ def extract_rec_entries_from_ppstructure(
 
         content = normalize_paragraph_text(blk.get("block_content", ""))
         if not content:
+            continue
+        if _is_numeric_only(content):
             continue
         paragraph_bboxes.append(bb_px)
 
@@ -921,6 +931,8 @@ def overlay_one_page(
         text = rec_texts[idx] if idx < len(rec_texts) else ""
         text = (text or "").strip()
         if not text:
+            continue
+        if _is_numeric_only(text):
             continue
 
         bb_px = [bbox[0], bbox[1], bbox[2], bbox[3]]
