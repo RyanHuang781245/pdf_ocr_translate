@@ -116,13 +116,39 @@ def _build_jobs_list() -> list[dict[str, Any]]:
         edited_pdf_path = job_dir / "edited.pdf"
 
         created_at = _job_timestamp(pdf_path) or _job_timestamp(job_dir)
-        updated_at = max(_job_timestamp(debug_pdf_path), _job_timestamp(edited_pdf_path), created_at)
-        duration_seconds = max(0.0, updated_at - created_at)
+        debug_ts = _job_timestamp(debug_pdf_path)
+        edited_ts = _job_timestamp(edited_pdf_path)
+        updated_at = max(debug_ts, edited_ts, created_at)
+        job_meta = _load_job_meta(job_dir) or {}
+        started_at = job_meta.get("processing_started_at") or created_at
+        completed_at = job_meta.get("processing_completed_at")
+        if not isinstance(completed_at, (int, float)):
+            if debug_ts:
+                completed_at = debug_ts
+            elif edited_ts:
+                completed_at = edited_ts
+        if isinstance(completed_at, (int, float)) and isinstance(started_at, (int, float)):
+            duration_seconds = max(0.0, float(completed_at) - float(started_at))
+        elif isinstance(started_at, (int, float)):
+            duration_seconds = max(0.0, time.time() - float(started_at))
+        else:
+            duration_seconds = max(0.0, updated_at - created_at)
+        ocr_started_at = job_meta.get("ocr_started_at") or created_at
+        ocr_completed_at = job_meta.get("ocr_completed_at") or debug_ts or None
+        if isinstance(ocr_completed_at, (int, float)) and isinstance(ocr_started_at, (int, float)):
+            ocr_duration_seconds = max(0.0, float(ocr_completed_at) - float(ocr_started_at))
+        else:
+            ocr_duration_seconds = None
+        translate_started_at = job_meta.get("translate_started_at")
+        translate_completed_at = job_meta.get("translate_completed_at") or edited_ts or None
+        if isinstance(translate_completed_at, (int, float)) and isinstance(translate_started_at, (int, float)):
+            translate_duration_seconds = max(0.0, float(translate_completed_at) - float(translate_started_at))
+        else:
+            translate_duration_seconds = None
 
         debug_ready = debug_pdf_path.exists()
         batch_status = _load_batch_status(job_dir)
         batch_config = _load_batch_config(job_dir)
-        job_meta = _load_job_meta(job_dir) or {}
         job_name = job_meta.get("job_name")
         if isinstance(job_name, str):
             job_name = job_name.strip() or None
@@ -152,6 +178,8 @@ def _build_jobs_list() -> list[dict[str, Any]]:
                 "created_at": created_at,
                 "updated_at": updated_at,
                 "duration_seconds": duration_seconds,
+                "ocr_duration_seconds": ocr_duration_seconds,
+                "translate_duration_seconds": translate_duration_seconds,
                 "status_code": status_code,
                 "status_label": status_label,
                 "status": status_label,
@@ -200,6 +228,12 @@ def _load_job_meta(job_dir: Path) -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
+
+
+def _update_job_meta(job_dir: Path, **updates: Any) -> None:
+    meta = _load_job_meta(job_dir) or {}
+    meta.update({k: v for k, v in updates.items() if v is not None})
+    _write_job_meta(job_dir, meta)
 
 
 def _write_batch_config(job_dir: Path, config: dict[str, Any]) -> None:
@@ -1013,6 +1047,7 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
     target_lang = str(config.get("target_lang") or "en")
     model_name = str(config.get("model") or AZURE_BATCH_MODEL)
     system_prompt = _resolve_batch_prompt(target_lang, config.get("system_prompt"))
+    _update_job_meta(job_dir, translate_started_at=time.time(), translate_completed_at=None)
     status_meta = {
         "job_id": job_id,
         "started_at": time.time(),
@@ -1052,6 +1087,7 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
             _apply_edits_to_pdf(job_id, job_dir, edits_payload)
             logger.info("Batch translate wrote edited.pdf job_id=%s", job_id)
             _write_batch_status(job_dir, "completed", **status_meta, batch_id="prefill_only")
+            _update_job_meta(job_dir, processing_completed_at=time.time(), translate_completed_at=time.time())
             logger.info("Batch translate completed from translation memory job_id=%s", job_id)
             return
 
@@ -1118,10 +1154,12 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
         _apply_edits_to_pdf(job_id, job_dir, edits_payload)
         logger.info("Batch translate wrote edited.pdf job_id=%s", job_id)
         _write_batch_status(job_dir, "completed", **status_meta, batch_id=batch_id)
+        _update_job_meta(job_dir, processing_completed_at=time.time(), translate_completed_at=time.time())
         logger.info("Batch translate completed job_id=%s", job_id)
     except Exception as exc:
         logger.exception("Batch translate failed job_id=%s error=%s", job_id, exc)
         _write_batch_status(job_dir, "failed", **status_meta, error=str(exc))
+        _update_job_meta(job_dir, processing_completed_at=time.time(), translate_completed_at=time.time())
 
 
 def _run_ocr_pipeline_job(
@@ -1165,6 +1203,7 @@ def _run_ocr_pipeline_job(
         return
     except Exception as exc:
         logger.exception("OCR pipeline failed job_id=%s error=%s", job_id, exc)
+        _update_job_meta(job_dir, processing_completed_at=time.time(), ocr_completed_at=time.time())
         _notify_jobs_update()
         return
     finally:
@@ -1175,6 +1214,8 @@ def _run_ocr_pipeline_job(
 
     logger.info("OCR pipeline completed job_id=%s", job_id)
     _update_pp_json_should_translate(job_dir)
+    if not enable_translate:
+        _update_job_meta(job_dir, processing_completed_at=time.time(), ocr_completed_at=time.time())
     _notify_jobs_update()
     if enable_translate:
         batch_config = {
@@ -1360,7 +1401,15 @@ def upload() -> str:
         job_dir = _job_dir(job_id)
         job_dir.mkdir(parents=True, exist_ok=True)
         job_name = f"{display_name}_{job_id[:8]}"
-        _write_job_meta(job_dir, {"job_name": job_name})
+        now_ts = time.time()
+        _write_job_meta(
+            job_dir,
+            {
+                "job_name": job_name,
+                "processing_started_at": now_ts,
+                "ocr_started_at": now_ts,
+            },
+        )
 
         pdf_filename = secure_filename(f"{job_id}.pdf")
         pdf_path = job_dir / pdf_filename

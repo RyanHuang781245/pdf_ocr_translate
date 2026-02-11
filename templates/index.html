@@ -159,7 +159,11 @@
           const statusLabel = job.status_label || job.status || "Unknown";
           const durationLabel = formatDuration(job.duration_seconds);
           const durationText = durationLabel ? ` · 處理時間: ${durationLabel}` : "";
-          meta.textContent = `Updated: ${formatDate(job.updated_at)} · Status: ${statusLabel}${durationText}`;
+          const ocrDuration = formatDuration(job.ocr_duration_seconds);
+          const translateDuration = formatDuration(job.translate_duration_seconds);
+          const ocrText = ocrDuration ? ` · OCR: ${ocrDuration}` : "";
+          const translateText = translateDuration ? ` · 翻譯: ${translateDuration}` : "";
+          meta.textContent = `Updated: ${formatDate(job.updated_at)} · Status: ${statusLabel}${durationText}${ocrText}${translateText}`;
 
           const actions = document.createElement("div");
           actions.className = "job-actions";
