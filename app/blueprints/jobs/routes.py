@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from flask import Blueprint, abort, send_from_directory
+from flask import Blueprint, abort, request, send_file, send_from_directory
 
 from ...services import jobs
 
@@ -21,4 +21,16 @@ def job_file(job_id: str, filename: str):
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
+    file_path = job_dir / filename
+    if not file_path.exists():
+        abort(404)
+    download_flag = str(request.args.get("download", "")).lower()
+    if download_flag in {"1", "true", "yes"}:
+        job_name = jobs.get_job_name(job_dir)
+        download_name = (
+            jobs.build_download_name(job_id, job_name)
+            if filename == "edited.pdf"
+            else filename
+        )
+        return send_file(file_path, as_attachment=True, download_name=download_name)
     return send_from_directory(job_dir, filename)

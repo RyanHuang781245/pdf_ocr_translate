@@ -46,10 +46,14 @@ def job_data(job_id: str):
 
     edited_pdf_path = job_dir / "edited.pdf"
     config = jobs.load_batch_config(job_dir) or {}
+    job_name = jobs.get_job_name(job_dir)
+    download_name = jobs.build_download_name(job_id, job_name)
     target_lang = str(config.get("target_lang") or "en")
     system_prompt = config.get("system_prompt") or batch.resolve_batch_prompt(target_lang)
     payload = {
         "job_id": job_id,
+        "job_name": job_name,
+        "download_name": download_name,
         "pdf_url": url_for("jobs.job_file", job_id=job_id, filename=f"{job_id}.pdf"),
         "debug_pdf_url": url_for(
             "jobs.job_file", job_id=job_id, filename="overlay_debug.pdf"

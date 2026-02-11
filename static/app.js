@@ -16,6 +16,7 @@ const state = {
   zoom: 1,
   pdfUrl: null,
   pdfDoc: null,
+  downloadName: null,
 };
 
 const historyState = {
@@ -714,11 +715,16 @@ function setPreviewMode(mode, editedUrl) {
   }
 }
 
-function triggerDownload(url) {
+function withDownloadParam(url) {
+  if (!url) return url;
+  return url.includes("?") ? `${url}&download=1` : `${url}?download=1`;
+}
+
+function triggerDownload(url, filename) {
   if (!url) return;
   const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "edited.pdf";
+  anchor.href = withDownloadParam(url);
+  anchor.download = filename || "edited.pdf";
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
@@ -741,6 +747,7 @@ function polyToBbox(poly) {
 
 function buildState(data) {
   state.pdfUrl = data.pdf_url || null;
+  state.downloadName = data.download_name || "edited.pdf";
   state.pages = data.pages.map((page) => {
     const boxes = page.rec_polys.map((poly, index) => {
       const bbox = polyToBbox(poly);
@@ -1588,7 +1595,7 @@ async function saveEdits(shouldDownload = false) {
       if (body.edited_pdf_url) {
         updateEditedLink(body.edited_pdf_url);
         if (shouldDownload) {
-          triggerDownload(body.edited_pdf_url);
+          triggerDownload(body.edited_pdf_url, state.downloadName);
         }
       }
       setStatus("Edits saved.");

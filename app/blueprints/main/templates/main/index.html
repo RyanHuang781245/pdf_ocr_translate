@@ -10,7 +10,7 @@
     <main class="shell">
       <header class="hero">
         <p class="eyebrow">PDF -> OCR -> Translate</p>
-        <h1>PDF 批次處理</h1>
+        <h1>文件批次翻譯系統</h1>
       </header>
       <section class="upload-card">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload') }}">
@@ -183,10 +183,17 @@
 
           if (job.edited_pdf_url) {
             const downloadLink = document.createElement("a");
-            downloadLink.href = job.edited_pdf_url;
+            const downloadUrl = job.edited_pdf_url
+              ? `${job.edited_pdf_url}?download=1`
+              : "";
+            downloadLink.href = downloadUrl;
             downloadLink.textContent = "下載已翻譯文件";
             downloadLink.className = "ghost";
-            downloadLink.download = "";
+            const downloadName = job.download_name
+              || (job.job_name && job.job_name.trim()
+                ? `${job.job_name.trim()}.pdf`
+                : `${job.job_id}.pdf`);
+            downloadLink.download = downloadName;
             actions.appendChild(downloadLink);
           }
 

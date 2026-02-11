@@ -19,6 +19,28 @@ def safe_job_id(job_id: str) -> bool:
     return bool(re.fullmatch(r"[a-f0-9]{32}", job_id))
 
 
+def normalize_job_name(value: Any) -> str | None:
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return cleaned or None
+    return None
+
+
+def get_job_name(job_dir_path: Path) -> str | None:
+    meta = load_job_meta(job_dir_path) or {}
+    return normalize_job_name(meta.get("job_name"))
+
+
+def build_download_base(job_id: str, job_name: str | None) -> str:
+    base = job_name or job_id
+    return secure_filename(base) or job_id
+
+
+def build_download_name(job_id: str, job_name: str | None, ext: str = "pdf") -> str:
+    base = build_download_base(job_id, job_name)
+    return f"{base}.{ext}"
+
+
 def job_dir(job_id: str) -> Path:
     return state.JOB_ROOT / job_id
 
@@ -84,11 +106,8 @@ def build_jobs_list() -> list[dict[str, Any]]:
         debug_ready = debug_pdf_path.exists()
         batch_status = load_batch_status(job_dir_path)
         batch_config = load_batch_config(job_dir_path)
-        job_name = job_meta.get("job_name")
-        if isinstance(job_name, str):
-            job_name = job_name.strip() or None
-        else:
-            job_name = None
+        job_name = normalize_job_name(job_meta.get("job_name"))
+        download_name = build_download_name(job_id, job_name)
         if not debug_ready:
             status_code = "ocr"
             status_label = "OCR"
@@ -119,6 +138,7 @@ def build_jobs_list() -> list[dict[str, Any]]:
                 "status_label": status_label,
                 "status": status_label,
                 "job_name": job_name,
+                "download_name": download_name,
                 "editor_url": url_for("editor.editor", job_id=job_id),
                 "debug_pdf_url": url_for(
                     "jobs.job_file", job_id=job_id, filename="overlay_debug.pdf"
@@ -298,14 +318,8 @@ def build_translated_zip(job_ids: set[str] | None) -> tuple[io.BytesIO, int]:
             edited_path = job_dir_path / "edited.pdf"
             if not edited_path.exists():
                 continue
-            job_meta = load_job_meta(job_dir_path) or {}
-            job_name = job_meta.get("job_name")
-            if isinstance(job_name, str):
-                job_name = job_name.strip() or None
-            else:
-                job_name = None
-            base = job_name or job_id
-            safe_name = secure_filename(base) or job_id
+            job_name = get_job_name(job_dir_path)
+            safe_name = build_download_base(job_id, job_name)
             filename = f"{safe_name}.pdf"
             if filename in names:
                 filename = f"{safe_name}_{job_id[:8]}.pdf"
