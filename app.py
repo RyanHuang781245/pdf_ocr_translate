@@ -67,6 +67,8 @@ DEFAULT_TEXT_COLOR = "#0000ff"
 DEFAULT_FONT_SIZE_PX = 25.0
 TRANSLATION_MEMORY_PATH = Path(os.getenv("TRANSLATION_MEMORY_PATH", str(OUT_ROOT / "translation_memory.json")))
 TRANSLATION_MEMORY_LOCK = threading.Lock()
+TRANSLATION_MEMORY_TTL_DAYS = int(os.getenv("TRANSLATION_MEMORY_TTL_DAYS", "7"))
+TRANSLATION_MEMORY_TTL_SECONDS = max(0, TRANSLATION_MEMORY_TTL_DAYS) * 86400
 NUMERIC_ONLY_RE = re.compile(r"^[0-9]+([,./:-][0-9]+)*%?$")
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -336,7 +338,23 @@ def _load_global_glossary() -> list[dict[str, str]]:
     return cleaned
 
 
-def _load_translation_memory() -> dict[str, str]:
+def _normalize_tm_entry(value: Any, now_ts: float) -> dict[str, Any] | None:
+    if isinstance(value, str):
+        return {"text": value, "last_used": now_ts}
+    if not isinstance(value, dict):
+        return None
+    text = value.get("text")
+    if not isinstance(text, str):
+        return None
+    last_used = value.get("last_used")
+    try:
+        last_used_ts = float(last_used) if last_used is not None else now_ts
+    except (TypeError, ValueError):
+        last_used_ts = now_ts
+    return {"text": text, "last_used": last_used_ts}
+
+
+def _load_translation_memory() -> dict[str, dict[str, Any]]:
     path = TRANSLATION_MEMORY_PATH
     if not path.exists():
         return {}
@@ -346,15 +364,31 @@ def _load_translation_memory() -> dict[str, str]:
         return {}
     if not isinstance(data, dict):
         return {}
-    cleaned: dict[str, str] = {}
+    now_ts = time.time()
+    ttl_seconds = TRANSLATION_MEMORY_TTL_SECONDS
+    cleaned: dict[str, dict[str, Any]] = {}
+    changed = False
     for k, v in data.items():
-        if not isinstance(k, str) or not isinstance(v, str):
+        if not isinstance(k, str):
+            changed = True
             continue
-        cleaned[k] = v
+        entry = _normalize_tm_entry(v, now_ts)
+        if not entry:
+            changed = True
+            continue
+        last_used = entry.get("last_used", now_ts)
+        if ttl_seconds and (now_ts - float(last_used) > ttl_seconds):
+            changed = True
+            continue
+        cleaned[k] = entry
+        if entry != v:
+            changed = True
+    if changed:
+        _write_translation_memory(cleaned)
     return cleaned
 
 
-def _write_translation_memory(memory: dict[str, str]) -> None:
+def _write_translation_memory(memory: dict[str, dict[str, Any]]) -> None:
     path = TRANSLATION_MEMORY_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(memory, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -728,6 +762,7 @@ def _build_batch_items(
 
     with TRANSLATION_MEMORY_LOCK:
         translation_memory = _load_translation_memory()
+        tm_dirty = False
 
     def _add_item(custom_id: str, raw_text: str) -> None:
         clean = _normalize_for_translation(raw_text)
@@ -740,7 +775,10 @@ def _build_batch_items(
             return
         key = clean
         if key in translation_memory:
-            prefilled[custom_id] = translation_memory[key]
+            entry = translation_memory[key]
+            prefilled[custom_id] = str(entry.get("text") or "")
+            entry["last_used"] = time.time()
+            tm_dirty = True
             return
         if key in seen:
             alias_map[custom_id] = seen[key]
@@ -798,6 +836,9 @@ def _build_batch_items(
                         continue
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
             _add_item(custom_id, text)
+
+    if tm_dirty:
+        _write_translation_memory(translation_memory)
 
     return items, alias_map, key_map, prefilled
 
@@ -1142,10 +1183,11 @@ def _run_batch_translate_job(job_id: str, job_dir: Path, config: dict[str, Any] 
         if key_map:
             with TRANSLATION_MEMORY_LOCK:
                 memory = _load_translation_memory()
+                now_ts = time.time()
                 for custom_id, key in key_map.items():
                     translated = translations.get(custom_id)
                     if translated:
-                        memory[key] = translated
+                        memory[key] = {"text": translated, "last_used": now_ts}
                 _write_translation_memory(memory)
         edits_payload = _build_edits_payload_from_translations(ocr_pages, translations, pp_pages=pp_pages)
         edits_path = job_dir / "edits.json"
