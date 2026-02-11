@@ -1032,46 +1032,76 @@ function onResizeStart(event, pageIdx, boxIdx) {
   const page = state.pages[pageIdx];
   const box = page?.boxes[boxIdx];
   if (!page || !box || box.deleted) return;
-  setSelection(pageIdx, boxIdx);
+  const key = boxKey(pageIdx, boxIdx);
+  const selectedOnPage = getSelectedBoxes().filter((item) => item.pageIdx === pageIdx);
+  const shouldGroup = selectedOnPage.length > 1 && state.selectedBoxes.has(key);
+  if (!shouldGroup) {
+    setSelection(pageIdx, boxIdx);
+  } else {
+    setActivePage(pageIdx, { scroll: false });
+    syncInspectorFromBox(box);
+  }
+  const group = shouldGroup
+    ? selectedOnPage.map((item) => ({
+      pageIdx: item.pageIdx,
+      boxIdx: item.boxIdx,
+      originW: item.box.bbox.w,
+      originH: item.box.bbox.h,
+      originX: item.box.bbox.x,
+      originY: item.box.bbox.y,
+    }))
+    : [{ pageIdx, boxIdx, originW: box.bbox.w, originH: box.bbox.h, originX: box.bbox.x, originY: box.bbox.y }];
+  const beforeUpdates = group.map((item) => {
+    const sourcePage = state.pages[item.pageIdx];
+    const sourceBox = sourcePage?.boxes[item.boxIdx];
+    return {
+      pageIdx: item.pageIdx,
+      boxId: sourceBox?.id,
+      before: sourceBox ? cloneBoxData(sourceBox) : null,
+    };
+  }).filter((update) => Number.isFinite(update.boxId) && update.before);
   state.resizing = {
     pageIdx,
     boxIdx,
     startX: event.clientX,
     startY: event.clientY,
-    originW: box.bbox.w,
-    originH: box.bbox.h,
-    originX: box.bbox.x,
-    originY: box.bbox.y,
-    beforeUpdate: { pageIdx, boxId: box.id, before: cloneBoxData(box) },
+    groupMode: shouldGroup,
+    group,
+    beforeUpdates,
   };
   event.currentTarget.setPointerCapture(event.pointerId);
 }
 
 function onResizeMove(event) {
   if (!state.resizing) return;
-  const { pageIdx, boxIdx, startX, startY, originW, originH, originX, originY } = state.resizing;
+  const { pageIdx, startX, startY, group } = state.resizing;
   const page = state.pages[pageIdx];
-  const box = page?.boxes[boxIdx];
-  if (!page || !box) return;
+  if (!page) return;
   const scale = page.scale || 1;
   const dx = (event.clientX - startX) / scale;
   const dy = (event.clientY - startY) / scale;
   const minSize = 12;
-  let newW = Math.max(minSize, originW + dx);
-  let newH = Math.max(minSize, originH + dy);
 
-  if (page.imageSize && page.imageSize.length === 2) {
-    const maxW = page.imageSize[0] - originX;
-    const maxH = page.imageSize[1] - originY;
-    if (Number.isFinite(maxW)) newW = Math.min(newW, maxW);
-    if (Number.isFinite(maxH)) newH = Math.min(newH, maxH);
-  }
-
-  box.bbox.w = newW;
-  box.bbox.h = newH;
-  updateBoxElement(page, box);
-  if (newW !== originW || newH !== originH) {
-    state.resizing.changed = true;
+  if (group && group.length) {
+    group.forEach((item) => {
+      const targetPage = state.pages[item.pageIdx];
+      const targetBox = targetPage?.boxes[item.boxIdx];
+      if (!targetPage || !targetBox) return;
+      let newW = Math.max(minSize, item.originW + dx);
+      let newH = Math.max(minSize, item.originH + dy);
+      if (targetPage.imageSize && targetPage.imageSize.length === 2) {
+        const maxW = targetPage.imageSize[0] - item.originX;
+        const maxH = targetPage.imageSize[1] - item.originY;
+        if (Number.isFinite(maxW)) newW = Math.min(newW, maxW);
+        if (Number.isFinite(maxH)) newH = Math.min(newH, maxH);
+      }
+      targetBox.bbox.w = newW;
+      targetBox.bbox.h = newH;
+      updateBoxElement(targetPage, targetBox);
+      if (newW !== item.originW || newH !== item.originH) {
+        state.resizing.changed = true;
+      }
+    });
   }
 }
 
@@ -1084,12 +1114,14 @@ function onResizeEnd(event) {
     box.element.releasePointerCapture(event.pointerId);
   }
   if (state.resizing.changed) {
-    const update = state.resizing.beforeUpdate;
-    const current = update ? findBox(update.pageIdx, update.boxId) : null;
-    if (update && current) {
+    const updates = (state.resizing.beforeUpdates || []).map((update) => {
+      const current = findBox(update.pageIdx, update.boxId);
+      return current ? { ...update, after: cloneBoxData(current) } : null;
+    }).filter(Boolean);
+    if (updates.length) {
       pushAction({
         type: "update_boxes",
-        updates: [{ ...update, after: cloneBoxData(current) }],
+        updates,
       });
     }
   }

@@ -64,6 +64,7 @@ FONT_CANDIDATES = [
     r"C:\Windows\Fonts\simsun.ttc",
 ]
 DEFAULT_TEXT_COLOR = "#0000ff"
+DEFAULT_FONT_SIZE_PX = 25.0
 TRANSLATION_MEMORY_PATH = Path(os.getenv("TRANSLATION_MEMORY_PATH", str(OUT_ROOT / "translation_memory.json")))
 TRANSLATION_MEMORY_LOCK = threading.Lock()
 NUMERIC_ONLY_RE = re.compile(r"^[0-9]+([,./:-][0-9]+)*%?$")
@@ -483,6 +484,29 @@ def _resolve_fontfile() -> str | None:
         if Path(candidate).exists():
             return candidate
     return None
+
+
+def _wrap_text_lines(text: str, max_width: float, font: fitz.Font, font_size: float) -> list[str]:
+    if not text:
+        return []
+    if max_width <= 0:
+        return [text]
+    lines: list[str] = []
+    for raw_line in str(text).splitlines():
+        if raw_line == "":
+            lines.append("")
+            continue
+        current = ""
+        for ch in raw_line:
+            candidate = current + ch
+            if current and font.text_length(candidate, font_size) > max_width:
+                lines.append(current.rstrip())
+                current = ch.lstrip()
+            else:
+                current = candidate
+        if current:
+            lines.append(current.rstrip())
+    return lines
 
 
 def _normalize_text(text: str) -> str:
@@ -1183,6 +1207,11 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
     pages_by_index = {int(p.get("page_index_0based", 0)): p for p in edits.get("pages", []) if isinstance(p, dict)}
 
     fontfile = _resolve_fontfile()
+    try:
+        font_obj = fitz.Font(fontfile=fontfile) if fontfile else fitz.Font("helv")
+    except RuntimeError:
+        font_obj = fitz.Font("helv")
+        fontfile = None
     debug_boxes = os.getenv("DEBUG_EDIT_BOXES") == "1"
     doc = fitz.open(pdf_path)
     for page_idx in range(doc.page_count):
@@ -1236,61 +1265,45 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                 dbg_shape.finish(color=(1, 0, 0), width=0.6)
 
             font_size_px = float(box.get("font_size") or 0.0)
-            font_size_pt = font_size_px * (page_h / img_h) if font_size_px > 0 else max(5.0, rect.height * 0.7)
+            if font_size_px <= 0:
+                font_size_px = DEFAULT_FONT_SIZE_PX
+            font_size_pt = font_size_px * (page_h / img_h)
             color = _hex_to_rgb(box.get("color"))
             rotate = rotation if rotation else 0
+            no_clip = bool(box.get("no_clip"))
 
-            ok = False
-            current = font_size_pt
-            for _ in range(20):
+            lines = _wrap_text_lines(text, rect.width, font_obj, font_size_pt)
+            if not lines:
+                lines = [text]
+            line_height = max(1.0, font_size_pt * 1.2)
+            cursor_y = rect.y0 + line_height
+            max_y = rect.y1 if not no_clip else page.rect.y1 - line_height * 0.2
+            for idx, line in enumerate(lines):
+                overflow = cursor_y > max_y
+                if overflow and idx != 0:
+                    break
+                baseline = fitz.Point(rect.x0, cursor_y)
                 if fontfile:
-                    rc = shape.insert_textbox(
-                        rect,
-                        text,
+                    shape.insert_text(
+                        baseline,
+                        line,
                         fontfile=fontfile,
-                        fontsize=current,
+                        fontsize=font_size_pt,
                         color=color,
-                        align=0,
                         rotate=rotate,
                     )
                 else:
-                    rc = shape.insert_textbox(
-                        rect,
-                        text,
+                    shape.insert_text(
+                        baseline,
+                        line,
                         fontname="helv",
-                        fontsize=current,
+                        fontsize=font_size_pt,
                         color=color,
-                        align=0,
                         rotate=rotate,
                     )
-                if rc >= 0:
-                    ok = True
+                if overflow:
                     break
-                current -= max(0.5, current * 0.1)
-                if current < 4.0:
-                    break
-
-            if not ok:
-                if fontfile:
-                    shape.insert_textbox(
-                        rect,
-                        text,
-                        fontfile=fontfile,
-                        fontsize=max(4.0, current),
-                        color=color,
-                        align=0,
-                        rotate=rotate,
-                    )
-                else:
-                    shape.insert_textbox(
-                        rect,
-                        text,
-                        fontname="helv",
-                        fontsize=max(4.0, current),
-                        color=color,
-                        align=0,
-                        rotate=rotate,
-                    )
+                cursor_y += line_height
 
         shape.commit()
         if dbg_shape is not None:
@@ -1471,14 +1484,16 @@ def batch_restore(job_id: str):
     job_dir = _job_dir(job_id)
     if not job_dir.exists():
         abort(404)
-    output_path = job_dir / BATCH_OUTPUT_NAME
-    if not output_path.exists():
-        return jsonify({"ok": False, "error": "Batch output not found."}), 400
-
     try:
-        raw_text = output_path.read_text(encoding="utf-8")
         alias_map = _load_batch_alias_map(job_dir)
         prefilled = _load_batch_prefill_map(job_dir)
+        output_path = job_dir / BATCH_OUTPUT_NAME
+        if output_path.exists():
+            raw_text = output_path.read_text(encoding="utf-8")
+        else:
+            raw_text = ""
+            if not prefilled:
+                return jsonify({"ok": False, "error": "Batch output not found."}), 400
         translations = _build_translations_from_jsonl_text(raw_text, alias_map=alias_map, prefilled=prefilled)
         ocr_pages = _load_ocr_pages(job_dir)
         pp_pages = _load_pp_pages(job_dir)
