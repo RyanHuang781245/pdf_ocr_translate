@@ -1032,7 +1032,7 @@ function onDragEnd(event) {
   state.dragging = null;
 }
 
-function onResizeStart(event, pageIdx, boxIdx) {
+function onResizeStart(event, pageIdx, boxIdx, dir = "se") {
   if (event.button !== 0) return;
   event.preventDefault();
   event.stopPropagation();
@@ -1075,13 +1075,15 @@ function onResizeStart(event, pageIdx, boxIdx) {
     groupMode: shouldGroup,
     group,
     beforeUpdates,
+    dir,
+    handleEl: event.currentTarget,
   };
   event.currentTarget.setPointerCapture(event.pointerId);
 }
 
 function onResizeMove(event) {
   if (!state.resizing) return;
-  const { pageIdx, startX, startY, group } = state.resizing;
+  const { pageIdx, startX, startY, group, dir } = state.resizing;
   const page = state.pages[pageIdx];
   if (!page) return;
   const scale = page.scale || 1;
@@ -1094,18 +1096,61 @@ function onResizeMove(event) {
       const targetPage = state.pages[item.pageIdx];
       const targetBox = targetPage?.boxes[item.boxIdx];
       if (!targetPage || !targetBox) return;
-      let newW = Math.max(minSize, item.originW + dx);
-      let newH = Math.max(minSize, item.originH + dy);
+
+      let newX = item.originX;
+      let newY = item.originY;
+      let newW = item.originW;
+      let newH = item.originH;
+
+      const hasW = dir.includes("w");
+      const hasE = dir.includes("e");
+      const hasN = dir.includes("n");
+      const hasS = dir.includes("s");
+
+      if (hasE) {
+        newW = item.originW + dx;
+      }
+      if (hasS) {
+        newH = item.originH + dy;
+      }
+      if (hasW) {
+        newX = item.originX + dx;
+        newW = item.originW - dx;
+      }
+      if (hasN) {
+        newY = item.originY + dy;
+        newH = item.originH - dy;
+      }
+
+      if (newW < minSize) {
+        if (hasW) {
+          newX -= (minSize - newW);
+        }
+        newW = minSize;
+      }
+      if (newH < minSize) {
+        if (hasN) {
+          newY -= (minSize - newH);
+        }
+        newH = minSize;
+      }
+
+      newX = Math.max(0, newX);
+      newY = Math.max(0, newY);
+
       if (targetPage.imageSize && targetPage.imageSize.length === 2) {
-        const maxW = targetPage.imageSize[0] - item.originX;
-        const maxH = targetPage.imageSize[1] - item.originY;
+        const maxW = targetPage.imageSize[0] - newX;
+        const maxH = targetPage.imageSize[1] - newY;
         if (Number.isFinite(maxW)) newW = Math.min(newW, maxW);
         if (Number.isFinite(maxH)) newH = Math.min(newH, maxH);
       }
+
+      targetBox.bbox.x = newX;
+      targetBox.bbox.y = newY;
       targetBox.bbox.w = newW;
       targetBox.bbox.h = newH;
       updateBoxElement(targetPage, targetBox);
-      if (newW !== item.originW || newH !== item.originH) {
+      if (newW !== item.originW || newH !== item.originH || newX !== item.originX || newY !== item.originY) {
         state.resizing.changed = true;
       }
     });
@@ -1117,8 +1162,8 @@ function onResizeEnd(event) {
   const { pageIdx, boxIdx } = state.resizing;
   const page = state.pages[pageIdx];
   const box = page?.boxes[boxIdx];
-  if (box?.element) {
-    box.element.releasePointerCapture(event.pointerId);
+  if (state.resizing.handleEl?.releasePointerCapture) {
+    state.resizing.handleEl.releasePointerCapture(event.pointerId);
   }
   if (state.resizing.changed) {
     const updates = (state.resizing.beforeUpdates || []).map((update) => {
@@ -1405,14 +1450,17 @@ function createBoxElement(pageIdx, boxIdx) {
     }
   });
 
-  const handleEl = document.createElement("div");
-  handleEl.className = "resize-handle";
-  boxEl.appendChild(handleEl);
+  ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach((dir) => {
+    const handleEl = document.createElement("div");
+    handleEl.className = `resize-handle resize-${dir}`;
+    handleEl.dataset.dir = dir;
+    boxEl.appendChild(handleEl);
 
-  handleEl.addEventListener("pointerdown", (event) => onResizeStart(event, pageIdx, boxIdx));
-  handleEl.addEventListener("pointermove", onResizeMove);
-  handleEl.addEventListener("pointerup", onResizeEnd);
-  handleEl.addEventListener("pointercancel", onResizeEnd);
+    handleEl.addEventListener("pointerdown", (event) => onResizeStart(event, pageIdx, boxIdx, dir));
+    handleEl.addEventListener("pointermove", onResizeMove);
+    handleEl.addEventListener("pointerup", onResizeEnd);
+    handleEl.addEventListener("pointercancel", onResizeEnd);
+  });
 
   box.element = boxEl;
   updateBoxElement(page, box);
