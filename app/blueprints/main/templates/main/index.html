@@ -13,7 +13,7 @@
         <h1>PDF 批次處理</h1>
       </header>
       <section class="upload-card">
-        <form method="post" enctype="multipart/form-data" action="{{ url_for('upload') }}">
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload') }}">
           <label class="file-input">
             <span>選擇 PDF（可多選）</span>
             <input type="file" name="pdf" accept="application/pdf" multiple />
