@@ -413,6 +413,7 @@ def _load_page_data(
         font_sizes: list[float] = []
         colors: list[str] = []
         box_ids: list[int] = []
+        no_clips: list[bool] = []
         for box in edits_boxes:
             if not isinstance(box, dict):
                 continue
@@ -429,6 +430,7 @@ def _load_page_data(
             font_sizes.append(float(box.get("font_size") or 0.0))
             colors.append(str(box.get("color") or DEFAULT_TEXT_COLOR))
             box_ids.append(int(box.get("id") or len(box_ids)))
+            no_clips.append(bool(box.get("no_clip")))
         count = len(rec_polys)
     else:
         rec_polys = data.get("rec_polys", []) or []
@@ -438,6 +440,7 @@ def _load_page_data(
         font_sizes = []
         colors = []
         box_ids = []
+        no_clips = []
         count = len(rec_polys)
 
     if not edit_texts:
@@ -459,6 +462,7 @@ def _load_page_data(
         "font_sizes": font_sizes,
         "colors": colors,
         "box_ids": box_ids,
+        "no_clips": no_clips,
     }
 
 
@@ -971,7 +975,15 @@ def _build_edits_payload_from_translations(
                     "w": float(bbox_list[2] - bbox_list[0]),
                     "h": float(bbox_list[3] - bbox_list[1]),
                 }
-                boxes.append({"id": base_id + block_idx, "bbox": bbox, "text": block_text, "deleted": False})
+                boxes.append(
+                    {
+                        "id": base_id + block_idx,
+                        "bbox": bbox,
+                        "text": block_text,
+                        "deleted": False,
+                        "no_clip": True,
+                    }
+                )
 
         if merged_cells:
             base_id = 100000
@@ -1277,7 +1289,9 @@ def _apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pa
                 lines = [text]
             line_height = max(1.0, font_size_pt * 1.2)
             cursor_y = rect.y0 + line_height
-            max_y = rect.y1 if not no_clip else page.rect.y1 - line_height * 0.2
+            max_lines_in_box = max(1, int(rect.height // line_height))
+            allow_overflow = no_clip or len(lines) > max_lines_in_box
+            max_y = rect.y1 if not allow_overflow else page.rect.y1 - line_height * 0.2
             for idx, line in enumerate(lines):
                 overflow = cursor_y > max_y
                 if overflow and idx != 0:

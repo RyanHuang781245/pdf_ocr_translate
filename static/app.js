@@ -252,6 +252,7 @@ function cloneBoxData(box) {
     text: box.text,
     fontSize: box.fontSize,
     color: box.color,
+    noClip: !!box.noClip,
     deleted: !!box.deleted,
   };
 }
@@ -524,6 +525,7 @@ function copySelectedBoxes() {
       text: box.text,
       fontSize: box.fontSize,
       color: box.color,
+      noClip: !!box.noClip,
     })),
     sourcePageIdx: selected.length === 1 ? selected[0].pageIdx : null,
     pasteCount: 0,
@@ -576,6 +578,7 @@ function pasteClipboardBoxes() {
       text: item.text,
       fontSize: item.fontSize,
       color: item.color,
+      noClip: !!item.noClip,
       deleted: false,
       element: null,
     };
@@ -650,6 +653,7 @@ function duplicateSelectedBoxes() {
         text: box.text,
         fontSize: box.fontSize,
         color: box.color,
+        noClip: !!box.noClip,
         deleted: false,
         element: null,
       };
@@ -745,12 +749,14 @@ function buildState(data) {
       const fontSize = Number(page.font_sizes?.[index]);
       const color = page.colors?.[index] ?? "#0000ff";
       const id = page.box_ids?.[index] ?? index;
+      const noClip = Boolean(page.no_clips?.[index]);
       return {
         id,
         bbox,
         text,
         fontSize: fontSize > 0 ? fontSize : baseSize,
         color,
+        noClip,
         deleted: false,
         element: null,
       };
@@ -798,6 +804,7 @@ function updateBoxElement(page, box) {
   box.element.style.color = box.color;
   box.element.querySelector(".text").style.fontSize = `${box.fontSize * scale}px`;
   box.element.classList.toggle("is-deleted", box.deleted);
+  box.element.classList.toggle("no-clip", !!box.noClip);
 }
 
 function updatePageLayout(page) {
@@ -1442,6 +1449,7 @@ function addNewBox() {
     text: "",
     fontSize: Math.max(10, Math.min(28, defaultH * 0.6)),
     color: "#0000ff",
+    noClip: false,
     deleted: false,
     element: null,
   };
@@ -1465,6 +1473,7 @@ function buildSavePayload() {
         bbox: box.bbox,
         text: box.text,
         font_size: box.fontSize,
+        no_clip: !!box.noClip,
         color: box.color,
       })),
     })),

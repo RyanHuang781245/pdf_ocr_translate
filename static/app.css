@@ -666,6 +666,15 @@ button.primary:hover {
   min-height: 16px;
 }
 
+.text-box.no-clip {
+  overflow: visible;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.text-box.no-clip .text {
+  overflow: visible;
+}
+
 .text-box .text {
   outline: none;
   cursor: text;
