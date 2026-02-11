@@ -98,7 +98,7 @@ def enqueue_job_from_upload(
     job_id = uuid.uuid4().hex
     job_dir = jobs.job_dir(job_id)
     job_dir.mkdir(parents=True, exist_ok=True)
-    job_name = f"{display_name}_{job_id[:8]}"
+    job_name = display_name
     now_ts = time.time()
     jobs.write_job_meta(
         job_dir,

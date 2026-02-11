@@ -293,6 +293,7 @@ def load_page_transforms(job_dir: Path) -> dict[int, dict[str, Any]]:
         img_size = transform.get("image_size_px") or []
         pdf_size = transform.get("pdf_page_size_pt") or []
         rotation = transform.get("page_rotation")
+        print(rotation)
         if len(img_size) == 2 and len(pdf_size) == 2:
             mapping[page_idx] = {
                 "img_w": float(img_size[0]),

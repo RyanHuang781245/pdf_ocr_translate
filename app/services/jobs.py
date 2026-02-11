@@ -22,6 +22,7 @@ def safe_job_id(job_id: str) -> bool:
 def normalize_job_name(value: Any) -> str | None:
     if isinstance(value, str):
         cleaned = value.strip()
+        cleaned = re.sub(r"_[a-f0-9]{8}$", "", cleaned)
         return cleaned or None
     return None
 
@@ -32,13 +33,16 @@ def get_job_name(job_dir_path: Path) -> str | None:
 
 
 def build_download_base(job_id: str, job_name: str | None) -> str:
-    base = job_name or job_id
-    return secure_filename(base) or job_id
+    base = job_name or "translated"
+    safe = secure_filename(base) or "translated"
+    return safe
 
 
-def build_download_name(job_id: str, job_name: str | None, ext: str = "pdf") -> str:
+def build_download_name(
+    job_id: str, job_name: str | None, ext: str = "pdf", suffix: str = "translate"
+) -> str:
     base = build_download_base(job_id, job_name)
-    return f"{base}.{ext}"
+    return f"{base}_{suffix}.{ext}" if suffix else f"{base}.{ext}"
 
 
 def job_dir(job_id: str) -> Path:
@@ -305,6 +309,7 @@ def build_translated_zip(job_ids: set[str] | None) -> tuple[io.BytesIO, int]:
     state.JOB_ROOT.mkdir(parents=True, exist_ok=True)
     buf = io.BytesIO()
     names: set[str] = set()
+    base_counts: dict[str, int] = {}
     count = 0
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for job_dir_path in sorted(state.JOB_ROOT.iterdir()):
@@ -320,9 +325,11 @@ def build_translated_zip(job_ids: set[str] | None) -> tuple[io.BytesIO, int]:
                 continue
             job_name = get_job_name(job_dir_path)
             safe_name = build_download_base(job_id, job_name)
+            count = base_counts.get(safe_name, 0) + 1
+            base_counts[safe_name] = count
             filename = f"{safe_name}.pdf"
             if filename in names:
-                filename = f"{safe_name}_{job_id[:8]}.pdf"
+                filename = f"{safe_name}_{count}.pdf"
             names.add(filename)
             zf.write(edited_path, arcname=filename)
             count += 1
