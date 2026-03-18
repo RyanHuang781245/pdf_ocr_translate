@@ -114,22 +114,19 @@ def get_azure_client():
     return OpenAI(base_url=state.AZURE_BASE_URL, api_key=api_key)
 
 
+
 def resolve_batch_prompt(target_lang: str, override: str | None = None) -> str:
     if override:
         return override.strip()
-        
     normalized = (target_lang or "").strip().lower()
-    
     if normalized in {"en", "english", "en-us", "en-gb"}:
-        translation_instruction = state.AZURE_BATCH_SYSTEM_PROMPT
-    else:
-        translation_instruction = f"Translate the text to {target_lang} accurately and literally."
+        return state.AZURE_BATCH_SYSTEM_PROMPT
     return "\n".join(
         [
             "You are a professional translator.",
             f"Translate the text to {target_lang} accurately and literally.",
             "Do NOT summarize, paraphrase, explain, or add content.",
-            "Preserve all numbers, codes, and text",
+            "Preserve all numbers, codes, references, and formatting.",
             "CRITICAL FORMATTING RULE 1: You MUST insert a line break strictly before every numbered item (e.g., '2.', '3.', '4.').",
             "CRITICAL FORMATTING RULE 2: You MUST keep all text within the same numbered item as ONE continuous paragraph. Do NOT add line breaks inside a step.",
             "Output only the translated text."

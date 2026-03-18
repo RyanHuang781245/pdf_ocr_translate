@@ -36,7 +36,9 @@ AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
             "Translate the text from Chinese to English accurately and literally.",
             "Do NOT summarize, paraphrase, explain, or add content.",
             "Preserve all numbers, codes, references, and formatting.",
-            "Output only the translated English text.",
+            "CRITICAL FORMATTING RULE 1: You MUST insert a line break strictly before every numbered item (e.g., '2.', '3.', '4.').",
+            "CRITICAL FORMATTING RULE 2: You MUST keep all text within the same numbered item as ONE continuous paragraph. Do NOT add line breaks inside a step.",
+            "Output only the translated text."
         ]
     ),
 ).strip()
