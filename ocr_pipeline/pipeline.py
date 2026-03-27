@@ -710,7 +710,7 @@ def translate_texts_with_openai(
             continue
             
         # 文字沒有出現中文就不送入翻譯
-        if not bool(re.search(r"[\u4e00-\u9fff]", key)) or re.fullmatch(r"[\x00-\x7F]+", key):
+        if not bool(re.search(r"[\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]", key)) or re.fullmatch(r"[\x00-\x7F]+", key):
             cache[key] = key
             normalized.append(key)
             continue

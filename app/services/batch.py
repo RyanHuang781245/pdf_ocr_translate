@@ -155,7 +155,7 @@ def build_batch_items(
         clean = normalize_for_translation(raw_text)
         if not clean:
             return
-        if not re.search(r"[\u4e00-\u9fff]", clean):
+        if not re.search(r"[\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]", clean):
     
             return
         # print(f"ID: {custom_id} | context: {clean}")

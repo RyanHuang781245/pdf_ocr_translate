@@ -6,7 +6,7 @@ from pathlib import Path
 import pdfplumber
 
 def is_chinese(text):
-    return re.search(r"[\u4e00-\u9fff]", text)
+    return re.search(r"[\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]", text)
 
 def is_english(text):
     return re.search(r"[A-Za-z]", text)
@@ -21,7 +21,7 @@ def should_translate(text):
     text = text.strip()
     if not text:
         return False
-    return bool(re.search(r"[\u4e00-\u9fff]", text))
+    return bool(re.search(r"[\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]", text))
 
 def box_center(box):
     x1, y1, x2, y2 = box
