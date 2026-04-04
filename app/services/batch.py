@@ -129,6 +129,7 @@ def resolve_batch_prompt(target_lang: str, override: str | None = None) -> str:
             "Preserve all numbers, codes, references, and formatting.",
             "CRITICAL FORMATTING RULE 1: You MUST insert a line break strictly before every numbered item (e.g., '2.', '3.', '4.').",
             "CRITICAL FORMATTING RULE 2: You MUST keep all text within the same numbered item as ONE continuous paragraph. Do NOT add line breaks inside a step.",
+            "Strictly prohibit duplicate words or expressions with identical meanings; if they appear, you must remove the redundancy and keep only one.",
             "Output only the translated text."
         ]
     ).strip()
