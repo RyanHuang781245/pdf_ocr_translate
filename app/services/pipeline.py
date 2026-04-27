@@ -104,6 +104,7 @@ def enqueue_job_from_upload(
         job_dir,
         {
             "job_name": job_name,
+            "job_type": "ocr_overlay",
             "processing_started_at": now_ts,
             "ocr_started_at": now_ts,
         },

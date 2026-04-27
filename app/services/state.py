@@ -5,12 +5,28 @@ import re
 import threading
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - optional import guard
+    load_dotenv = None
+
+if callable(load_dotenv):
+    load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 OUT_ROOT = BASE_DIR / "out"
 JOB_ROOT = OUT_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
+DOC_WORKSPACE_ROOT = OUT_ROOT / "doc_workspace"
 
 TRITON_URL = os.getenv("TRITON_URL", "https://racks-editing-norm-timber.trycloudflare.com/table-recognition")
+PP_STRUCTURE_URL = os.getenv(
+    "PP_STRUCTURE_URL",
+    os.getenv(
+        "TRITON_LAYOUT_URL",
+        "https://writing-coordination-farm-approximately.trycloudflare.com/layout-parsing",
+    ),
+)
 AZURE_BASE_URL = os.getenv("AZURE_OPENAI_BASE_URL", "https://uocp-azure-openai.openai.azure.com/openai/v1/")
 AZURE_API_KEY_ENV = os.getenv("AZURE_OPENAI_API_KEY_ENV", "UO_AZURE_OPENAI_API_KEY")
 AZURE_BATCH_MODEL = os.getenv("AZURE_BATCH_MODEL", "batch-o3-mini")
@@ -44,11 +60,28 @@ AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
     ),
 ).strip()
 
+DOC_TRANSLATE_MODEL = os.getenv("DOC_TRANSLATE_MODEL", "gpt-4.1-mini")
+DOC_TRANSLATE_MAX_CHARS = int(os.getenv("DOC_TRANSLATE_MAX_CHARS", "4000"))
+DOC_TRANSLATE_USE_AZURE = os.getenv("DOC_TRANSLATE_USE_AZURE", "0").strip() == "1"
+DOC_TRANSLATE_SYSTEM_PROMPT = os.getenv(
+    "DOC_TRANSLATE_SYSTEM_PROMPT",
+    "\n".join(
+        [
+            "You are a professional document translator.",
+            "Translate the provided Markdown content accurately and literally.",
+            "Preserve the original Markdown structure, headings, lists, tables, links, and image references.",
+            "Do NOT remove placeholders, file paths, URLs, code spans, or fenced code blocks.",
+            "Return only the translated Markdown.",
+        ]
+    ),
+).strip()
+
 BATCH_INPUT_NAME = "azure_batch_input.jsonl"
 BATCH_OUTPUT_NAME = "azure_batch_output.jsonl"
 BATCH_STATUS_NAME = "batch_status.json"
 BATCH_ALIAS_NAME = "batch_alias_map.json"
 BATCH_PREFILL_NAME = "batch_prefill_map.json"
+DOC_STATUS_NAME = "document_status.json"
 
 ALLOWED_EXTENSIONS = {".pdf"}
 

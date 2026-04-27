@@ -32,6 +32,14 @@ def get_job_name(job_dir_path: Path) -> str | None:
     return normalize_job_name(meta.get("job_name"))
 
 
+def get_job_type(job_dir_path: Path) -> str:
+    meta = load_job_meta(job_dir_path) or {}
+    job_type = str(meta.get("job_type") or "").strip().lower()
+    if job_type == "doc_workspace":
+        return "doc_workspace"
+    return "ocr_overlay"
+
+
 def build_download_base(job_id: str, job_name: str | None) -> str:
     base = job_name or "translated"
     safe = secure_filename(base) or "translated"
@@ -43,6 +51,15 @@ def build_download_name(
 ) -> str:
     base = build_download_base(job_id, job_name)
     return f"{base}_{suffix}.{ext}" if suffix else f"{base}.{ext}"
+
+
+def build_doc_markdown_name(job_id: str, job_name: str | None, translated: bool = False) -> str:
+    suffix = "translated" if translated else "structure"
+    return build_download_name(job_id, job_name, ext="md", suffix=suffix)
+
+
+def build_docx_name(job_id: str, job_name: str | None) -> str:
+    return build_download_name(job_id, job_name, ext="docx", suffix="translated")
 
 
 def job_dir(job_id: str) -> Path:
@@ -62,7 +79,7 @@ def notify_jobs_update() -> None:
         state.JOBS_EVENT.notify_all()
 
 
-def build_jobs_list() -> list[dict[str, Any]]:
+def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
     state.JOB_ROOT.mkdir(parents=True, exist_ok=True)
     jobs = []
     for job_dir_path in sorted(state.JOB_ROOT.iterdir()):
@@ -71,29 +88,99 @@ def build_jobs_list() -> list[dict[str, Any]]:
         job_id = job_dir_path.name
         if not safe_job_id(job_id):
             continue
+        current_job_type = get_job_type(job_dir_path)
+        if job_type and current_job_type != job_type:
+            continue
 
         pdf_path = job_dir_path / f"{job_id}.pdf"
         debug_pdf_path = job_dir_path / "overlay_debug.pdf"
         edited_pdf_path = job_dir_path / "edited.pdf"
+        source_pdf_path = job_dir_path / "source.pdf"
+        structure_md_path = job_dir_path / "structure" / "doc.md"
+        translated_md_path = job_dir_path / "translated" / "doc.translated.md"
+        docx_path = job_dir_path / "output" / "output.docx"
 
-        created_at = job_timestamp(pdf_path) or job_timestamp(job_dir_path)
+        created_at = (
+            job_timestamp(pdf_path)
+            or job_timestamp(source_pdf_path)
+            or job_timestamp(job_dir_path)
+        )
         debug_ts = job_timestamp(debug_pdf_path)
         edited_ts = job_timestamp(edited_pdf_path)
-        updated_at = max(debug_ts, edited_ts, created_at)
+        structure_ts = job_timestamp(structure_md_path)
+        translated_ts = job_timestamp(translated_md_path)
+        docx_ts = job_timestamp(docx_path)
+        updated_at = max(debug_ts, edited_ts, structure_ts, translated_ts, docx_ts, created_at)
         job_meta = load_job_meta(job_dir_path) or {}
         started_at = job_meta.get("processing_started_at") or created_at
         completed_at = job_meta.get("processing_completed_at")
+        job_name = normalize_job_name(job_meta.get("job_name"))
         if not isinstance(completed_at, (int, float)):
-            if debug_ts:
-                completed_at = debug_ts
-            elif edited_ts:
-                completed_at = edited_ts
+            if current_job_type == "doc_workspace":
+                completed_at = docx_ts or translated_ts or structure_ts or None
+            else:
+                if debug_ts:
+                    completed_at = debug_ts
+                elif edited_ts:
+                    completed_at = edited_ts
         if isinstance(completed_at, (int, float)) and isinstance(started_at, (int, float)):
             duration_seconds = max(0.0, float(completed_at) - float(started_at))
         elif isinstance(started_at, (int, float)):
             duration_seconds = max(0.0, time.time() - float(started_at))
         else:
             duration_seconds = max(0.0, updated_at - created_at)
+
+        if current_job_type == "doc_workspace":
+            doc_stage = str(job_meta.get("doc_stage") or "uploaded").lower()
+            status_map = {
+                "uploaded": ("uploaded", "已上傳"),
+                "structure_running": ("structure", "辨識中"),
+                "structure_completed": ("structure_completed", "辨識完成"),
+                "translate_running": ("translate", "翻譯中"),
+                "translate_completed": ("translate_completed", "翻譯完成"),
+                "docx_running": ("docx", "轉檔中"),
+                "completed": ("completed", "完成"),
+                "failed": ("failed", "失敗"),
+            }
+            status_code, status_label = status_map.get(doc_stage, ("uploaded", "已上傳"))
+            jobs.append(
+                {
+                    "job_id": job_id,
+                    "job_type": current_job_type,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                    "duration_seconds": duration_seconds,
+                    "ocr_duration_seconds": None,
+                    "translate_duration_seconds": None,
+                    "status_code": status_code,
+                    "status_label": status_label,
+                    "status": status_label,
+                    "job_name": job_name,
+                    "download_name": build_docx_name(job_id, job_name),
+                    "source_pdf_url": url_for(
+                        "jobs.job_file", job_id=job_id, filename="source.pdf"
+                    )
+                    if source_pdf_path.exists()
+                    else None,
+                    "structure_md_url": url_for(
+                        "jobs.job_file", job_id=job_id, filename="structure/doc.md"
+                    )
+                    if structure_md_path.exists()
+                    else None,
+                    "translated_md_url": url_for(
+                        "jobs.job_file", job_id=job_id, filename="translated/doc.translated.md"
+                    )
+                    if translated_md_path.exists()
+                    else None,
+                    "docx_url": url_for(
+                        "jobs.job_file", job_id=job_id, filename="output/output.docx"
+                    )
+                    if docx_path.exists()
+                    else None,
+                }
+            )
+            continue
+
         ocr_started_at = job_meta.get("ocr_started_at") or created_at
         ocr_completed_at = job_meta.get("ocr_completed_at") or debug_ts or None
         if isinstance(ocr_completed_at, (int, float)) and isinstance(ocr_started_at, (int, float)):
@@ -110,7 +197,6 @@ def build_jobs_list() -> list[dict[str, Any]]:
         debug_ready = debug_pdf_path.exists()
         batch_status = load_batch_status(job_dir_path)
         batch_config = load_batch_config(job_dir_path)
-        job_name = normalize_job_name(job_meta.get("job_name"))
         download_name = build_download_name(job_id, job_name)
         if not debug_ready:
             status_code = "ocr"
@@ -133,6 +219,7 @@ def build_jobs_list() -> list[dict[str, Any]]:
         jobs.append(
             {
                 "job_id": job_id,
+                "job_type": current_job_type,
                 "created_at": created_at,
                 "updated_at": updated_at,
                 "duration_seconds": duration_seconds,

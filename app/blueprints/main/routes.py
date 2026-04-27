@@ -5,7 +5,7 @@ from pathlib import Path
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
-from ...services import jobs, pipeline, state
+from ...services import doc_workspace, jobs, pipeline, state
 
 main_bp = Blueprint(
     "main",
@@ -68,4 +68,38 @@ def upload() -> str:
 
     jobs.notify_jobs_update()
 
+    return redirect(url_for(".index"))
+
+
+@main_bp.route("/upload-doc-workspace", methods=["POST"], endpoint="upload_doc_workspace")
+def upload_doc_workspace() -> str:
+    files = request.files.getlist("pdf")
+    if not files or all(f.filename == "" for f in files):
+        abort(400, "Missing PDF file.")
+
+    state.JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    state.UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+
+    target_lang = request.form.get("target_lang", "en").strip() or "en"
+
+    for file in files:
+        if not file or file.filename == "":
+            continue
+        ext = Path(file.filename).suffix.lower()
+        if ext not in state.ALLOWED_EXTENSIONS:
+            continue
+        tmp_path = state.UPLOAD_ROOT / secure_filename(file.filename)
+        file.save(tmp_path)
+        display_name = secure_filename(Path(file.filename).stem) or "document"
+        doc_workspace.enqueue_doc_job_from_upload(
+            tmp_path,
+            display_name,
+            target_lang,
+        )
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    jobs.notify_jobs_update()
     return redirect(url_for(".index"))

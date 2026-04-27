@@ -70,6 +70,11 @@ code {
   border: 1px solid var(--edge);
 }
 
+.upload-card-doc h2 {
+  margin: 0.3rem 0 1rem;
+  font-size: 1.4rem;
+}
+
 .upload-files {
   margin-top: 0.6rem;
   color: var(--muted);
@@ -139,6 +144,10 @@ code {
   gap: 0.5rem;
   background: rgba(255, 255, 255, 0.6);
   position: relative;
+}
+
+.doc-job-card {
+  padding-left: 1.2rem;
 }
 
 .job-select {

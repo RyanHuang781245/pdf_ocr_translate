@@ -27,10 +27,15 @@ def job_file(job_id: str, filename: str):
     download_flag = str(request.args.get("download", "")).lower()
     if download_flag in {"1", "true", "yes"}:
         job_name = jobs.get_job_name(job_dir)
-        download_name = (
-            jobs.build_download_name(job_id, job_name)
-            if filename == "edited.pdf"
-            else filename
-        )
+        if filename == "edited.pdf":
+            download_name = jobs.build_download_name(job_id, job_name)
+        elif filename == "structure/doc.md":
+            download_name = jobs.build_doc_markdown_name(job_id, job_name, translated=False)
+        elif filename == "translated/doc.translated.md":
+            download_name = jobs.build_doc_markdown_name(job_id, job_name, translated=True)
+        elif filename == "output/output.docx":
+            download_name = jobs.build_docx_name(job_id, job_name)
+        else:
+            download_name = filename
         return send_file(file_path, as_attachment=True, download_name=download_name)
     return send_from_directory(job_dir, filename)

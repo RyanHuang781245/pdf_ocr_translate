@@ -6,7 +6,7 @@ import threading
 
 from flask import Blueprint, Response, abort, jsonify, request, send_file, stream_with_context, url_for
 
-from ...services import batch, glossary, jobs, ocr, state
+from ...services import batch, doc_workspace, glossary, jobs, ocr, state
 
 logger = logging.getLogger(__name__)
 
@@ -170,8 +170,47 @@ def global_glossary():
 
 @api_bp.route("/jobs", methods=["GET"], endpoint="list_jobs")
 def list_jobs():
-    jobs_list = jobs.build_jobs_list()
+    jobs_list = jobs.build_jobs_list(job_type="ocr_overlay")
     return jsonify({"jobs": jobs_list})
+
+
+@api_bp.route("/doc-jobs", methods=["GET"], endpoint="list_doc_jobs")
+def list_doc_jobs():
+    jobs_list = jobs.build_jobs_list(job_type="doc_workspace")
+    return jsonify({"jobs": jobs_list})
+
+
+@api_bp.route("/doc-job/<job_id>", methods=["GET"], endpoint="doc_job_data")
+def doc_job_data(job_id: str):
+    if not jobs.safe_job_id(job_id):
+        abort(404)
+    job_dir = jobs.job_dir(job_id)
+    if not job_dir.exists() or jobs.get_job_type(job_dir) != "doc_workspace":
+        abort(404)
+    job_name = jobs.get_job_name(job_dir)
+    payload = {
+        "job_id": job_id,
+        "job_name": job_name,
+        "status": doc_workspace.load_doc_status(job_dir),
+        "source_pdf_url": url_for("jobs.job_file", job_id=job_id, filename="source.pdf")
+        if (job_dir / "source.pdf").exists()
+        else None,
+        "structure_md_url": url_for("jobs.job_file", job_id=job_id, filename="structure/doc.md")
+        if (job_dir / "structure" / "doc.md").exists()
+        else None,
+        "translated_md_url": url_for(
+            "jobs.job_file", job_id=job_id, filename="translated/doc.translated.md"
+        )
+        if (job_dir / "translated" / "doc.translated.md").exists()
+        else None,
+        "docx_url": url_for("jobs.job_file", job_id=job_id, filename="output/output.docx")
+        if (job_dir / "output" / "output.docx").exists()
+        else None,
+        "docx_download_name": jobs.build_docx_name(job_id, job_name),
+        "structure_download_name": jobs.build_doc_markdown_name(job_id, job_name, translated=False),
+        "translated_download_name": jobs.build_doc_markdown_name(job_id, job_name, translated=True),
+    }
+    return jsonify(payload)
 
 
 @api_bp.route("/jobs/download-translated", methods=["GET", "POST"], endpoint="download_translated_batch")
@@ -212,7 +251,7 @@ def jobs_stream():
                 yield ": ping\n\n"
                 continue
             last_version = current_version
-            payload = {"jobs": jobs.build_jobs_list()}
+            payload = {"jobs": jobs.build_jobs_list(job_type="ocr_overlay")}
             data = json.dumps(payload, ensure_ascii=False)
             yield f"event: jobs\ndata: {data}\n\n"
 
