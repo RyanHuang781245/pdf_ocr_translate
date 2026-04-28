@@ -3,7 +3,16 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+
 import pdfplumber
+
+try:
+    from img2table.document import PDF as Img2TablePDF
+except Exception:
+    Img2TablePDF = None
+
+
+IMG2TABLE_RENDER_DPI = 200.0
 
 def is_chinese(text):
     return re.search(r"[\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]", text)
@@ -107,6 +116,67 @@ def normalize_box_to_bbox(box):
     return [float(v) for v in box]
 
 
+def extract_cells_with_img2table(pdf_path: str, page_index: int, scale_factor: float) -> list[list[float]]:
+    if Img2TablePDF is None:
+        return []
+    pdf = Img2TablePDF(
+        src=pdf_path,
+        pages=[page_index],
+        detect_rotation=False,
+        pdf_text_extraction=False,
+    )
+    extracted_tables = pdf.extract_tables(
+        implicit_rows=False,
+        implicit_columns=False,
+        borderless_tables=False,
+    )
+    if not extracted_tables:
+        return []
+    scale = scale_factor / (IMG2TABLE_RENDER_DPI / 72.0)
+    cells: list[list[float]] = []
+    for tables in extracted_tables.values():
+        for table in tables or []:
+            for row in table.content.values():
+                for cell in row:
+                    x0, top, x1, bottom = cell.bbox.x1, cell.bbox.y1, cell.bbox.x2, cell.bbox.y2
+                    cells.append([
+                        float(x0) * scale,
+                        float(top) * scale,
+                        float(x1) * scale,
+                        float(bottom) * scale,
+                    ])
+    return cells
+
+
+def extract_cells_with_pdfplumber(pdf_path: str, page_index: int, scale_factor: float) -> tuple[list[list[float]], bool]:
+    with pdfplumber.open(pdf_path) as pdf:
+        if page_index >= len(pdf.pages):
+            return [], False
+        page = pdf.pages[page_index]
+        is_landscape = page.width > page.height
+        cells: list[list[float]] = []
+        for table_plumb in page.find_tables():
+            for cell in table_plumb.cells:
+                if cell is None:
+                    continue
+                x0, top, x1, bottom = cell
+                cells.append([
+                    x0 * scale_factor,
+                    top * scale_factor,
+                    x1 * scale_factor,
+                    bottom * scale_factor,
+                ])
+        return cells, is_landscape
+
+
+def is_pdf_page_landscape(pdf_path: str, page_index: int) -> bool:
+    with pdfplumber.open(pdf_path) as pdf:
+        if page_index >= len(pdf.pages):
+            return False
+        page = pdf.pages[page_index]
+        return page.width > page.height
+
+
 def add_merged_cells_field(data, pdf_path: str = None, page_index: int = 0, scale_factor: float = 1.0, verbose: bool = False):
     table_res_list = data.get("table_res_list")
     if not isinstance(table_res_list, list) or not table_res_list:
@@ -140,23 +210,28 @@ def add_merged_cells_field(data, pdf_path: str = None, page_index: int = 0, scal
     is_landscape = False 
 
     if pdf_path and Path(pdf_path).exists():
-        with pdfplumber.open(pdf_path) as pdf:
-            if page_index < len(pdf.pages):
-                page = pdf.pages[page_index]
-                if page.width > page.height:
-                    is_landscape = True
+        try:
+            is_landscape = is_pdf_page_landscape(pdf_path, page_index)
+        except Exception:
+            is_landscape = False
+        try:
+            all_pdf_cells = extract_cells_with_img2table(pdf_path, page_index, scale_factor)
+            if verbose and all_pdf_cells:
+                print(f"[table_merge] page={page_index} cell_source=img2table cells={len(all_pdf_cells)}")
+        except Exception as exc:
+            if verbose:
+                print(f"[table_merge] page={page_index} img2table failed: {exc}")
+            all_pdf_cells = []
 
-                for table_plumb in page.find_tables():
-                    for cell in table_plumb.cells:
-                        if cell is None:
-                            continue
-                        x0, top, x1, bottom = cell
-                        all_pdf_cells.append([
-                            x0 * scale_factor, 
-                            top * scale_factor, 
-                            x1 * scale_factor, 
-                            bottom * scale_factor
-                        ])
+        if not all_pdf_cells:
+            try:
+                all_pdf_cells, is_landscape = extract_cells_with_pdfplumber(pdf_path, page_index, scale_factor)
+                if verbose and all_pdf_cells:
+                    print(f"[table_merge] page={page_index} cell_source=pdfplumber cells={len(all_pdf_cells)}")
+            except Exception as exc:
+                if verbose:
+                    print(f"[table_merge] page={page_index} pdfplumber failed: {exc}")
+                all_pdf_cells = []
 
     if not all_pdf_cells:
         # Fallback to OCR-detected cells from table_res_list
@@ -169,6 +244,8 @@ def add_merged_cells_field(data, pdf_path: str = None, page_index: int = 0, scal
         max_x = max([normalize_box_to_bbox(b)[2] for t in table_res_list for b in t.get("table_ocr_pred", {}).get("rec_boxes", [])] + [0])
         max_y = max([normalize_box_to_bbox(b)[3] for t in table_res_list for b in t.get("table_ocr_pred", {}).get("rec_boxes", [])] + [0])
         is_landscape = (max_x > max_y)
+        if verbose and all_pdf_cells:
+            print(f"[table_merge] page={page_index} cell_source=ocr_fallback cells={len(all_pdf_cells)}")
 
     dynamic_y_thresh = 4 if is_landscape else 0.7
 

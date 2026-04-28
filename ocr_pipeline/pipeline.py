@@ -255,7 +255,7 @@ def merge_pp_json_inprocess(pp_json_paths: list[Path], pdf_path: Path | None = N
                     pdf_path=str(pdf_path) if pdf_path else None, 
                     page_index=page_idx,
                     scale_factor=scale_factor,
-                    verbose=False
+                    verbose=True,
                 )
             js_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
             merged_paths.append(js_path)
