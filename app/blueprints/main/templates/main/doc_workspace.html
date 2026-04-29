@@ -13,7 +13,7 @@
           <h1>PDF 翻譯重建</h1>
           <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
         </div>
-        <p class="eyebrow">PDF -> PP-StructureV3 -> Markdown -> Word</p>
+        <p class="eyebrow">PDF -> PP-StructureV3 -> Markdown -> HTML -> Translate -> Word</p>
       </header>
       <section class="upload-card upload-card-doc">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload_doc_workspace') }}">
@@ -29,6 +29,9 @@
                 <option value="zh">中文 (zh)</option>
               </select>
             </label>
+          </div>
+          <div class="form-note">
+             <span>注意事項:<br>Word 文件排版格式不會與原始 PDF 文件完全相同，較複雜的表格可能會重建失敗，翻譯完成後請檢查輸出結果</span>
           </div>
           <button class="primary" type="submit">開始文件轉檔</button>
         </form>
@@ -105,10 +108,18 @@
             actions.appendChild(mdLink);
           }
 
-          if (job.translated_md_url) {
+          if (job.structure_html_url) {
+            const htmlLink = document.createElement("a");
+            htmlLink.href = `${job.structure_html_url}?download=1`;
+            htmlLink.textContent = "下載原始 HTML";
+            htmlLink.className = "ghost";
+            actions.appendChild(htmlLink);
+          }
+
+          if (job.translated_html_url) {
             const translatedLink = document.createElement("a");
-            translatedLink.href = `${job.translated_md_url}?download=1`;
-            translatedLink.textContent = "下載翻譯 MD";
+            translatedLink.href = `${job.translated_html_url}?download=1`;
+            translatedLink.textContent = "下載翻譯 HTML";
             translatedLink.className = "ghost";
             actions.appendChild(translatedLink);
           }

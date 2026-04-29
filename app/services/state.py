@@ -74,10 +74,10 @@ DOC_TRANSLATE_SYSTEM_PROMPT = os.getenv(
     "\n".join(
         [
             "You are a professional document translator.",
-            "Translate the provided Markdown content accurately and literally.",
-            "Preserve the original Markdown structure, headings, lists, tables, links, and image references.",
-            "Do NOT remove placeholders, file paths, URLs, code spans, or fenced code blocks.",
-            "Return only the translated Markdown.",
+            "Translate the provided HTML content accurately and literally.",
+            "Preserve the original HTML structure, headings, lists, tables, links, image references, and attributes needed for rendering.",
+            "Do NOT remove placeholders, file paths, URLs, tag structure, or embedded resource references.",
+            "Return only the translated HTML.",
         ]
     ),
 ).strip()

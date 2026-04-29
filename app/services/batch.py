@@ -23,6 +23,10 @@ def use_merged_cells_for_mode(document_mode: str) -> bool:
     return resolve_document_mode(document_mode) in {"form", "general"}
 
 
+def use_structured_blocks_for_mode(document_mode: str) -> bool:
+    return resolve_document_mode(document_mode) in {"form", "general"}
+
+
 def _contains_cjk(text: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]", text or ""))
 
@@ -199,7 +203,9 @@ def build_batch_items(
     prefilled: dict[str, str] = {}
     seen: dict[str, str] = {}
     pp_pages = pp_pages or {}
+    mode = resolve_document_mode(document_mode)
     translate_merged_cells = use_merged_cells_for_mode(document_mode)
+    use_structured_blocks = use_structured_blocks_for_mode(document_mode)
 
     with state.TRANSLATION_MEMORY_LOCK:
         translation_memory_data = translation_memory.load_translation_memory()
@@ -246,19 +252,29 @@ def build_batch_items(
     for page in ocr_pages:
         page_idx = int(page.get("page_index_0based", 0))
         pp_page = pp_pages.get(page_idx)
+        texts = page.get("rec_texts", []) or []
+        rec_polys = page.get("rec_polys", []) or []
+
+        if mode == "scanned":
+            for idx, text in enumerate(texts):
+                custom_id = f"p{page_idx:04d}-l{idx:04d}"
+                _add_item(custom_id, text)
+            continue
+
         merged_cells = ocr.iter_merged_cells(pp_page) if translate_merged_cells else []
         table_bboxes = ocr.collect_table_bboxes(pp_page) if merged_cells else []
         skip_table_lines = bool(table_bboxes)
-        has_paragraph_flags = ocr.has_paragraph_translate_flags(pp_page)
-        paragraph_blocks = ocr.iter_paragraph_blocks(pp_page)
-        for block in paragraph_blocks:
-            if not block.get("should_translate"):
-                continue
-            if table_bboxes and bbox_list_overlaps_tables(block.get("bbox"), table_bboxes):
-                continue
-            block_idx = int(block.get("block_index", 0))
-            custom_id = f"p{page_idx:04d}-b{block_idx:04d}"
-            _add_item(custom_id, block.get("text", ""))
+        has_paragraph_flags = use_structured_blocks and ocr.has_paragraph_translate_flags(pp_page)
+        paragraph_blocks = ocr.iter_paragraph_blocks(pp_page) if use_structured_blocks else []
+        if use_structured_blocks:
+            for block in paragraph_blocks:
+                if not block.get("should_translate"):
+                    continue
+                if table_bboxes and bbox_list_overlaps_tables(block.get("bbox"), table_bboxes):
+                    continue
+                block_idx = int(block.get("block_index", 0))
+                custom_id = f"p{page_idx:04d}-b{block_idx:04d}"
+                _add_item(custom_id, block.get("text", ""))
 
         for cell_idx, cell in enumerate(merged_cells):
             if not should_translate_merged_cell(cell, document_mode):
@@ -266,8 +282,6 @@ def build_batch_items(
             custom_id = f"p{page_idx:04d}-c{cell_idx:04d}"
             _add_item(custom_id, cell.get("merged_text", ""))
 
-        texts = page.get("rec_texts", []) or []
-        rec_polys = page.get("rec_polys", []) or []
         for idx, text in enumerate(texts):
             if has_paragraph_flags:
                 continue
@@ -332,18 +346,44 @@ def build_edits_payload_from_translations(
 ) -> dict[str, Any]:
     pages_payload: list[dict[str, Any]] = []
     pp_pages = pp_pages or {}
+    mode = resolve_document_mode(document_mode)
     translate_merged_cells = use_merged_cells_for_mode(document_mode)
+    use_structured_blocks = use_structured_blocks_for_mode(document_mode)
     
     for page in ocr_pages:
         page_idx = int(page.get("page_index_0based", 0))
         pp_page = pp_pages.get(page_idx)
+        rec_polys = page.get("rec_polys", []) or []
+        boxes: list[dict[str, Any]] = []
+
+        if mode == "scanned":
+            for idx, poly in enumerate(rec_polys):
+                custom_id = f"p{page_idx:04d}-l{idx:04d}"
+                text = translations.get(custom_id)
+                if not text:
+                    continue
+                text = normalize_text(text)
+                if not text or is_numeric_only(text):
+                    continue
+                bbox = poly_to_bbox(poly)
+                if not bbox:
+                    continue
+                boxes.append(
+                    {
+                        "id": idx,
+                        "bbox": bbox,
+                        "text": text,
+                        "deleted": False,
+                        "auto_generated": True,
+                    }
+                )
+            pages_payload.append({"page_index_0based": page_idx, "boxes": boxes})
+            continue
+
         merged_cells = ocr.iter_merged_cells(pp_page) if translate_merged_cells else []
         table_bboxes = ocr.collect_table_bboxes(pp_page) if merged_cells else []
         skip_table_lines = bool(table_bboxes)
-        has_paragraph_flags = ocr.has_paragraph_translate_flags(pp_page)
-        rec_polys = page.get("rec_polys", []) or []
-        
-        boxes: list[dict[str, Any]] = []
+        has_paragraph_flags = use_structured_blocks and ocr.has_paragraph_translate_flags(pp_page)
         
 
         for idx, poly in enumerate(rec_polys):
@@ -383,7 +423,7 @@ def build_edits_payload_from_translations(
                 }
             )
 
-        paragraph_blocks = ocr.iter_paragraph_blocks(pp_page)
+        paragraph_blocks = ocr.iter_paragraph_blocks(pp_page) if use_structured_blocks else []
         if paragraph_blocks:
             base_id = 200000
             for block in paragraph_blocks:

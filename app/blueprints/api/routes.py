@@ -226,17 +226,21 @@ def doc_job_data(job_id: str):
         "structure_md_url": url_for("jobs.job_file", job_id=job_id, filename="structure/doc.md")
         if (job_dir / "structure" / "doc.md").exists()
         else None,
-        "translated_md_url": url_for(
-            "jobs.job_file", job_id=job_id, filename="translated/doc.translated.md"
+        "structure_html_url": url_for("jobs.job_file", job_id=job_id, filename="structure/doc.html")
+        if (job_dir / "structure" / "doc.html").exists()
+        else None,
+        "translated_html_url": url_for(
+            "jobs.job_file", job_id=job_id, filename="translated/doc.translated.html"
         )
-        if (job_dir / "translated" / "doc.translated.md").exists()
+        if (job_dir / "translated" / "doc.translated.html").exists()
         else None,
         "docx_url": url_for("jobs.job_file", job_id=job_id, filename="output/output.docx")
         if (job_dir / "output" / "output.docx").exists()
         else None,
         "docx_download_name": jobs.build_docx_name(job_id, job_name),
         "structure_download_name": jobs.build_doc_markdown_name(job_id, job_name, translated=False),
-        "translated_download_name": jobs.build_doc_markdown_name(job_id, job_name, translated=True),
+        "structure_html_download_name": jobs.build_doc_html_name(job_id, job_name, translated=False),
+        "translated_html_download_name": jobs.build_doc_html_name(job_id, job_name, translated=True),
     }
     return jsonify(payload)
 

@@ -46,6 +46,8 @@ def normalize_document_mode(value: Any) -> str:
     mode = str(value or "").strip().lower()
     if mode == "general":
         return "general"
+    if mode == "scanned":
+        return "scanned"
     return "form"
 
 
@@ -65,6 +67,11 @@ def build_download_name(
 def build_doc_markdown_name(job_id: str, job_name: str | None, translated: bool = False) -> str:
     suffix = "translated" if translated else "structure"
     return build_download_name(job_id, job_name, ext="md", suffix=suffix)
+
+
+def build_doc_html_name(job_id: str, job_name: str | None, translated: bool = False) -> str:
+    suffix = "translated" if translated else "structure"
+    return build_download_name(job_id, job_name, ext="html", suffix=suffix)
 
 
 def build_docx_name(job_id: str, job_name: str | None) -> str:
@@ -106,7 +113,8 @@ def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
         edited_pdf_path = job_dir_path / "edited.pdf"
         source_pdf_path = job_dir_path / "source.pdf"
         structure_md_path = job_dir_path / "structure" / "doc.md"
-        translated_md_path = job_dir_path / "translated" / "doc.translated.md"
+        structure_html_path = job_dir_path / "structure" / "doc.html"
+        translated_html_path = job_dir_path / "translated" / "doc.translated.html"
         docx_path = job_dir_path / "output" / "output.docx"
         source_docx_path = None
         word_source_name = ""
@@ -119,9 +127,18 @@ def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
         debug_ts = job_timestamp(debug_pdf_path)
         edited_ts = job_timestamp(edited_pdf_path)
         structure_ts = job_timestamp(structure_md_path)
-        translated_ts = job_timestamp(translated_md_path)
+        structure_html_ts = job_timestamp(structure_html_path)
+        translated_html_ts = job_timestamp(translated_html_path)
         docx_ts = job_timestamp(docx_path)
-        updated_at = max(debug_ts, edited_ts, structure_ts, translated_ts, docx_ts, created_at)
+        updated_at = max(
+            debug_ts,
+            edited_ts,
+            structure_ts,
+            structure_html_ts,
+            translated_html_ts,
+            docx_ts,
+            created_at,
+        )
         job_meta = load_job_meta(job_dir_path) or {}
         word_source_name = str(job_meta.get("source_filename") or "").strip()
         if word_source_name:
@@ -133,7 +150,7 @@ def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
         job_name = normalize_job_name(job_meta.get("job_name"))
         if not isinstance(completed_at, (int, float)):
             if current_job_type == "doc_workspace":
-                completed_at = docx_ts or translated_ts or structure_ts or None
+                completed_at = docx_ts or translated_html_ts or structure_html_ts or structure_ts or None
             elif current_job_type == "word_translate":
                 completed_at = docx_ts or None
             else:
@@ -156,6 +173,7 @@ def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
                 "structure_completed": ("structure_completed", "辨識完成"),
                 "translate_running": ("translate", "翻譯中"),
                 "translate_completed": ("translate_completed", "翻譯完成"),
+                "html_running": ("html", "HTML 轉檔中"),
                 "docx_running": ("docx", "轉檔中"),
                 "completed": ("completed", "完成"),
                 "failed": ("failed", "失敗"),
@@ -185,10 +203,15 @@ def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
                     )
                     if structure_md_path.exists()
                     else None,
-                    "translated_md_url": url_for(
-                        "jobs.job_file", job_id=job_id, filename="translated/doc.translated.md"
+                    "structure_html_url": url_for(
+                        "jobs.job_file", job_id=job_id, filename="structure/doc.html"
                     )
-                    if translated_md_path.exists()
+                    if structure_html_path.exists()
+                    else None,
+                    "translated_html_url": url_for(
+                        "jobs.job_file", job_id=job_id, filename="translated/doc.translated.html"
+                    )
+                    if translated_html_path.exists()
                     else None,
                     "docx_url": url_for(
                         "jobs.job_file", job_id=job_id, filename="output/output.docx"

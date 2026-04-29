@@ -393,3 +393,66 @@ def test_general_document_mode_keeps_chinese_missing_text_added_individually_cel
     assert len(boxes) == 1
     assert boxes[0]["id"] == 100000
     assert boxes[0]["text"] == "translated cell"
+
+
+def test_scanned_document_mode_uses_ocr_lines_for_batch_items():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["掃描文字", "Scan text"],
+            "rec_polys": [
+                [[0, 0], [10, 0], [10, 10], [0, 10]],
+                [[20, 0], [30, 0], [30, 10], [20, 10]],
+            ],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "不應使用的段落",
+                    "block_bbox": [0, 0, 100, 20],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ]
+        }
+    }
+
+    items, alias_map, key_map, prefilled = build_batch_items(
+        ocr_pages,
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
+        pp_pages=pp_pages,
+        document_mode="scanned",
+    )
+
+    assert [item["custom_id"] for item in items] == ["p0000-l0000"]
+    assert alias_map == {}
+    assert key_map == {"p0000-l0000": "掃描文字"}
+    assert prefilled == {}
+
+
+def test_scanned_document_mode_writes_back_to_ocr_boxes():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["掃描文字"],
+            "rec_polys": [
+                [[0, 0], [10, 0], [10, 10], [0, 10]],
+            ],
+        }
+    ]
+
+    payload = build_edits_payload_from_translations(
+        ocr_pages,
+        {"p0000-l0000": "translated scan"},
+        pp_pages={},
+        document_mode="scanned",
+    )
+
+    boxes = payload["pages"][0]["boxes"]
+    assert len(boxes) == 1
+    assert boxes[0]["id"] == 0
+    assert boxes[0]["text"] == "translated scan"

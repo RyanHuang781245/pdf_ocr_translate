@@ -55,22 +55,35 @@ def run_doc_workspace_job(
         jobs.update_job_meta(job_dir, doc_stage="structure_completed")
         write_doc_status(job_dir, "structure_completed", markdown_path=str(markdown_path.name))
 
+        jobs.update_job_meta(job_dir, doc_stage="html_running")
+        write_doc_status(job_dir, "html_running")
+        structure_html_path = structure_dir / "doc.html"
+        docx_export.export_markdown_to_html(markdown_path, structure_html_path)
+
         jobs.update_job_meta(job_dir, doc_stage="translate_running", translate_started_at=time.time())
         write_doc_status(job_dir, "translate_running", target_lang=target_lang)
-        translated_path = translated_dir / "doc.translated.md"
-        markdown_translate.translate_markdown_file(
-            markdown_path,
-            translated_path,
+        translated_html_path = translated_dir / "doc.translated.html"
+        source_images_dir = structure_dir / "images"
+        translated_images_dir = translated_dir / "images"
+        if source_images_dir.exists():
+            shutil.copytree(source_images_dir, translated_images_dir, dirs_exist_ok=True)
+        markdown_translate.translate_html_file(
+            structure_html_path,
+            translated_html_path,
             target_lang=target_lang,
         )
 
         jobs.update_job_meta(job_dir, doc_stage="translate_completed", translate_completed_at=time.time())
-        write_doc_status(job_dir, "translate_completed", translated_path=str(translated_path.name))
+        write_doc_status(
+            job_dir,
+            "translate_completed",
+            html_path=str(translated_html_path.name),
+        )
 
         jobs.update_job_meta(job_dir, doc_stage="docx_running")
-        write_doc_status(job_dir, "docx_running")
+        write_doc_status(job_dir, "docx_running", html_path=str(translated_html_path.name))
         docx_path = output_dir / "output.docx"
-        docx_export.export_markdown_to_docx(translated_path, docx_path)
+        docx_export.export_html_to_docx(translated_html_path, docx_path)
 
         now_ts = time.time()
         jobs.update_job_meta(
@@ -78,7 +91,12 @@ def run_doc_workspace_job(
             doc_stage="completed",
             processing_completed_at=now_ts,
         )
-        write_doc_status(job_dir, "completed", docx_path=str(docx_path.name))
+        write_doc_status(
+            job_dir,
+            "completed",
+            html_path=str(translated_html_path.name),
+            docx_path=str(docx_path.name),
+        )
     except Exception as exc:
         logger.exception("Document workspace failed job_id=%s error=%s", job_id, exc)
         jobs.update_job_meta(
