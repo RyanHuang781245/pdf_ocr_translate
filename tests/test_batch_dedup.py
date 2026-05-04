@@ -145,6 +145,107 @@ def test_table_merged_cells_win_over_overlapping_paragraph_blocks():
     assert key_map == {"p0000-c0000": "表格內容"}
 
 
+def test_form_mode_prefers_merged_cells_over_paragraph_blocks_and_ocr_lines():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["表格 OCR 行"],
+            "rec_polys": [
+                [[10, 10], [90, 10], [90, 30], [10, 30]],
+            ],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "段落區塊",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [
+                {
+                    "cell_box_list": [[0, 0, 120, 40]],
+                    "merged_cells": [
+                        {
+                            "cell_box": [10, 10, 90, 30],
+                            "merged_text": "表格合併儲存格",
+                            "should_translate": True,
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+
+    items, _, key_map, _ = build_batch_items(
+        ocr_pages,
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
+        pp_pages=pp_pages,
+        document_mode="form",
+    )
+
+    assert [item["custom_id"] for item in items] == ["p0000-c0000"]
+    assert key_map == {"p0000-c0000": "表格合併儲存格"}
+
+
+def test_form_mode_payload_prefers_merged_cells_over_paragraph_blocks_and_ocr_lines():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["表格 OCR 行"],
+            "rec_polys": [
+                [[10, 10], [90, 10], [90, 30], [10, 30]],
+            ],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "段落區塊",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [
+                {
+                    "cell_box_list": [[0, 0, 120, 40]],
+                    "merged_cells": [
+                        {
+                            "cell_box": [10, 10, 90, 30],
+                            "merged_text": "表格合併儲存格",
+                            "should_translate": True,
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    translations = {
+        "p0000-l0000": "translated line",
+        "p0000-b0000": "translated block",
+        "p0000-c0000": "translated cell",
+    }
+
+    payload = build_edits_payload_from_translations(
+        ocr_pages,
+        translations,
+        pp_pages=pp_pages,
+        document_mode="form",
+    )
+
+    boxes = payload["pages"][0]["boxes"]
+    assert len(boxes) == 1
+    assert boxes[0]["id"] == 100000
+    assert boxes[0]["text"] == "translated cell"
+
+
 def test_general_document_mode_skips_bilingual_merged_cells_for_batch_items():
     ocr_pages = [
         {

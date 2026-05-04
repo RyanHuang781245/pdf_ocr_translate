@@ -27,6 +27,10 @@ def use_structured_blocks_for_mode(document_mode: str) -> bool:
     return resolve_document_mode(document_mode) in {"form", "general"}
 
 
+def prefer_merged_cells_only(document_mode: str, merged_cells: list[dict[str, Any]]) -> bool:
+    return resolve_document_mode(document_mode) == "form" and bool(merged_cells)
+
+
 def _contains_cjk(text: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff\u3040-\u309F\u30A0-\u30FF]", text or ""))
 
@@ -262,11 +266,12 @@ def build_batch_items(
             continue
 
         merged_cells = ocr.iter_merged_cells(pp_page) if translate_merged_cells else []
+        merged_only = prefer_merged_cells_only(document_mode, merged_cells)
         table_bboxes = ocr.collect_table_bboxes(pp_page) if merged_cells else []
         skip_table_lines = bool(table_bboxes)
         has_paragraph_flags = use_structured_blocks and ocr.has_paragraph_translate_flags(pp_page)
         paragraph_blocks = ocr.iter_paragraph_blocks(pp_page) if use_structured_blocks else []
-        if use_structured_blocks:
+        if use_structured_blocks and not merged_only:
             for block in paragraph_blocks:
                 if not block.get("should_translate"):
                     continue
@@ -283,6 +288,8 @@ def build_batch_items(
             _add_item(custom_id, cell.get("merged_text", ""))
 
         for idx, text in enumerate(texts):
+            if merged_only:
+                continue
             if has_paragraph_flags:
                 continue
             if skip_table_lines and table_bboxes and idx < len(rec_polys):
@@ -381,6 +388,7 @@ def build_edits_payload_from_translations(
             continue
 
         merged_cells = ocr.iter_merged_cells(pp_page) if translate_merged_cells else []
+        merged_only = prefer_merged_cells_only(document_mode, merged_cells)
         table_bboxes = ocr.collect_table_bboxes(pp_page) if merged_cells else []
         skip_table_lines = bool(table_bboxes)
         has_paragraph_flags = use_structured_blocks and ocr.has_paragraph_translate_flags(pp_page)
@@ -399,6 +407,8 @@ def build_edits_payload_from_translations(
                 continue
             bbox = poly_to_bbox(poly)
             if not bbox:
+                continue
+            if merged_only:
                 continue
             if has_paragraph_flags:
                 continue
@@ -424,7 +434,7 @@ def build_edits_payload_from_translations(
             )
 
         paragraph_blocks = ocr.iter_paragraph_blocks(pp_page) if use_structured_blocks else []
-        if paragraph_blocks:
+        if paragraph_blocks and not merged_only:
             base_id = 200000
             for block in paragraph_blocks:
                 if not block.get("should_translate"):

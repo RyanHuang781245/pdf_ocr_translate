@@ -11,6 +11,7 @@ dependencies = [
   "flask>=3.1.2",
   "img2table>=1.4.2",
   "ipykernel>=7.1.0",
+  "jieba>=0.42.1",
   "openai>=2.18.0",
   "opencv-python>=4.13.0.92",
   "paddlex>=3.4.1",
