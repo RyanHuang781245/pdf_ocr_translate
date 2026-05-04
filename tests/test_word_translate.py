@@ -8,7 +8,7 @@ from pathlib import Path
 import docx
 
 from app.services import state, translation_memory
-from app.services.word_translate import EnhancedWordTranslator
+from app.services.word_translate import EnhancedWordTranslator, ensure_docx_source
 
 
 class _FailingCompletions:
@@ -108,3 +108,26 @@ def test_word_translation_writes_tm_after_model_translation(tmp_path, monkeypatc
     assert entry["target_text"] == "table content"
     assert entry["document_mode"] == "word"
     assert entry["source"] == "word"
+
+
+def test_ensure_docx_source_converts_doc_with_word_converter(tmp_path, monkeypatch):
+    source_path = tmp_path / "legacy.doc"
+    source_path.write_bytes(b"legacy")
+    expected_path = tmp_path / "legacy.converted.docx"
+
+    def fake_convert(source, out):
+        assert source == source_path
+        assert out == expected_path
+        out.write_bytes(b"converted")
+        return out
+
+    monkeypatch.setattr("app.services.word_translate.os.name", "nt")
+    monkeypatch.setattr("app.services.word_translate._convert_doc_with_word", fake_convert)
+    monkeypatch.setattr(
+        "app.services.word_translate._convert_doc_with_soffice",
+        lambda source, out: (_ for _ in ()).throw(AssertionError("should not fallback to soffice")),
+    )
+
+    result = ensure_docx_source(source_path, expected_path)
+    assert result == expected_path
+    assert expected_path.read_bytes() == b"converted"

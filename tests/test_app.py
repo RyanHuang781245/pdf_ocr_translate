@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 
-from app.services import state
+from app.services import jobs, state
 
 
 def test_index_ok(client):
@@ -95,3 +96,80 @@ def test_save_job_writes_form_tm_from_editor_edits(client, tmp_path, monkeypatch
     assert entry["target_lang"] == "en"
     assert entry["document_mode"] == "form"
     assert entry["source"] == "editor"
+
+
+def test_upload_word_workspace_accepts_doc(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")
+    captured: list[dict[str, str]] = []
+
+    def fake_enqueue(source_path, display_name, target_lang, retain_terms_raw=None):
+        captured.append(
+            {
+                "source_name": Path(source_path).name,
+                "display_name": display_name,
+                "target_lang": target_lang,
+            }
+        )
+        return "b" * 32
+
+    monkeypatch.setattr(
+        "app.blueprints.main.routes.word_translate.enqueue_word_job_from_upload",
+        fake_enqueue,
+    )
+
+    resp = client.post(
+        "/upload-word-workspace",
+        data={
+            "target_lang": "en",
+            "docx": (io.BytesIO(b"legacy doc"), "legacy.doc"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 302
+    assert len(captured) == 1
+    assert Path(captured[0]["source_name"]).suffix == ".doc"
+    assert captured[0]["display_name"] == "legacy"
+    assert captured[0]["target_lang"] == "en"
+
+
+def test_upload_word_workspace_preserves_chinese_display_name(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")
+    captured: list[dict[str, str]] = []
+
+    def fake_enqueue(source_path, display_name, target_lang, retain_terms_raw=None):
+        captured.append(
+            {
+                "source_name": Path(source_path).name,
+                "display_name": display_name,
+                "target_lang": target_lang,
+            }
+        )
+        return "b" * 32
+
+    monkeypatch.setattr(
+        "app.blueprints.main.routes.word_translate.enqueue_word_job_from_upload",
+        fake_enqueue,
+    )
+
+    resp = client.post(
+        "/upload-word-workspace",
+        data={
+            "target_lang": "en",
+            "docx": (io.BytesIO(b"docx"), "中文檔名.docx"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 302
+    assert len(captured) == 1
+    assert Path(captured[0]["source_name"]).suffix == ".docx"
+    assert captured[0]["display_name"] == "中文檔名"
+    assert captured[0]["target_lang"] == "en"
+
+
+def test_build_download_name_preserves_chinese_job_name():
+    assert jobs.build_download_name("a" * 32, "中文檔名", ext="pdf", suffix="translate") == "中文檔名_translate.pdf"
+    assert jobs.build_docx_name("a" * 32, "中文檔名") == "中文檔名_translated.docx"

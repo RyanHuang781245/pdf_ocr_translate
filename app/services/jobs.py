@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 from flask import url_for
-from werkzeug.utils import secure_filename
 
 from . import state
 
@@ -21,7 +20,7 @@ def safe_job_id(job_id: str) -> bool:
 
 def normalize_job_name(value: Any) -> str | None:
     if isinstance(value, str):
-        cleaned = value.strip()
+        cleaned = sanitize_unicode_filename(value, fallback="")
         cleaned = re.sub(r"_[a-f0-9]{8}$", "", cleaned)
         return cleaned or None
     return None
@@ -53,8 +52,18 @@ def normalize_document_mode(value: Any) -> str:
 
 def build_download_base(job_id: str, job_name: str | None) -> str:
     base = job_name or "translated"
-    safe = secure_filename(base) or "translated"
+    safe = sanitize_unicode_filename(base, fallback="translated")
     return safe
+
+
+def sanitize_unicode_filename(value: Any, fallback: str = "file") -> str:
+    if value is None:
+        return fallback
+    cleaned = str(value).strip()
+    cleaned = cleaned.replace("\x00", "")
+    cleaned = re.sub(r"[<>:\"/\\\\|?*\x00-\x1f]", "_", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")
+    return cleaned or fallback
 
 
 def build_download_name(

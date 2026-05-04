@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
 import re
 import shutil
+import subprocess
 import threading
 import time
 import uuid
@@ -23,6 +25,7 @@ from . import jobs, openai_config, state, translation_memory
 logger = logging.getLogger(__name__)
 WORD_JOB_EVENTS: dict[str, threading.Event] = {}
 WORD_JOB_EVENTS_LOCK = threading.Lock()
+WORD_ALLOWED_EXTENSIONS = {".doc", ".docx"}
 
 
 class WordTranslationCancelled(Exception):
@@ -113,6 +116,114 @@ def _parse_retain_terms(raw: str | None) -> list[str]:
     parts = [part.strip() for part in raw.replace("\r", "").split("\n")]
     flat = [item.strip() for part in parts for item in (part.split(",") if "," in part else [part])]
     return [item for item in flat if item]
+
+
+def _run_command(args: list[str]) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "command failed")
+    return completed
+
+
+def _convert_doc_with_word(source_path: Path, out_path: Path) -> Path:
+    if os.name != "nt":
+        raise RuntimeError("Microsoft Word COM conversion is only available on Windows.")
+    script = """
+$ErrorActionPreference = 'Stop'
+$source = $args[0]
+$dest = $args[1]
+$word = $null
+$doc = $null
+try {
+    $word = New-Object -ComObject Word.Application
+    $word.Visible = $false
+    $word.DisplayAlerts = 0
+    $doc = $word.Documents.Open($source, $false, $true)
+    $format = 16
+    $doc.SaveAs([ref]$dest, [ref]$format)
+}
+finally {
+    if ($doc -ne $null) {
+        $doc.Close([ref]$false)
+    }
+    if ($word -ne $null) {
+        $word.Quit()
+    }
+}
+""".strip()
+    _run_command(
+        [
+            "powershell",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+            str(source_path.resolve()),
+            str(out_path.resolve()),
+        ]
+    )
+    if not out_path.exists():
+        raise RuntimeError("Microsoft Word conversion completed without producing a .docx file.")
+    return out_path
+
+
+def _convert_doc_with_soffice(source_path: Path, out_path: Path) -> Path:
+    office_bin = shutil.which("soffice") or shutil.which("libreoffice")
+    if not office_bin:
+        raise RuntimeError("LibreOffice soffice was not found.")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    _run_command(
+        [
+            office_bin,
+            "--headless",
+            "--convert-to",
+            "docx",
+            "--outdir",
+            str(out_path.parent.resolve()),
+            str(source_path.resolve()),
+        ]
+    )
+    generated_path = source_path.with_suffix(".docx")
+    generated_in_outdir = out_path.parent / generated_path.name
+    if generated_in_outdir.exists() and generated_in_outdir != out_path:
+        generated_in_outdir.replace(out_path)
+    if not out_path.exists():
+        raise RuntimeError("LibreOffice conversion completed without producing a .docx file.")
+    return out_path
+
+
+def ensure_docx_source(source_path: Path, converted_path: Path | None = None) -> Path:
+    ext = source_path.suffix.lower()
+    if ext == ".docx":
+        return source_path
+    if ext != ".doc":
+        raise ValueError(f"Unsupported Word file: {source_path.name}")
+
+    out_path = converted_path or source_path.with_suffix(".docx")
+    if out_path.exists():
+        out_path.unlink()
+
+    errors: list[str] = []
+    if os.name == "nt":
+        try:
+            return _convert_doc_with_word(source_path, out_path)
+        except Exception as exc:
+            errors.append(f"Word COM: {exc}")
+
+    try:
+        return _convert_doc_with_soffice(source_path, out_path)
+    except Exception as exc:
+        errors.append(f"LibreOffice: {exc}")
+
+    message = "; ".join(errors) if errors else "no available converter"
+    raise RuntimeError(f"Unable to convert .doc to .docx: {message}")
 
 
 class EnhancedWordTranslator:
@@ -505,7 +616,15 @@ class EnhancedWordTranslator:
         doc.save(output_path)
 
 
-def _run_word_job(job_id: str, job_dir: Path, source_path: Path, output_path: Path, target_lang: str, retain_terms: list[str]) -> None:
+def _run_word_job(
+    job_id: str,
+    job_dir: Path,
+    source_path: Path,
+    processing_source_path: Path,
+    output_path: Path,
+    target_lang: str,
+    retain_terms: list[str],
+) -> None:
     now_ts = time.time()
     jobs.update_job_meta(
         job_dir,
@@ -517,11 +636,16 @@ def _run_word_job(job_id: str, job_dir: Path, source_path: Path, output_path: Pa
     with WORD_JOB_EVENTS_LOCK:
         cancel_event = WORD_JOB_EVENTS.setdefault(job_id, threading.Event())
     try:
+        if source_path.suffix.lower() == ".doc":
+            ensure_docx_source(source_path, processing_source_path)
+        else:
+            processing_source_path = source_path
+
         async def _runner() -> tuple[float, float]:
             last_progress = 0.0
             last_quality = 0.0
             async for progress, avg_quality in translator.process_translation(
-                source_path=source_path,
+                source_path=processing_source_path,
                 output_path=output_path,
                 target_language=target_lang,
                 user_terms=retain_terms,
@@ -603,6 +727,11 @@ def enqueue_word_job_from_upload(
     now_ts = time.time()
     safe_name = secure_filename(source_docx.name) if source_docx.name else "source.docx"
     source_path = job_dir / safe_name
+    processing_source_path = (
+        source_path
+        if source_path.suffix.lower() == ".docx"
+        else job_dir / f"{source_path.stem}.converted.docx"
+    )
     output_path = job_dir / "output" / "output.docx"
     if not source_docx.exists():
         raise FileNotFoundError(f"Missing Word file: {source_docx}")
@@ -625,7 +754,15 @@ def enqueue_word_job_from_upload(
     jobs.notify_jobs_update()
     threading.Thread(
         target=_run_word_job,
-        args=(job_id, job_dir, source_path, output_path, target_lang, retain_terms),
+        args=(
+            job_id,
+            job_dir,
+            source_path,
+            processing_source_path,
+            output_path,
+            target_lang,
+            retain_terms,
+        ),
         daemon=True,
     ).start()
     return job_id

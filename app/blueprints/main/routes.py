@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 from flask import Blueprint, abort, redirect, render_template, request, url_for
-from werkzeug.utils import secure_filename
 
 from ...services import doc_workspace, jobs, pipeline, state, word_translate
 
@@ -14,6 +14,16 @@ main_bp = Blueprint(
     static_folder="static",
     static_url_path="/static/main",
 )
+
+
+def _safe_upload_name(filename: str, fallback_ext: str) -> str:
+    ext = Path(filename or "").suffix.lower() or fallback_ext
+    return f"{uuid4().hex}{ext}"
+
+
+def _display_name_from_filename(filename: str, fallback: str) -> str:
+    raw_stem = Path(filename or "").stem
+    return jobs.sanitize_unicode_filename(raw_stem, fallback=fallback)
 
 
 @main_bp.route("/", methods=["GET"], endpoint="index")
@@ -63,9 +73,9 @@ def upload() -> str:
         ext = Path(file.filename).suffix.lower()
         if ext not in state.ALLOWED_EXTENSIONS:
             continue
-        tmp_path = state.UPLOAD_ROOT / secure_filename(file.filename)
+        tmp_path = state.UPLOAD_ROOT / _safe_upload_name(file.filename or "", ".pdf")
         file.save(tmp_path)
-        display_name = secure_filename(Path(file.filename).stem) or "job"
+        display_name = _display_name_from_filename(file.filename or "", "job")
         pipeline.enqueue_job_from_upload(
             tmp_path,
             display_name,
@@ -105,9 +115,9 @@ def upload_doc_workspace() -> str:
         ext = Path(file.filename).suffix.lower()
         if ext not in state.ALLOWED_EXTENSIONS:
             continue
-        tmp_path = state.UPLOAD_ROOT / secure_filename(file.filename)
+        tmp_path = state.UPLOAD_ROOT / _safe_upload_name(file.filename or "", ".pdf")
         file.save(tmp_path)
-        display_name = secure_filename(Path(file.filename).stem) or "document"
+        display_name = _display_name_from_filename(file.filename or "", "document")
         doc_workspace.enqueue_doc_job_from_upload(
             tmp_path,
             display_name,
@@ -138,11 +148,11 @@ def upload_word_workspace() -> str:
         if not file or file.filename == "":
             continue
         ext = Path(file.filename).suffix.lower()
-        if ext != ".docx":
+        if ext not in word_translate.WORD_ALLOWED_EXTENSIONS:
             continue
-        tmp_path = state.UPLOAD_ROOT / secure_filename(file.filename)
+        tmp_path = state.UPLOAD_ROOT / _safe_upload_name(file.filename or "", ".docx")
         file.save(tmp_path)
-        display_name = secure_filename(Path(file.filename).stem) or "document"
+        display_name = _display_name_from_filename(file.filename or "", "document")
         word_translate.enqueue_word_job_from_upload(
             tmp_path,
             display_name,

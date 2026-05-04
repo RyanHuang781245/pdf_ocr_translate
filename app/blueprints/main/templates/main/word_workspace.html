@@ -18,8 +18,8 @@
       <section class="upload-card upload-card-doc">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload_word_workspace') }}">
           <label class="file-input">
-            <span>選擇 Word（可多選）</span>
-            <input type="file" name="docx" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
+            <span>選擇 Word（.doc / .docx，可多選）</span>
+            <input type="file" name="docx" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple />
           </label>
           <div class="form-grid">
             <label>
