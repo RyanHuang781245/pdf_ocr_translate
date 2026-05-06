@@ -14,6 +14,7 @@ const state = {
     sourcePageIdx: null,
     pasteCount: 0,
   },
+  viewMode: "single",
   zoom: 1,
   pdfUrl: null,
   pdfDoc: null,
@@ -52,6 +53,7 @@ const zoomNumberEl = document.getElementById("zoomNumber");
 const pagesEl = document.getElementById("pages");
 const thumbsEl = document.getElementById("thumbs");
 const toggleThumbsBtn = document.getElementById("toggleThumbsBtn");
+const toggleViewModeBtn = document.getElementById("toggleViewModeBtn");
 const viewerEl = document.querySelector(".viewer");
 const editedLink = document.getElementById("editedPdfLink");
 const previewEl = document.getElementById("pdfPreview");
@@ -108,6 +110,31 @@ function setThumbsCollapsed(collapsed) {
   viewerEl.classList.toggle("is-thumbs-collapsed", collapsed);
   toggleThumbsBtn.textContent = collapsed ? "顯示頁面縮圖" : "隱藏頁面縮圖";
   toggleThumbsBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+}
+
+function syncViewModeButton() {
+  if (!toggleViewModeBtn) return;
+  const isContinuous = state.viewMode === "continuous";
+  toggleViewModeBtn.textContent = isContinuous ? "切換到單頁模式" : "切換到連續模式";
+  toggleViewModeBtn.setAttribute("aria-pressed", isContinuous ? "true" : "false");
+}
+
+function setViewMode(mode) {
+  const nextMode = mode === "continuous" ? "continuous" : "single";
+  if (state.viewMode === nextMode) {
+    syncViewModeButton();
+    return;
+  }
+  state.viewMode = nextMode;
+  clearSelection();
+  renderPages();
+  syncViewModeButton();
+  if (nextMode === "continuous") {
+    const page = state.pages[state.activePageIdx];
+    page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (pagesEl) {
+    pagesEl.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }
 }
 
 function setSelectionMode(mode) {
@@ -516,6 +543,7 @@ function redoHistory() {
 function setActivePage(pageIdx, options = {}) {
   if (!Number.isFinite(pageIdx)) return;
   const { scroll = true } = options;
+  const previousIdx = state.activePageIdx ?? 0;
   const maxIdx = Math.max(0, state.pages.length - 1);
   state.activePageIdx = Math.max(0, Math.min(pageIdx, maxIdx));
   syncPageSelector();
@@ -525,11 +553,17 @@ function setActivePage(pageIdx, options = {}) {
       page.thumbElement.classList.toggle("is-active", idx === state.activePageIdx);
     }
   });
-  if (scroll) {
-    const page = state.pages[state.activePageIdx];
-    if (page?.element) {
-      page.element.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (previousIdx !== state.activePageIdx) {
+    clearSelection();
+    if (state.viewMode === "single") {
+      renderCurrentPage();
     }
+  }
+  if (scroll && state.viewMode === "continuous") {
+    const page = state.pages[state.activePageIdx];
+    page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (scroll && pagesEl) {
+    pagesEl.scrollTo({ top: 0, left: 0, behavior: "smooth" });
   }
 }
 
@@ -573,8 +607,14 @@ function applyZoom(zoom) {
     renderAllPdfPages();
     renderThumbnails();
   } else {
-    state.pages.forEach((page) => applyZoomToPage(page));
-    renderThumbnails();
+    if (state.viewMode === "continuous") {
+      state.pages.forEach((page) => applyZoomToPage(page));
+    } else {
+      const currentPage = state.pages[state.activePageIdx];
+      if (currentPage) {
+        applyZoomToPage(currentPage);
+      }
+    }
   }
 }
 
@@ -1164,6 +1204,7 @@ function polyToBbox(poly) {
 
 function buildState(data) {
   state.pdfUrl = data.pdf_url || null;
+  state.pdfDoc = null;
   state.downloadName = data.download_name || "edited.pdf";
   state.pages = data.pages.map((page) => {
     const boxes = page.rec_polys.map((poly, index) => {
@@ -1340,6 +1381,8 @@ function renderThumbnails() {
       renderThumbnail(pageIdx, canvas);
     } else if (page.imageUrl) {
       const img = document.createElement("img");
+      img.loading = "lazy";
+      img.decoding = "async";
       img.src = page.imageUrl;
       img.alt = `Page ${page.pageIndex + 1}`;
       thumb.appendChild(img);
@@ -1752,7 +1795,106 @@ async function endRangeSelection(event) {
 }
 
 function renderPages() {
+  if (state.viewMode === "continuous") {
+    renderContinuousPages();
+  } else {
+    renderCurrentPage();
+  }
+  renderThumbnails();
+}
+
+function disposeRenderedPage(page) {
+  if (!page) return;
+  page.element = null;
+  page.overlay = null;
+  page.image = null;
+  page.selectionRect = null;
+  page.boxes.forEach((box) => {
+    box.element = null;
+  });
+}
+
+function renderCurrentPage() {
   pagesEl.innerHTML = "";
+  state.pages.forEach((page) => disposeRenderedPage(page));
+  const pageIdx = state.activePageIdx ?? 0;
+  const page = state.pages[pageIdx];
+  if (!page) return;
+
+  const pageEl = document.createElement("article");
+  pageEl.className = "page";
+
+  const header = document.createElement("div");
+  header.className = "page-header";
+  header.innerHTML = `<span class="page-number">Page ${page.pageIndex + 1}</span>`;
+  header.addEventListener("click", () => {
+    setActivePage(pageIdx);
+    setStatus(`Active page: ${page.pageIndex + 1}`);
+  });
+
+  const wrap = document.createElement("div");
+  wrap.className = "page-wrap";
+  wrap.draggable = false;
+  wrap.addEventListener("dragstart", (event) => event.preventDefault());
+
+  let img;
+  if (state.pdfDoc && window.pdfjsLib) {
+    img = document.createElement("canvas");
+    img.className = "pdf-canvas";
+  } else {
+    img = document.createElement("img");
+    img.loading = "eager";
+    img.decoding = "async";
+    img.src = page.imageUrl;
+    img.alt = `Page ${page.pageIndex + 1}`;
+    img.draggable = false;
+    img.addEventListener("dragstart", (event) => event.preventDefault());
+    img.addEventListener("load", () => {
+      applyZoomToPage(page);
+    });
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.draggable = false;
+  overlay.addEventListener("dragstart", (event) => event.preventDefault());
+
+  const selectionRect = document.createElement("div");
+  selectionRect.className = "selection-rect";
+  selectionRect.style.display = "none";
+  overlay.appendChild(selectionRect);
+
+  wrap.appendChild(img);
+  wrap.appendChild(overlay);
+  pageEl.appendChild(header);
+  pageEl.appendChild(wrap);
+  pagesEl.appendChild(pageEl);
+
+  page.element = pageEl;
+  page.overlay = overlay;
+  page.image = img;
+  page.selectionRect = selectionRect;
+
+  wrap.addEventListener("pointerdown", (event) => startRangeSelection(event, pageIdx));
+  wrap.addEventListener("pointermove", updateRangeSelection);
+  wrap.addEventListener("pointerup", endRangeSelection);
+  wrap.addEventListener("pointercancel", endRangeSelection);
+  wrap.addEventListener("wheel", (event) => {
+    if (state.selecting) {
+      updateRangeSelection(event);
+    }
+  }, { passive: true });
+
+  page.boxes.forEach((box, index) => {
+    createBoxElement(pageIdx, index);
+  });
+
+  applySelectionClasses();
+}
+
+function renderContinuousPages() {
+  pagesEl.innerHTML = "";
+  state.pages.forEach((page) => disposeRenderedPage(page));
   state.pages.forEach((page, pageIdx) => {
     const pageEl = document.createElement("article");
     pageEl.className = "page";
@@ -1761,7 +1903,7 @@ function renderPages() {
     header.className = "page-header";
     header.innerHTML = `<span class="page-number">Page ${page.pageIndex + 1}</span>`;
     header.addEventListener("click", () => {
-      setActivePage(pageIdx);
+      setActivePage(pageIdx, { scroll: false });
       setStatus(`Active page: ${page.pageIndex + 1}`);
     });
 
@@ -1770,20 +1912,16 @@ function renderPages() {
     wrap.draggable = false;
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
 
-    let img;
-    if (state.pdfUrl && window.pdfjsLib) {
-      img = document.createElement("canvas");
-      img.className = "pdf-canvas";
-    } else {
-      img = document.createElement("img");
-      img.src = page.imageUrl;
-      img.alt = `Page ${page.pageIndex + 1}`;
-      img.draggable = false;
-      img.addEventListener("dragstart", (event) => event.preventDefault());
-      img.addEventListener("load", () => {
-        applyZoomToPage(page);
-      });
-    }
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = page.imageUrl;
+    img.alt = `Page ${page.pageIndex + 1}`;
+    img.draggable = false;
+    img.addEventListener("dragstart", (event) => event.preventDefault());
+    img.addEventListener("load", () => {
+      applyZoomToPage(page);
+    });
 
     const overlay = document.createElement("div");
     overlay.className = "overlay";
@@ -1794,8 +1932,6 @@ function renderPages() {
     selectionRect.className = "selection-rect";
     selectionRect.style.display = "none";
     overlay.appendChild(selectionRect);
-
-    window.addEventListener("resize", () => updatePageLayout(page));
 
     wrap.appendChild(img);
     wrap.appendChild(overlay);
@@ -1812,17 +1948,22 @@ function renderPages() {
     wrap.addEventListener("pointermove", updateRangeSelection);
     wrap.addEventListener("pointerup", endRangeSelection);
     wrap.addEventListener("pointercancel", endRangeSelection);
-    wrap.addEventListener("wheel", (event) => {
-      if (state.selecting) {
-        updateRangeSelection(event);
-      }
-    }, { passive: true });
+    wrap.addEventListener(
+      "wheel",
+      (event) => {
+        if (state.selecting) {
+          updateRangeSelection(event);
+        }
+      },
+      { passive: true },
+    );
 
     page.boxes.forEach((box, index) => {
       createBoxElement(pageIdx, index);
     });
   });
-  renderThumbnails();
+
+  applySelectionClasses();
 }
 
 function createBoxElement(pageIdx, boxIdx) {
@@ -2074,9 +2215,6 @@ async function loadJobData(jobId) {
   const data = await res.json();
   buildState(data);
   renderPages();
-  if (state.pdfUrl && window.pdfjsLib) {
-    await loadPdfDocument(state.pdfUrl);
-  }
   updateEditedLink(data.edited_pdf_url);
   if (previewEditedBtn) {
     previewEditedBtn.disabled = !data.edited_pdf_url;
@@ -2248,8 +2386,6 @@ function bindControls() {
       const idx = Number.parseInt(pageSelectEl.value, 10);
       if (!Number.isFinite(idx)) return;
       setActivePage(idx);
-      const page = state.pages[idx];
-      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -2257,8 +2393,6 @@ function bindControls() {
     prevPageBtn.addEventListener("click", () => {
       const idx = Math.max(0, (state.activePageIdx ?? 0) - 1);
       setActivePage(idx);
-      const page = state.pages[idx];
-      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -2266,8 +2400,6 @@ function bindControls() {
     nextPageBtn.addEventListener("click", () => {
       const idx = Math.min(state.pages.length - 1, (state.activePageIdx ?? 0) + 1);
       setActivePage(idx);
-      const page = state.pages[idx];
-      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -2312,10 +2444,31 @@ function bindControls() {
     );
   }
 
+  window.addEventListener("resize", () => {
+    if (state.viewMode === "continuous") {
+      state.pages.forEach((page) => {
+        if (page.element) {
+          updatePageLayout(page);
+        }
+      });
+    } else {
+      const page = state.pages[state.activePageIdx ?? 0];
+      if (page) {
+        updatePageLayout(page);
+      }
+    }
+  });
+
   if (toggleThumbsBtn) {
     toggleThumbsBtn.addEventListener("click", () => {
       const collapsed = viewerEl?.classList.contains("is-thumbs-collapsed");
       setThumbsCollapsed(!collapsed);
+    });
+  }
+
+  if (toggleViewModeBtn) {
+    toggleViewModeBtn.addEventListener("click", () => {
+      setViewMode(state.viewMode === "continuous" ? "single" : "continuous");
     });
   }
 
@@ -2661,5 +2814,6 @@ async function init() {
 
 if (document.body.classList.contains("editor")) {
   setThumbsCollapsed(false);
+  syncViewModeButton();
   init();
 }
