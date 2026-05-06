@@ -211,6 +211,58 @@ def get_azure_client():
     return openai_config.create_sync_client()
 
 
+def _build_inline_glossary_instructions(glossary_entries: list[tuple[str, str]] | None) -> str:
+    if not glossary_entries:
+        return ""
+    lines = ["Use the following terminology when applicable:"]
+    for src, dst in glossary_entries[:50]:
+        src_text = str(src or "").strip()
+        dst_text = str(dst or "").strip()
+        if not src_text or not dst_text:
+            continue
+        lines.append(f"- {src_text} -> {dst_text}")
+    return "\n".join(lines)
+
+
+def translate_texts_for_region(
+    texts: list[str],
+    *,
+    target_lang: str,
+    model_name: str,
+    system_prompt: str | None = None,
+    glossary_entries: list[tuple[str, str]] | None = None,
+) -> list[str]:
+    if not texts:
+        return []
+
+    client = get_azure_client()
+    prompt_parts = [resolve_batch_prompt(target_lang, system_prompt)]
+    glossary_prompt = _build_inline_glossary_instructions(glossary_entries)
+    if glossary_prompt:
+        prompt_parts.append(glossary_prompt)
+    prompt_parts.append("Return only the translated text for the current input.")
+    final_prompt = "\n\n".join(part for part in prompt_parts if part).strip()
+
+    outputs: list[str] = []
+    for raw_text in texts:
+        source_text = str(raw_text or "").strip()
+        normalized_source = normalize_for_translation(source_text)
+        if not normalized_source:
+            outputs.append("")
+            continue
+        if is_numeric_only(normalized_source) or not _contains_cjk(normalized_source):
+            outputs.append(source_text)
+            continue
+        response = client.responses.create(
+            model=model_name,
+            instructions=final_prompt,
+            input=source_text,
+        )
+        translated = str(response.output_text or "").strip()
+        outputs.append(normalize_text(translated) or source_text)
+    return outputs
+
+
 
 def resolve_batch_prompt(target_lang: str, override: str | None = None) -> str:
     if override:

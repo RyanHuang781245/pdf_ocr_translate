@@ -4,6 +4,7 @@ const state = {
   dragging: null,
   resizing: null,
   previewMode: "debug",
+  selectionMode: "boxes",
   selectedBoxes: new Set(),
   selecting: null,
   lastCtrlKey: false,
@@ -17,6 +18,7 @@ const state = {
   pdfUrl: null,
   pdfDoc: null,
   downloadName: null,
+  pendingRegionPreview: null,
 };
 
 const historyState = {
@@ -39,6 +41,7 @@ const batchApplyBoxesBtn = document.getElementById("batchApplyBoxes");
 const batchDeleteBoxesBtn = document.getElementById("batchDeleteBoxes");
 const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
+const regionTranslateBtn = document.getElementById("regionTranslateBtn");
 const batchTranslateBtn = document.getElementById("batchTranslateBtn");
 const batchRestoreBtn = document.getElementById("batchRestoreBtn");
 const prevPageBtn = document.getElementById("prevPage");
@@ -62,6 +65,12 @@ const savePromptBtn = document.getElementById("savePromptBtn");
 const glossaryPromptBtn = document.getElementById("glossaryPromptBtn");
 const glossaryPromptModal = document.getElementById("glossaryPromptModal");
 const closeGlossaryPrompt = document.getElementById("closeGlossaryPrompt");
+const regionPreviewModal = document.getElementById("regionPreviewModal");
+const regionPreviewImageEl = document.getElementById("regionPreviewImage");
+const regionPreviewTextEl = document.getElementById("regionPreviewText");
+const confirmRegionPreviewBtn = document.getElementById("confirmRegionPreview");
+const cancelRegionPreviewBtn = document.getElementById("cancelRegionPreview");
+const closeRegionPreviewBtn = document.getElementById("closeRegionPreview");
 const batchPageModal = document.getElementById("batchPageModal");
 const batchPageSourceHintEl = document.getElementById("batchPageSourceHint");
 const batchPageAllEl = document.getElementById("batchPageAll");
@@ -90,6 +99,54 @@ function setStatus(message) {
   if (statusEl) {
     statusEl.textContent = message;
   }
+}
+
+function setSelectionMode(mode) {
+  state.selectionMode = mode === "retranslate" ? "retranslate" : "boxes";
+  if (!regionTranslateBtn) return;
+  if (state.selectionMode === "retranslate") {
+    regionTranslateBtn.textContent = "取消補翻選區";
+    regionTranslateBtn.classList.add("primary");
+    regionTranslateBtn.classList.remove("ghost");
+  } else {
+    regionTranslateBtn.textContent = "補翻選區";
+    regionTranslateBtn.classList.add("ghost");
+    regionTranslateBtn.classList.remove("primary");
+  }
+}
+
+function openRegionPreviewModal(preview) {
+  state.pendingRegionPreview = preview;
+  if (regionPreviewImageEl) {
+    regionPreviewImageEl.src = preview.image_data_url || "";
+  }
+  if (regionPreviewTextEl) {
+    regionPreviewTextEl.value = preview.source_text || "";
+  }
+  if (regionPreviewModal) {
+    regionPreviewModal.hidden = false;
+  }
+}
+
+function closeRegionPreviewModal() {
+  state.pendingRegionPreview = null;
+  if (regionPreviewModal) {
+    regionPreviewModal.hidden = true;
+  }
+  if (regionPreviewImageEl) {
+    regionPreviewImageEl.removeAttribute("src");
+  }
+  if (regionPreviewTextEl) {
+    regionPreviewTextEl.value = "";
+  }
+}
+
+function normalizePreviewText(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 let glossaryEntries = [];
@@ -1636,7 +1693,7 @@ function updateRangeSelection(event) {
   state.selecting.rect = { left, top, width, height };
 }
 
-function endRangeSelection(event) {
+async function endRangeSelection(event) {
   if (!state.selecting) return;
   const { pageIdx, rect, rectEl, captureEl, pointerId, additive } = state.selecting;
   rectEl.style.display = "none";
@@ -1661,6 +1718,11 @@ function endRangeSelection(event) {
     w: rect.width / scale,
     h: rect.height / scale,
   };
+
+  if (state.selectionMode === "retranslate") {
+    await retranslateSelectedRegion(pageIdx, selectionBox);
+    return;
+  }
 
   page.boxes.forEach((box, boxIdx) => {
     if (box.deleted) return;
@@ -1920,6 +1982,79 @@ function buildSavePayload() {
   };
 }
 
+async function retranslateSelectedRegion(pageIdx, bbox) {
+  const jobId = document.body.dataset.jobId;
+  const page = state.pages[pageIdx];
+  if (!jobId || !page) {
+    setSelectionMode("boxes");
+    return;
+  }
+  setSelectionMode("boxes");
+  const saved = await saveEdits(false, { silent: true });
+  if (!saved) {
+    setStatus("補翻前儲存失敗，已取消補翻。");
+    return;
+  }
+  setStatus(`擷取第 ${page.pageIndex + 1} 頁選取區域中...`);
+  try {
+    const res = await fetch(`/api/job/${jobId}/region-ocr-preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page_index_0based: page.pageIndex,
+        bbox,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(body.error ? `擷取失敗：${body.error}` : "擷取失敗。");
+      return;
+    }
+    openRegionPreviewModal({
+      pageIndex: page.pageIndex,
+      bbox,
+      region_bbox: body.region_bbox || bbox,
+      merged_bbox: body.merged_bbox || bbox,
+      source_text: body.source_text || "",
+      image_data_url: body.image_data_url || "",
+    });
+    setStatus("請確認擷取區域與 OCR 結果。");
+  } catch (error) {
+    setStatus("擷取失敗。");
+  }
+}
+
+async function confirmRegionPreview() {
+  const jobId = document.body.dataset.jobId;
+  const preview = state.pendingRegionPreview;
+  if (!jobId || !preview) return;
+  const sourceText = normalizePreviewText(regionPreviewTextEl?.value || preview.source_text || "");
+  closeRegionPreviewModal();
+  setStatus(`補翻第 ${preview.pageIndex + 1} 頁選取區域中...`);
+  try {
+    const res = await fetch(`/api/job/${jobId}/retranslate-region`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page_index_0based: preview.pageIndex,
+        bbox: preview.region_bbox || preview.bbox,
+        merged_bbox: preview.merged_bbox || preview.bbox,
+        source_text: sourceText,
+        replace_existing: true,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(body.error ? `補翻失敗：${body.error}` : "補翻失敗。");
+      return;
+    }
+    await loadJobData(jobId);
+    setStatus(body.boxes_added ? `補翻完成，新增 ${body.boxes_added} 個文字框。` : "補翻完成，但沒有新增文字框。");
+  } catch (error) {
+    setStatus("補翻失敗。");
+  }
+}
+
 async function loadJobData(jobId) {
   setStatus("Loading OCR data...");
   const res = await fetch(`/api/job/${jobId}`);
@@ -1956,7 +2091,8 @@ async function pollBatchStatus(jobId) {
   return status;
 }
 
-async function saveEdits(shouldDownload = false) {
+async function saveEdits(shouldDownload = false, options = {}) {
+  const { silent = false } = options;
   const jobId = document.body.dataset.jobId;
   if (!jobId) return;
   const originalText = saveBtn ? saveBtn.textContent : null;
@@ -1967,7 +2103,9 @@ async function saveEdits(shouldDownload = false) {
   if (downloadBtn) {
     downloadBtn.disabled = true;
   }
-  setStatus("Saving edits...");
+  if (!silent) {
+    setStatus("Saving edits...");
+  }
   try {
     const payload = buildSavePayload();
     const res = await fetch(`/api/job/${jobId}/save`, {
@@ -1983,12 +2121,17 @@ async function saveEdits(shouldDownload = false) {
           triggerDownload(body.edited_pdf_url, state.downloadName);
         }
       }
-      setStatus("Edits saved.");
+      if (!silent) {
+        setStatus("Edits saved.");
+      }
+      return true;
     } else {
       setStatus(body.error ? `Save failed: ${body.error}` : "Save failed. Check server logs.");
+      return false;
     }
   } catch (error) {
     setStatus("Save failed. Check console/logs.");
+    return false;
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;
@@ -2214,6 +2357,26 @@ function bindControls() {
     });
   }
 
+  if (confirmRegionPreviewBtn) {
+    confirmRegionPreviewBtn.addEventListener("click", () => {
+      confirmRegionPreview();
+    });
+  }
+
+  if (cancelRegionPreviewBtn) {
+    cancelRegionPreviewBtn.addEventListener("click", () => {
+      closeRegionPreviewModal();
+      setStatus("已取消補翻。");
+    });
+  }
+
+  if (closeRegionPreviewBtn) {
+    closeRegionPreviewBtn.addEventListener("click", () => {
+      closeRegionPreviewModal();
+      setStatus("已取消補翻。");
+    });
+  }
+
   if (batchPageAllEl) {
     batchPageAllEl.addEventListener("change", () => {
       if (batchPageAllEl.checked) {
@@ -2287,6 +2450,15 @@ function bindControls() {
     });
   }
 
+  if (regionPreviewModal) {
+    regionPreviewModal.addEventListener("click", (event) => {
+      if (event.target === regionPreviewModal) {
+        closeRegionPreviewModal();
+        setStatus("已取消補翻。");
+      }
+    });
+  }
+
   if (batchPageModal) {
     batchPageModal.addEventListener("click", (event) => {
       if (event.target === batchPageModal) {
@@ -2297,6 +2469,11 @@ function bindControls() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      if (regionPreviewModal && !regionPreviewModal.hidden) {
+        closeRegionPreviewModal();
+        setStatus("已取消補翻。");
+        return;
+      }
       if (batchPageModal && !batchPageModal.hidden) {
         finishBatchPageModal(null);
         return;
@@ -2334,6 +2511,19 @@ function bindControls() {
     downloadBtn.addEventListener("click", (event) => {
       event.preventDefault();
       saveEdits(true);
+    });
+  }
+
+  if (regionTranslateBtn) {
+    regionTranslateBtn.addEventListener("click", () => {
+      if (state.selectionMode === "retranslate") {
+        setSelectionMode("boxes");
+        setStatus("已取消補翻選區。");
+        return;
+      }
+      clearSelection();
+      setSelectionMode("retranslate");
+      setStatus("請在頁面上框選要補翻的區域。");
     });
   }
 
@@ -2438,6 +2628,7 @@ async function init() {
   if (!jobId) return;
   currentJobId = jobId;
   bindControls();
+  setSelectionMode("boxes");
   const data = await loadJobData(jobId);
   if (!data) return;
   glossaryEntries = Array.isArray(data.glossary) ? data.glossary : [];

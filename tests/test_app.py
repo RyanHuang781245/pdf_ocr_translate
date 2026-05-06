@@ -173,3 +173,135 @@ def test_upload_word_workspace_preserves_chinese_display_name(client, tmp_path, 
 def test_build_download_name_preserves_chinese_job_name():
     assert jobs.build_download_name("a" * 32, "中文檔名", ext="pdf", suffix="translate") == "中文檔名_translate.pdf"
     assert jobs.build_docx_name("a" * 32, "中文檔名") == "中文檔名_translated.docx"
+
+
+def test_retranslate_region_replaces_overlapping_auto_boxes_only(client, tmp_path, monkeypatch):
+    job_id = "b" * 32
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+
+    (job_dir / "batch_config.json").write_text(
+        json.dumps(
+            {
+                "document_mode": "form",
+                "target_lang": "en",
+                "model": "fake-model",
+                "system_prompt": "translate",
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (job_dir / "edits.json").write_text(
+        json.dumps(
+            {
+                "pages": [
+                    {
+                        "page_index_0based": 0,
+                        "boxes": [
+                            {
+                                "id": 100000,
+                                "deleted": False,
+                                "bbox": {"x": 10, "y": 10, "w": 80, "h": 20},
+                                "text": "old auto",
+                                "auto_generated": True,
+                            },
+                            {
+                                "id": 5,
+                                "deleted": False,
+                                "bbox": {"x": 12, "y": 12, "w": 50, "h": 16},
+                                "text": "manual keep",
+                                "auto_generated": False,
+                            },
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "app.blueprints.api.routes.ocr.run_region_ocr",
+        lambda current_job_dir, page_idx, bbox: {
+            "page_index_0based": page_idx,
+            "region_bbox": bbox,
+            "rec_polys": [
+                [[15, 15], [65, 15], [65, 25], [15, 25]],
+                [[15, 28], [90, 28], [90, 40], [15, 40]],
+            ],
+            "rec_texts": ["補翻來源第一行", "補翻來源第二行"],
+            "rec_scores": [0.99, 0.99],
+        },
+    )
+    monkeypatch.setattr(
+        "app.blueprints.api.routes.batch.translate_texts_for_region",
+        lambda texts, **kwargs: ["merged paragraph translation"],
+    )
+    monkeypatch.setattr(
+        "app.blueprints.api.routes.ocr.apply_edits_to_pdf",
+        lambda current_job_id, current_job_dir, edits: Path(current_job_dir) / "edited.pdf",
+    )
+
+    resp = client.post(
+        f"/api/job/{job_id}/retranslate-region",
+        json={
+            "page_index_0based": 0,
+            "bbox": {"x": 0, "y": 0, "w": 120, "h": 60},
+            "replace_existing": True,
+        },
+    )
+    assert resp.status_code == 200
+
+    saved = json.loads((job_dir / "edits.json").read_text(encoding="utf-8"))
+    boxes = saved["pages"][0]["boxes"]
+    assert boxes[0]["deleted"] is True
+    assert boxes[1]["deleted"] is False
+    assert boxes[1]["text"] == "manual keep"
+    assert boxes[2]["text"] == "merged paragraph translation"
+    assert boxes[2]["auto_generated"] is True
+    assert boxes[2]["no_clip"] is True
+    assert boxes[2]["source"] == "manual_region_retranslate"
+    assert boxes[2]["tm_source_text"] == "補翻來源第一行\n補翻來源第二行"
+
+
+def test_region_ocr_preview_returns_image_and_ocr_text(client, tmp_path, monkeypatch):
+    job_id = "c" * 32
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(
+        "app.blueprints.api.routes.ocr.run_region_ocr",
+        lambda current_job_dir, page_idx, bbox: {
+            "page_index_0based": page_idx,
+            "region_bbox": bbox,
+            "merged_bbox": {"x": 10, "y": 10, "w": 50, "h": 25},
+            "image_data_url": "data:image/png;base64,AAA",
+            "rec_polys": [
+                [[10, 10], [20, 10], [20, 20], [10, 20]],
+                [[30, 10], [40, 10], [40, 20], [30, 20]],
+            ],
+            "rec_texts": ["第一行", "第二行"],
+            "rec_scores": [0.9, 0.9],
+        },
+    )
+
+    resp = client.post(
+        f"/api/job/{job_id}/region-ocr-preview",
+        json={
+            "page_index_0based": 0,
+            "bbox": {"x": 0, "y": 0, "w": 120, "h": 60},
+        },
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["ocr_lines"] == ["第一行", "第二行"]
+    assert payload["source_text"] == "第一行\n第二行"
+    assert payload["image_data_url"] == "data:image/png;base64,AAA"
+    assert payload["ocr_items"][0]["text"] == "第一行"

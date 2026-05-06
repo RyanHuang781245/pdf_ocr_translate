@@ -4,14 +4,19 @@ import json
 import logging
 import os
 import re
+import base64
 from pathlib import Path
 from typing import Any
 
 import fitz
-
-from pipeline_ocr_overlay import px_point_to_pdf_pt
+import requests
 
 from . import state
+
+try:
+    import cv2
+except Exception:  # pragma: no cover - optional runtime dependency in tests
+    cv2 = None
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +314,38 @@ def collect_table_bboxes(pp_page: dict[str, Any] | None) -> list[list[float]]:
     return table_bboxes
 
 
+def bbox_intersects(
+    bbox_a: dict[str, Any] | None,
+    bbox_b: dict[str, Any] | None,
+    *,
+    min_overlap_ratio: float = 0.05,
+) -> bool:
+    if not isinstance(bbox_a, dict) or not isinstance(bbox_b, dict):
+        return False
+    try:
+        ax1 = float(bbox_a.get("x", 0.0))
+        ay1 = float(bbox_a.get("y", 0.0))
+        ax2 = ax1 + float(bbox_a.get("w", 0.0))
+        ay2 = ay1 + float(bbox_a.get("h", 0.0))
+        bx1 = float(bbox_b.get("x", 0.0))
+        by1 = float(bbox_b.get("y", 0.0))
+        bx2 = bx1 + float(bbox_b.get("w", 0.0))
+        by2 = by1 + float(bbox_b.get("h", 0.0))
+    except (TypeError, ValueError):
+        return False
+    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    if area_a <= 0:
+        return False
+    ix1 = max(ax1, bx1)
+    iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2)
+    iy2 = min(ay2, by2)
+    if ix2 <= ix1 or iy2 <= iy1:
+        return False
+    overlap_area = (ix2 - ix1) * (iy2 - iy1)
+    return overlap_area / area_a >= min_overlap_ratio
+
+
 def iter_merged_cells(pp_page: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not pp_page:
         return []
@@ -352,6 +389,189 @@ def iter_merged_cells(pp_page: dict[str, Any] | None) -> list[dict[str, Any]]:
     return cells
 
 
+def load_page_json_data(job_dir: Path, page_idx: int) -> dict[str, Any]:
+    json_dir = job_dir / "ocr_json"
+    if not json_dir.exists():
+        raise FileNotFoundError(f"Missing OCR JSON directory: {json_dir}")
+    for path in sorted(json_dir.glob("*_res_with_pdf_coords.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if int(data.get("page_index_0based", -1)) == int(page_idx):
+            return data
+    raise FileNotFoundError(f"OCR page JSON not found for page {page_idx}")
+
+
+def resolve_page_image_path(job_dir: Path, page_data: dict[str, Any]) -> Path:
+    input_path = Path(str(page_data.get("input_path") or ""))
+    candidates = []
+    if input_path:
+        candidates.append(input_path)
+        candidates.append(job_dir / "images" / input_path.name)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(f"Page image not found for {input_path.name or 'unknown image'}")
+
+
+def clamp_bbox_to_image(
+    bbox: dict[str, Any],
+    image_width: int,
+    image_height: int,
+) -> dict[str, int]:
+    x = max(0, int(round(float(bbox.get("x", 0.0)))))
+    y = max(0, int(round(float(bbox.get("y", 0.0)))))
+    w = max(1, int(round(float(bbox.get("w", 0.0)))))
+    h = max(1, int(round(float(bbox.get("h", 0.0)))))
+    x2 = min(image_width, x + w)
+    y2 = min(image_height, y + h)
+    x = min(x, max(0, image_width - 1))
+    y = min(y, max(0, image_height - 1))
+    return {"x": x, "y": y, "w": max(1, x2 - x), "h": max(1, y2 - y)}
+
+
+def build_region_rows(
+    rec_polys: list[list[list[float]]],
+    rec_texts: list[str],
+) -> list[str]:
+    items: list[tuple[float, float, float, float, str]] = []
+    for poly, text in zip(rec_polys, rec_texts):
+        text_value = str(text or "").strip()
+        if not text_value:
+            continue
+        if not isinstance(poly, list) or len(poly) < 4:
+            items.append((float(len(items)), float(len(items)), 0.0, 0.0, text_value))
+            continue
+        xs: list[float] = []
+        ys: list[float] = []
+        for point in poly[:4]:
+            if not isinstance(point, (list, tuple)) or len(point) < 2:
+                continue
+            xs.append(float(point[0]))
+            ys.append(float(point[1]))
+        if not xs or not ys:
+            items.append((float(len(items)), float(len(items)), 0.0, 0.0, text_value))
+            continue
+        items.append((min(ys), min(xs), max(xs) - min(xs), max(ys) - min(ys), text_value))
+
+    if not items:
+        return []
+
+    row_threshold = max(
+        12.0,
+        min((item[3] for item in items if item[3] > 0.0), default=12.0) * 0.8,
+    )
+    items.sort(key=lambda item: (round(item[0], 1), round(item[1], 1)))
+
+    rows: list[list[tuple[float, float, float, float, str]]] = []
+    for item in items:
+        if not rows:
+            rows.append([item])
+            continue
+        last_row = rows[-1]
+        row_y = sum(entry[0] for entry in last_row) / len(last_row)
+        if abs(item[0] - row_y) <= row_threshold:
+            last_row.append(item)
+        else:
+            rows.append([item])
+
+    output: list[str] = []
+    for row in rows:
+        row.sort(key=lambda item: (round(item[1], 1), round(item[0], 1)))
+        output.append("".join(item[4] for item in row))
+    return output
+
+
+def run_region_ocr(
+    job_dir: Path,
+    page_idx: int,
+    bbox: dict[str, Any],
+) -> dict[str, Any]:
+    if cv2 is None:
+        raise RuntimeError("opencv-python is required for region OCR.")
+    page_data = load_page_json_data(job_dir, page_idx)
+    image_path = resolve_page_image_path(job_dir, page_data)
+    image = cv2.imread(image_path.as_posix())
+    if image is None:
+        raise RuntimeError(f"Failed to load page image: {image_path}")
+    image_height, image_width = image.shape[:2]
+    region_bbox = clamp_bbox_to_image(bbox, image_width, image_height)
+    crop = image[
+        region_bbox["y"] : region_bbox["y"] + region_bbox["h"],
+        region_bbox["x"] : region_bbox["x"] + region_bbox["w"],
+    ]
+    if crop.size == 0:
+        raise RuntimeError("Selected region is empty.")
+    ok, encoded = cv2.imencode(".png", crop)
+    if not ok:
+        raise RuntimeError("Failed to encode selected region image.")
+    image_data_url = f"data:image/png;base64,{base64.b64encode(encoded.tobytes()).decode('ascii')}"
+
+    payload = {
+        "file": base64.b64encode(encoded.tobytes()).decode("ascii"),
+        "fileType": 1,
+        "useDocOrientationClassify": False,
+        "useTableOrientationClassify": False,
+    }
+    response = requests.post(state.TRITON_URL, json=payload, timeout=120)
+    if response.status_code != 200:
+        raise RuntimeError(f"Region OCR request failed: HTTP {response.status_code}")
+    output = response.json()
+    if output.get("errorCode", -1) != 0:
+        raise RuntimeError(str(output.get("errorMsg") or "Region OCR failed."))
+    try:
+        pruned = output["result"]["tableRecResults"][0]["prunedResult"]
+    except Exception as exc:
+        raise RuntimeError("Unexpected region OCR response.") from exc
+    pruned = dict(pruned)
+    pruned["width"] = region_bbox["w"]
+    pruned["height"] = region_bbox["h"]
+    pruned.setdefault("input_path", str(image_path))
+
+    from ocr_pipeline.pipeline import extract_rec_entries_from_ppstructure
+
+    rec_polys, rec_texts, rec_scores = extract_rec_entries_from_ppstructure(
+        pruned,
+        skip_text_inside_table=True,
+        min_line_score=0.0,
+        table_fallback_layout=True,
+    )
+    offset_polys: list[list[list[float]]] = []
+    for poly in rec_polys:
+        shifted: list[list[float]] = []
+        for point in poly:
+            shifted.append(
+                [
+                    float(point[0]) + float(region_bbox["x"]),
+                    float(point[1]) + float(region_bbox["y"]),
+                ]
+            )
+        offset_polys.append(shifted)
+    merged_bbox: dict[str, float] | dict[str, int] = region_bbox
+    if offset_polys:
+        xs: list[float] = []
+        ys: list[float] = []
+        for poly in offset_polys:
+            for point in poly[:4]:
+                if isinstance(point, (list, tuple)) and len(point) >= 2:
+                    xs.append(float(point[0]))
+                    ys.append(float(point[1]))
+        if xs and ys:
+            merged_bbox = {
+                "x": min(xs),
+                "y": min(ys),
+                "w": max(xs) - min(xs),
+                "h": max(ys) - min(ys),
+            }
+    return {
+        "page_index_0based": int(page_idx),
+        "region_bbox": region_bbox,
+        "merged_bbox": merged_bbox,
+        "image_data_url": image_data_url,
+        "rec_polys": offset_polys,
+        "rec_texts": rec_texts,
+        "rec_scores": rec_scores,
+    }
+
+
 def load_page_transforms(job_dir: Path) -> dict[int, dict[str, Any]]:
     json_dir = job_dir / "ocr_json"
     mapping: dict[int, dict[str, Any]] = {}
@@ -362,7 +582,7 @@ def load_page_transforms(job_dir: Path) -> dict[int, dict[str, Any]]:
         img_size = transform.get("image_size_px") or []
         pdf_size = transform.get("pdf_page_size_pt") or []
         rotation = transform.get("page_rotation")
-        print(rotation)
+        # print(rotation)
         if len(img_size) == 2 and len(pdf_size) == 2:
             mapping[page_idx] = {
                 "img_w": float(img_size[0]),
@@ -375,6 +595,8 @@ def load_page_transforms(job_dir: Path) -> dict[int, dict[str, Any]]:
 
 
 def apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Path:
+    from pipeline_ocr_overlay import px_point_to_pdf_pt
+
     pdf_path = job_dir / f"{job_id}.pdf"
     if not pdf_path.exists():
         raise FileNotFoundError(f"Missing PDF: {pdf_path}")

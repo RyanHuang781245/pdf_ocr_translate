@@ -628,6 +628,53 @@ button.primary:hover {
   flex-wrap: wrap;
 }
 
+.region-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.region-preview-pane {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.region-preview-pane h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.region-preview-image {
+  width: 100%;
+  max-height: 44vh;
+  object-fit: contain;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.region-preview-textarea {
+  margin: 0;
+  width: 100%;
+  min-height: 180px;
+  max-height: 44vh;
+  overflow: auto;
+  padding: 0.8rem;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: rgba(21, 36, 43, 0.04);
+  white-space: pre-wrap;
+  word-break: break-word;
+  resize: vertical;
+  font: inherit;
+}
+
+@media (max-width: 900px) {
+  .region-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .status {
   padding: 0.6rem 0.8rem;
   border-radius: 12px;
