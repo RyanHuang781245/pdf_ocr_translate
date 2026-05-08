@@ -419,6 +419,218 @@ def save_job(job_id: str):
     )
 
 
+@api_bp.route(
+    "/job/<job_id>/region-ocr-preview",
+    methods=["POST"],
+    endpoint="region_ocr_preview",
+)
+def region_ocr_preview(job_id: str):
+    if not jobs.safe_job_id(job_id):
+        abort(404)
+    job_dir = jobs.job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+
+    payload = request.get_json(force=True) or {}
+    try:
+        page_idx = int(payload.get("page_index_0based"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Invalid page index."}), 400
+    bbox = payload.get("bbox")
+    if not isinstance(bbox, dict):
+        return jsonify({"ok": False, "error": "Invalid region bbox."}), 400
+
+    try:
+        region_data = ocr.run_region_ocr(job_dir, page_idx, bbox)
+        source_lines = [
+            batch.normalize_text(str(item or ""))
+            for item in ocr.build_region_rows(
+                region_data.get("rec_polys", []) or [],
+                region_data.get("rec_texts", []) or [],
+            )
+        ]
+        source_lines = [item for item in source_lines if item]
+        merged_source_text = "\n".join(source_lines).strip()
+    except Exception as exc:
+        logger.exception("Region OCR preview failed job_id=%s page=%s error=%s", job_id, page_idx, exc)
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    region_bbox = region_data.get("region_bbox") or bbox
+    merged_bbox = region_data.get("merged_bbox") or region_bbox
+    ocr_items: list[dict[str, object]] = []
+    for poly, text in zip(region_data.get("rec_polys", []) or [], region_data.get("rec_texts", []) or []):
+        bbox_payload = batch.poly_to_bbox(poly)
+        if not bbox_payload:
+            continue
+        ocr_items.append({"text": str(text or ""), "bbox": bbox_payload})
+    return jsonify(
+        {
+            "ok": True,
+            "page_index_0based": page_idx,
+            "region_bbox": region_bbox,
+            "merged_bbox": merged_bbox,
+            "ocr_lines": source_lines,
+            "ocr_items": ocr_items,
+            "source_text": merged_source_text,
+            "image_data_url": region_data.get("image_data_url"),
+        }
+    )
+
+
+@api_bp.route(
+    "/job/<job_id>/retranslate-region",
+    methods=["POST"],
+    endpoint="retranslate_region",
+)
+def retranslate_region(job_id: str):
+    if not jobs.safe_job_id(job_id):
+        abort(404)
+    job_dir = jobs.job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+
+    payload = request.get_json(force=True) or {}
+    try:
+        page_idx = int(payload.get("page_index_0based"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Invalid page index."}), 400
+    bbox = payload.get("bbox")
+    if not isinstance(bbox, dict):
+        return jsonify({"ok": False, "error": "Invalid region bbox."}), 400
+    replace_existing = bool(payload.get("replace_existing", True))
+
+    config = jobs.load_batch_config(job_dir) or {}
+    meta = jobs.load_job_meta(job_dir) or {}
+    target_lang = str(config.get("target_lang") or "en")
+    model_name = str(state.DOC_TRANSLATE_MODEL)
+    document_mode = batch.resolve_document_mode(
+        config.get("document_mode") or meta.get("document_mode")
+    )
+    system_prompt = config.get("system_prompt") or batch.resolve_batch_prompt(target_lang)
+
+    try:
+        merged_source_text = batch.normalize_text(str(payload.get("source_text") or "")).strip()
+        merged_bbox = payload.get("merged_bbox")
+        if merged_source_text:
+            region_data = {"region_bbox": bbox, "merged_bbox": merged_bbox or bbox, "rec_polys": []}
+        else:
+            region_data = ocr.run_region_ocr(job_dir, page_idx, bbox)
+            source_lines = [
+                batch.normalize_text(str(item or ""))
+                for item in ocr.build_region_rows(
+                    region_data.get("rec_polys", []) or [],
+                    region_data.get("rec_texts", []) or [],
+                )
+            ]
+            source_lines = [item for item in source_lines if item]
+            merged_source_text = "\n".join(source_lines).strip()
+        translations = batch.translate_texts_for_region(
+            [merged_source_text] if merged_source_text else [],
+            target_lang=target_lang,
+            model_name=model_name,
+            system_prompt=system_prompt,
+            glossary_entries=glossary.load_combined_glossary(),
+        )
+    except Exception as exc:
+        logger.exception("Region retranslate failed job_id=%s page=%s error=%s", job_id, page_idx, exc)
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+    edits_map = jobs.load_edits_map(job_dir)
+    page_boxes = list(edits_map.get(page_idx) or [])
+    region_bbox = region_data.get("region_bbox") or bbox
+    if replace_existing:
+        for box in page_boxes:
+            if box.get("deleted") or not bool(box.get("auto_generated", True)):
+                continue
+            if ocr.bbox_intersects(box.get("bbox"), region_bbox):
+                box["deleted"] = True
+
+    existing_ids = {
+        int(box.get("id") or 0)
+        for box in page_boxes
+        if isinstance(box, dict) and str(box.get("id") or "").strip()
+    }
+    next_id = (max(existing_ids) + 1) if existing_ids else 300000
+
+    def build_tm_meta(source_text: str) -> dict[str, str]:
+        if document_mode != "form":
+            return {}
+        normalized_source = batch.normalize_for_translation(source_text)
+        if not normalized_source:
+            return {}
+        return {
+            "tm_source_text": str(source_text or ""),
+            "tm_source_normalized": normalized_source,
+            "tm_target_lang": target_lang,
+            "tm_document_mode": document_mode,
+        }
+
+    merged_bbox = region_data.get("merged_bbox")
+    region_polys = region_data.get("rec_polys", []) or []
+    if not merged_bbox and region_polys:
+        xs: list[float] = []
+        ys: list[float] = []
+        for poly in region_polys:
+            for point in poly[:4]:
+                if isinstance(point, (list, tuple)) and len(point) >= 2:
+                    xs.append(float(point[0]))
+                    ys.append(float(point[1]))
+        if xs and ys:
+            merged_bbox = {
+                "x": min(xs),
+                "y": min(ys),
+                "w": max(xs) - min(xs),
+                "h": max(ys) - min(ys),
+            }
+    if not merged_bbox:
+        merged_bbox = region_bbox
+
+    created = 0
+    translated_text = batch.normalize_text(translations[0] if translations else "")
+    if merged_source_text and translated_text and not batch.is_numeric_only(translated_text):
+        page_boxes.append(
+            {
+                "id": next_id,
+                "bbox": merged_bbox,
+                "text": translated_text,
+                "deleted": False,
+                "auto_generated": True,
+                "no_clip": True,
+                "source": "manual_region_retranslate",
+                "font_size": state.DEFAULT_FONT_SIZE_PX,
+                "color": state.DEFAULT_TEXT_COLOR,
+                **build_tm_meta(merged_source_text),
+            }
+        )
+        created = 1
+
+    edits_map[page_idx] = page_boxes
+    edits_payload = {
+        "pages": [
+            {"page_index_0based": idx, "boxes": boxes}
+            for idx, boxes in sorted(edits_map.items())
+        ]
+    }
+    edits_path = job_dir / "edits.json"
+    edits_path.write_text(
+        json.dumps(edits_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    try:
+        edited_pdf = ocr.apply_edits_to_pdf(job_id, job_dir, edits_payload)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    jobs.notify_jobs_update()
+    return jsonify(
+        {
+            "ok": True,
+            "boxes_added": created,
+            "edited_pdf_url": url_for(
+                "jobs.job_file", job_id=job_id, filename=edited_pdf.name
+            ),
+        }
+    )
+
+
 @api_bp.route("/upload-cancel", methods=["POST"], endpoint="cancel_upload")
 def cancel_upload():
     active = jobs.get_active_upload()

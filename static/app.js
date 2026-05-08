@@ -4,6 +4,7 @@ const state = {
   dragging: null,
   resizing: null,
   previewMode: "debug",
+  selectionMode: "boxes",
   selectedBoxes: new Set(),
   selecting: null,
   lastCtrlKey: false,
@@ -13,10 +14,12 @@ const state = {
     sourcePageIdx: null,
     pasteCount: 0,
   },
+  viewMode: "single",
   zoom: 1,
   pdfUrl: null,
   pdfDoc: null,
   downloadName: null,
+  pendingRegionPreview: null,
 };
 
 const historyState = {
@@ -39,6 +42,9 @@ const batchApplyBoxesBtn = document.getElementById("batchApplyBoxes");
 const batchDeleteBoxesBtn = document.getElementById("batchDeleteBoxes");
 const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
+const menuBtn = document.getElementById("menuBtn");
+const menuDropdown = document.getElementById("menuDropdown");
+const regionTranslateBtn = document.getElementById("regionTranslateBtn");
 const batchTranslateBtn = document.getElementById("batchTranslateBtn");
 const batchRestoreBtn = document.getElementById("batchRestoreBtn");
 const prevPageBtn = document.getElementById("prevPage");
@@ -48,6 +54,11 @@ const zoomRangeEl = document.getElementById("zoomRange");
 const zoomNumberEl = document.getElementById("zoomNumber");
 const pagesEl = document.getElementById("pages");
 const thumbsEl = document.getElementById("thumbs");
+const toggleThumbsBtn = document.getElementById("toggleThumbsBtn");
+const toggleViewModeBtn = document.getElementById("toggleViewModeBtn");
+const sidebarEl = document.querySelector(".editor-sidebar");
+const sidebarRailButtons = Array.from(document.querySelectorAll(".sidebar-rail__item"));
+const viewerEl = document.querySelector(".viewer");
 const editedLink = document.getElementById("editedPdfLink");
 const previewEl = document.getElementById("pdfPreview");
 const previewDebugBtn = document.getElementById("previewDebug");
@@ -62,6 +73,12 @@ const savePromptBtn = document.getElementById("savePromptBtn");
 const glossaryPromptBtn = document.getElementById("glossaryPromptBtn");
 const glossaryPromptModal = document.getElementById("glossaryPromptModal");
 const closeGlossaryPrompt = document.getElementById("closeGlossaryPrompt");
+const regionPreviewModal = document.getElementById("regionPreviewModal");
+const regionPreviewImageEl = document.getElementById("regionPreviewImage");
+const regionPreviewTextEl = document.getElementById("regionPreviewText");
+const confirmRegionPreviewBtn = document.getElementById("confirmRegionPreview");
+const cancelRegionPreviewBtn = document.getElementById("cancelRegionPreview");
+const closeRegionPreviewBtn = document.getElementById("closeRegionPreview");
 const batchPageModal = document.getElementById("batchPageModal");
 const batchPageSourceHintEl = document.getElementById("batchPageSourceHint");
 const batchPageAllEl = document.getElementById("batchPageAll");
@@ -92,6 +109,104 @@ function setStatus(message) {
   }
 }
 
+function setThumbsCollapsed(collapsed) {
+  if (!sidebarEl || !toggleThumbsBtn) return;
+  sidebarEl.classList.toggle("is-thumbs-collapsed", collapsed);
+  toggleThumbsBtn.textContent = collapsed ? "顯示頁面縮圖" : "隱藏頁面縮圖";
+  toggleThumbsBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+}
+
+function setActiveSidebarRail(targetId) {
+  sidebarRailButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.sidebarTarget === targetId);
+  });
+}
+
+function setSidebarSection(targetId) {
+  const sections = ["sidebarPagesSection", "sidebarToolsSection", "sidebarShortcutsSection"];
+  sections.forEach((sectionId) => {
+    const sectionEl = document.getElementById(sectionId);
+    if (!sectionEl) return;
+    const active = sectionId === targetId;
+    sectionEl.hidden = !active;
+    sectionEl.classList.toggle("is-active", active);
+  });
+  setActiveSidebarRail(targetId);
+}
+
+function syncViewModeButton() {
+  if (!toggleViewModeBtn) return;
+  const isContinuous = state.viewMode === "continuous";
+  toggleViewModeBtn.textContent = isContinuous ? "切換到單頁模式" : "切換到連續模式";
+  toggleViewModeBtn.setAttribute("aria-pressed", isContinuous ? "true" : "false");
+}
+
+function setViewMode(mode) {
+  const nextMode = mode === "continuous" ? "continuous" : "single";
+  if (state.viewMode === nextMode) {
+    syncViewModeButton();
+    return;
+  }
+  state.viewMode = nextMode;
+  clearSelection();
+  renderPages();
+  syncViewModeButton();
+  if (nextMode === "continuous") {
+    const page = state.pages[state.activePageIdx];
+    page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (pagesEl) {
+    pagesEl.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }
+}
+
+function setSelectionMode(mode) {
+  state.selectionMode = mode === "retranslate" ? "retranslate" : "boxes";
+  if (!regionTranslateBtn) return;
+  if (state.selectionMode === "retranslate") {
+    regionTranslateBtn.textContent = "取消補翻選區";
+    regionTranslateBtn.classList.add("primary");
+    regionTranslateBtn.classList.remove("ghost");
+  } else {
+    regionTranslateBtn.textContent = "補翻選區";
+    regionTranslateBtn.classList.add("ghost");
+    regionTranslateBtn.classList.remove("primary");
+  }
+}
+
+function openRegionPreviewModal(preview) {
+  state.pendingRegionPreview = preview;
+  if (regionPreviewImageEl) {
+    regionPreviewImageEl.src = preview.image_data_url || "";
+  }
+  if (regionPreviewTextEl) {
+    regionPreviewTextEl.value = preview.source_text || "";
+  }
+  if (regionPreviewModal) {
+    regionPreviewModal.hidden = false;
+  }
+}
+
+function closeRegionPreviewModal() {
+  state.pendingRegionPreview = null;
+  if (regionPreviewModal) {
+    regionPreviewModal.hidden = true;
+  }
+  if (regionPreviewImageEl) {
+    regionPreviewImageEl.removeAttribute("src");
+  }
+  if (regionPreviewTextEl) {
+    regionPreviewTextEl.value = "";
+  }
+}
+
+function normalizePreviewText(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 let glossaryEntries = [];
 let currentJobId = null;
 let batchPageModalResolver = null;
@@ -102,7 +217,7 @@ function renderGlossary() {
   if (!glossaryEntries.length) {
     const empty = document.createElement("div");
     empty.className = "hint";
-    empty.textContent = "尚未加入詞彙對照。";
+    empty.textContent = "尚未加入詞彙對照";
     glossaryListEl.appendChild(empty);
     return;
   }
@@ -162,9 +277,9 @@ async function saveSystemPrompt(jobId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ system_prompt: prompt }),
     });
-    setStatus("已儲存提示詞。");
+    setStatus("已儲存提示詞");
   } catch (error) {
-    setStatus("儲存提示詞失敗。");
+    setStatus("儲存提示詞失敗");
   }
 }
 
@@ -172,7 +287,7 @@ function addGlossaryEntry() {
   const cn = glossaryCnEl?.value?.trim();
   const en = glossaryEnEl?.value?.trim();
   if (!cn || !en) {
-    setStatus("請輸入中文與英文詞彙。");
+    setStatus("請輸入中文與英文詞彙");
     return;
   }
   glossaryEntries.unshift({ cn, en });
@@ -202,7 +317,7 @@ function setBatchPagePreset(mode) {
 function openBatchPageModal(sourcePageIdx, modeLabel) {
   if (!batchPageModal) return Promise.resolve(null);
   if (batchPageSourceHintEl) {
-    batchPageSourceHintEl.textContent = `來源頁：第 ${sourcePageIdx + 1} 頁。請設定要${modeLabel}的目標頁。`;
+    batchPageSourceHintEl.textContent = `來源頁：第 ${sourcePageIdx + 1} 頁請設定要${modeLabel}的目標頁`;
   }
   if (batchPageInputEl) {
     batchPageInputEl.value = "";
@@ -240,7 +355,7 @@ function renderBatchStatus(status) {
   if (!status || !statusEl) return;
   const label = status.status || "unknown";
   if (label === "completed") {
-    setStatus("Batch 翻譯完成，已更新編輯內容。");
+    setStatus("Batch 翻譯完成，已更新編輯內容");
   } else if (label === "running" || label === "queued") {
     setStatus("Batch 翻譯進行中...");
   } else if (label === "failed") {
@@ -450,6 +565,7 @@ function redoHistory() {
 function setActivePage(pageIdx, options = {}) {
   if (!Number.isFinite(pageIdx)) return;
   const { scroll = true } = options;
+  const previousIdx = state.activePageIdx ?? 0;
   const maxIdx = Math.max(0, state.pages.length - 1);
   state.activePageIdx = Math.max(0, Math.min(pageIdx, maxIdx));
   syncPageSelector();
@@ -459,11 +575,17 @@ function setActivePage(pageIdx, options = {}) {
       page.thumbElement.classList.toggle("is-active", idx === state.activePageIdx);
     }
   });
-  if (scroll) {
-    const page = state.pages[state.activePageIdx];
-    if (page?.element) {
-      page.element.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (previousIdx !== state.activePageIdx) {
+    clearSelection();
+    if (state.viewMode === "single") {
+      renderCurrentPage();
     }
+  }
+  if (scroll && state.viewMode === "continuous") {
+    const page = state.pages[state.activePageIdx];
+    page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (scroll && pagesEl) {
+    pagesEl.scrollTo({ top: 0, left: 0, behavior: "smooth" });
   }
 }
 
@@ -507,8 +629,14 @@ function applyZoom(zoom) {
     renderAllPdfPages();
     renderThumbnails();
   } else {
-    state.pages.forEach((page) => applyZoomToPage(page));
-    renderThumbnails();
+    if (state.viewMode === "continuous") {
+      state.pages.forEach((page) => applyZoomToPage(page));
+    } else {
+      const currentPage = state.pages[state.activePageIdx];
+      if (currentPage) {
+        applyZoomToPage(currentPage);
+      }
+    }
   }
 }
 
@@ -698,7 +826,7 @@ async function askBatchTargetPages(sourcePageIdx, modeLabel, excludedPageIdxs = 
     pageIdxs = parsePageSelectionInput(selection.pages, state.pages.length, excludedPageIdxs);
   }
   if (!pageIdxs.length) {
-    setStatus("沒有符合的目標頁。");
+    setStatus("沒有符合的目標頁");
     return null;
   }
   return pageIdxs;
@@ -707,12 +835,12 @@ async function askBatchTargetPages(sourcePageIdx, modeLabel, excludedPageIdxs = 
 function getSingleSourceSelection() {
   const selected = getSelectedBoxes();
   if (!selected.length) {
-    setStatus("請先選取文字框。");
+    setStatus("請先選取文字框");
     return null;
   }
   const sourcePageIdxs = new Set(selected.map((item) => item.pageIdx));
   if (sourcePageIdxs.size !== 1) {
-    setStatus("批次套用需從同一頁選取來源文字框。");
+    setStatus("批次套用需從同一頁選取來源文字框");
     return null;
   }
   const sourcePageIdx = selected[0].pageIdx;
@@ -795,11 +923,11 @@ async function batchApplySelectedBoxes() {
   });
 
   if (!actions.length) {
-    setStatus("沒有新增任何文字框。");
+    setStatus("沒有新增任何文字框");
     return;
   }
   pushAction(actions.length === 1 ? actions[0] : { type: "batch", actions });
-  setStatus(`已批次套用 ${addedCount} 個文字框到 ${targetPageIdxs.length} 頁。`);
+  setStatus(`已批次套用 ${addedCount} 個文字框到 ${targetPageIdxs.length} 頁`);
 }
 
 async function batchDeleteMatchingBoxes() {
@@ -875,12 +1003,12 @@ async function batchDeleteMatchingBoxes() {
   });
 
   if (!actions.length) {
-    setStatus("沒有找到可批次刪除的對應文字框。");
+    setStatus("沒有找到可批次刪除的對應文字框");
     return;
   }
   clearSelection();
   pushAction(actions.length === 1 ? actions[0] : { type: "batch", actions });
-  setStatus(`已批次刪除 ${deletedCount} 個對應文字框。`);
+  setStatus(`已批次刪除 ${deletedCount} 個對應文字框`);
 }
 
 function pasteClipboardBoxes() {
@@ -1096,8 +1224,10 @@ function polyToBbox(poly) {
   };
 }
 
-function buildState(data) {
+function buildState(data, options = {}) {
+  const { activePageIdx = 0 } = options;
   state.pdfUrl = data.pdf_url || null;
+  state.pdfDoc = null;
   state.downloadName = data.download_name || "edited.pdf";
   state.pages = data.pages.map((page) => {
     const boxes = page.rec_polys.map((poly, index) => {
@@ -1140,7 +1270,8 @@ function buildState(data) {
       scale: 1,
     };
   });
-  state.activePageIdx = 0;
+  const maxIdx = Math.max(0, state.pages.length - 1);
+  state.activePageIdx = Math.max(0, Math.min(activePageIdx, maxIdx));
   state.zoom = 0.5;
   if (zoomRangeEl) zoomRangeEl.value = "50";
   if (zoomNumberEl) zoomNumberEl.value = "50";
@@ -1211,7 +1342,7 @@ async function loadPdfDocument(pdfUrl) {
     state.pdfDoc = null;
     state.pdfUrl = null;
     renderPages();
-    setStatus("PDF 載入失敗。");
+    setStatus("PDF 載入失敗");
   }
 }
 
@@ -1274,6 +1405,8 @@ function renderThumbnails() {
       renderThumbnail(pageIdx, canvas);
     } else if (page.imageUrl) {
       const img = document.createElement("img");
+      img.loading = "lazy";
+      img.decoding = "async";
       img.src = page.imageUrl;
       img.alt = `Page ${page.pageIndex + 1}`;
       thumb.appendChild(img);
@@ -1636,7 +1769,7 @@ function updateRangeSelection(event) {
   state.selecting.rect = { left, top, width, height };
 }
 
-function endRangeSelection(event) {
+async function endRangeSelection(event) {
   if (!state.selecting) return;
   const { pageIdx, rect, rectEl, captureEl, pointerId, additive } = state.selecting;
   rectEl.style.display = "none";
@@ -1662,6 +1795,11 @@ function endRangeSelection(event) {
     h: rect.height / scale,
   };
 
+  if (state.selectionMode === "retranslate") {
+    await retranslateSelectedRegion(pageIdx, selectionBox);
+    return;
+  }
+
   page.boxes.forEach((box, boxIdx) => {
     if (box.deleted) return;
     if (boxesIntersect(box.bbox, selectionBox)) {
@@ -1681,7 +1819,106 @@ function endRangeSelection(event) {
 }
 
 function renderPages() {
+  if (state.viewMode === "continuous") {
+    renderContinuousPages();
+  } else {
+    renderCurrentPage();
+  }
+  renderThumbnails();
+}
+
+function disposeRenderedPage(page) {
+  if (!page) return;
+  page.element = null;
+  page.overlay = null;
+  page.image = null;
+  page.selectionRect = null;
+  page.boxes.forEach((box) => {
+    box.element = null;
+  });
+}
+
+function renderCurrentPage() {
   pagesEl.innerHTML = "";
+  state.pages.forEach((page) => disposeRenderedPage(page));
+  const pageIdx = state.activePageIdx ?? 0;
+  const page = state.pages[pageIdx];
+  if (!page) return;
+
+  const pageEl = document.createElement("article");
+  pageEl.className = "page";
+
+  const header = document.createElement("div");
+  header.className = "page-header";
+  header.innerHTML = `<span class="page-number">Page ${page.pageIndex + 1}</span>`;
+  header.addEventListener("click", () => {
+    setActivePage(pageIdx);
+    setStatus(`Active page: ${page.pageIndex + 1}`);
+  });
+
+  const wrap = document.createElement("div");
+  wrap.className = "page-wrap";
+  wrap.draggable = false;
+  wrap.addEventListener("dragstart", (event) => event.preventDefault());
+
+  let img;
+  if (state.pdfDoc && window.pdfjsLib) {
+    img = document.createElement("canvas");
+    img.className = "pdf-canvas";
+  } else {
+    img = document.createElement("img");
+    img.loading = "eager";
+    img.decoding = "async";
+    img.src = page.imageUrl;
+    img.alt = `Page ${page.pageIndex + 1}`;
+    img.draggable = false;
+    img.addEventListener("dragstart", (event) => event.preventDefault());
+    img.addEventListener("load", () => {
+      applyZoomToPage(page);
+    });
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.draggable = false;
+  overlay.addEventListener("dragstart", (event) => event.preventDefault());
+
+  const selectionRect = document.createElement("div");
+  selectionRect.className = "selection-rect";
+  selectionRect.style.display = "none";
+  overlay.appendChild(selectionRect);
+
+  wrap.appendChild(img);
+  wrap.appendChild(overlay);
+  pageEl.appendChild(header);
+  pageEl.appendChild(wrap);
+  pagesEl.appendChild(pageEl);
+
+  page.element = pageEl;
+  page.overlay = overlay;
+  page.image = img;
+  page.selectionRect = selectionRect;
+
+  wrap.addEventListener("pointerdown", (event) => startRangeSelection(event, pageIdx));
+  wrap.addEventListener("pointermove", updateRangeSelection);
+  wrap.addEventListener("pointerup", endRangeSelection);
+  wrap.addEventListener("pointercancel", endRangeSelection);
+  wrap.addEventListener("wheel", (event) => {
+    if (state.selecting) {
+      updateRangeSelection(event);
+    }
+  }, { passive: true });
+
+  page.boxes.forEach((box, index) => {
+    createBoxElement(pageIdx, index);
+  });
+
+  applySelectionClasses();
+}
+
+function renderContinuousPages() {
+  pagesEl.innerHTML = "";
+  state.pages.forEach((page) => disposeRenderedPage(page));
   state.pages.forEach((page, pageIdx) => {
     const pageEl = document.createElement("article");
     pageEl.className = "page";
@@ -1690,7 +1927,7 @@ function renderPages() {
     header.className = "page-header";
     header.innerHTML = `<span class="page-number">Page ${page.pageIndex + 1}</span>`;
     header.addEventListener("click", () => {
-      setActivePage(pageIdx);
+      setActivePage(pageIdx, { scroll: false });
       setStatus(`Active page: ${page.pageIndex + 1}`);
     });
 
@@ -1699,20 +1936,16 @@ function renderPages() {
     wrap.draggable = false;
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
 
-    let img;
-    if (state.pdfUrl && window.pdfjsLib) {
-      img = document.createElement("canvas");
-      img.className = "pdf-canvas";
-    } else {
-      img = document.createElement("img");
-      img.src = page.imageUrl;
-      img.alt = `Page ${page.pageIndex + 1}`;
-      img.draggable = false;
-      img.addEventListener("dragstart", (event) => event.preventDefault());
-      img.addEventListener("load", () => {
-        applyZoomToPage(page);
-      });
-    }
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = page.imageUrl;
+    img.alt = `Page ${page.pageIndex + 1}`;
+    img.draggable = false;
+    img.addEventListener("dragstart", (event) => event.preventDefault());
+    img.addEventListener("load", () => {
+      applyZoomToPage(page);
+    });
 
     const overlay = document.createElement("div");
     overlay.className = "overlay";
@@ -1723,8 +1956,6 @@ function renderPages() {
     selectionRect.className = "selection-rect";
     selectionRect.style.display = "none";
     overlay.appendChild(selectionRect);
-
-    window.addEventListener("resize", () => updatePageLayout(page));
 
     wrap.appendChild(img);
     wrap.appendChild(overlay);
@@ -1741,17 +1972,22 @@ function renderPages() {
     wrap.addEventListener("pointermove", updateRangeSelection);
     wrap.addEventListener("pointerup", endRangeSelection);
     wrap.addEventListener("pointercancel", endRangeSelection);
-    wrap.addEventListener("wheel", (event) => {
-      if (state.selecting) {
-        updateRangeSelection(event);
-      }
-    }, { passive: true });
+    wrap.addEventListener(
+      "wheel",
+      (event) => {
+        if (state.selecting) {
+          updateRangeSelection(event);
+        }
+      },
+      { passive: true },
+    );
 
     page.boxes.forEach((box, index) => {
       createBoxElement(pageIdx, index);
     });
   });
-  renderThumbnails();
+
+  applySelectionClasses();
 }
 
 function createBoxElement(pageIdx, boxIdx) {
@@ -1920,7 +2156,81 @@ function buildSavePayload() {
   };
 }
 
-async function loadJobData(jobId) {
+async function retranslateSelectedRegion(pageIdx, bbox) {
+  const jobId = document.body.dataset.jobId;
+  const page = state.pages[pageIdx];
+  if (!jobId || !page) {
+    setSelectionMode("boxes");
+    return;
+  }
+  setSelectionMode("boxes");
+  const saved = await saveEdits(false, { silent: true });
+  if (!saved) {
+    setStatus("補翻前儲存失敗，已取消補翻");
+    return;
+  }
+  setStatus(`擷取第 ${page.pageIndex + 1} 頁選取區域中...`);
+  try {
+    const res = await fetch(`/api/job/${jobId}/region-ocr-preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page_index_0based: page.pageIndex,
+        bbox,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(body.error ? `擷取失敗：${body.error}` : "擷取失敗");
+      return;
+    }
+    openRegionPreviewModal({
+      pageIndex: page.pageIndex,
+      bbox,
+      region_bbox: body.region_bbox || bbox,
+      merged_bbox: body.merged_bbox || bbox,
+      source_text: body.source_text || "",
+      image_data_url: body.image_data_url || "",
+    });
+    setStatus("請確認擷取區域與 OCR 結果");
+  } catch (error) {
+    setStatus("擷取失敗");
+  }
+}
+
+async function confirmRegionPreview() {
+  const jobId = document.body.dataset.jobId;
+  const preview = state.pendingRegionPreview;
+  if (!jobId || !preview) return;
+  const sourceText = normalizePreviewText(regionPreviewTextEl?.value || preview.source_text || "");
+  closeRegionPreviewModal();
+  setStatus(`補翻第 ${preview.pageIndex + 1} 頁選取區域中...`);
+  try {
+    const res = await fetch(`/api/job/${jobId}/retranslate-region`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page_index_0based: preview.pageIndex,
+        bbox: preview.region_bbox || preview.bbox,
+        merged_bbox: preview.merged_bbox || preview.bbox,
+        source_text: sourceText,
+        replace_existing: true,
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(body.error ? `補翻失敗：${body.error}` : "補翻失敗");
+      return;
+    }
+    await loadJobData(jobId, { preserveActivePage: true });
+    setStatus(body.boxes_added ? `補翻完成，新增 ${body.boxes_added} 個文字框` : "補翻完成，但沒有新增文字框");
+  } catch (error) {
+    setStatus("補翻失敗");
+  }
+}
+
+async function loadJobData(jobId, options = {}) {
+  const { preserveActivePage = false } = options;
   setStatus("Loading OCR data...");
   const res = await fetch(`/api/job/${jobId}`);
   if (!res.ok) {
@@ -1928,10 +2238,12 @@ async function loadJobData(jobId) {
     return null;
   }
   const data = await res.json();
-  buildState(data);
+  const targetPageIdx = preserveActivePage ? (state.activePageIdx ?? 0) : 0;
+  buildState(data, { activePageIdx: targetPageIdx });
   renderPages();
-  if (state.pdfUrl && window.pdfjsLib) {
-    await loadPdfDocument(state.pdfUrl);
+  if (preserveActivePage) {
+    setActivePage(targetPageIdx, { scroll: false });
+    state.pages[state.activePageIdx]?.element?.scrollIntoView({ behavior: "auto", block: "start" });
   }
   updateEditedLink(data.edited_pdf_url);
   if (previewEditedBtn) {
@@ -1951,12 +2263,13 @@ async function pollBatchStatus(jobId) {
   if (status.status === "running" || status.status === "queued") {
     setTimeout(() => pollBatchStatus(jobId), 5000);
   } else if (status.status === "completed") {
-    await loadJobData(jobId);
+    await loadJobData(jobId, { preserveActivePage: true });
   }
   return status;
 }
 
-async function saveEdits(shouldDownload = false) {
+async function saveEdits(shouldDownload = false, options = {}) {
+  const { silent = false } = options;
   const jobId = document.body.dataset.jobId;
   if (!jobId) return;
   const originalText = saveBtn ? saveBtn.textContent : null;
@@ -1967,7 +2280,9 @@ async function saveEdits(shouldDownload = false) {
   if (downloadBtn) {
     downloadBtn.disabled = true;
   }
-  setStatus("Saving edits...");
+  if (!silent) {
+    setStatus("Saving edits...");
+  }
   try {
     const payload = buildSavePayload();
     const res = await fetch(`/api/job/${jobId}/save`, {
@@ -1983,12 +2298,17 @@ async function saveEdits(shouldDownload = false) {
           triggerDownload(body.edited_pdf_url, state.downloadName);
         }
       }
-      setStatus("Edits saved.");
+      if (!silent) {
+        setStatus("Edits saved.");
+      }
+      return true;
     } else {
       setStatus(body.error ? `Save failed: ${body.error}` : "Save failed. Check server logs.");
+      return false;
     }
   } catch (error) {
     setStatus("Save failed. Check console/logs.");
+    return false;
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;
@@ -2052,6 +2372,19 @@ function bindControls() {
     applyFontSize(value);
   };
 
+  if (menuBtn && menuDropdown) {
+    menuBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      menuDropdown.hidden = !menuDropdown.hidden;
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!menuDropdown.hidden && !menuDropdown.contains(event.target) && event.target !== menuBtn) {
+        menuDropdown.hidden = true;
+      }
+    });
+  }
+
   if (fontSizeEl) {
     fontSizeEl.addEventListener("input", () => {
       applyFontSize(Number(fontSizeEl.value));
@@ -2096,8 +2429,6 @@ function bindControls() {
       const idx = Number.parseInt(pageSelectEl.value, 10);
       if (!Number.isFinite(idx)) return;
       setActivePage(idx);
-      const page = state.pages[idx];
-      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -2105,8 +2436,6 @@ function bindControls() {
     prevPageBtn.addEventListener("click", () => {
       const idx = Math.max(0, (state.activePageIdx ?? 0) - 1);
       setActivePage(idx);
-      const page = state.pages[idx];
-      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -2114,8 +2443,6 @@ function bindControls() {
     nextPageBtn.addEventListener("click", () => {
       const idx = Math.min(state.pages.length - 1, (state.activePageIdx ?? 0) + 1);
       setActivePage(idx);
-      const page = state.pages[idx];
-      page?.element?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -2159,6 +2486,42 @@ function bindControls() {
       { passive: false },
     );
   }
+
+  window.addEventListener("resize", () => {
+    if (state.viewMode === "continuous") {
+      state.pages.forEach((page) => {
+        if (page.element) {
+          updatePageLayout(page);
+        }
+      });
+    } else {
+      const page = state.pages[state.activePageIdx ?? 0];
+      if (page) {
+        updatePageLayout(page);
+      }
+    }
+  });
+
+  if (toggleThumbsBtn) {
+    toggleThumbsBtn.addEventListener("click", () => {
+      const collapsed = sidebarEl?.classList.contains("is-thumbs-collapsed");
+      setThumbsCollapsed(!collapsed);
+    });
+  }
+
+  if (toggleViewModeBtn) {
+    toggleViewModeBtn.addEventListener("click", () => {
+      setViewMode(state.viewMode === "continuous" ? "single" : "continuous");
+    });
+  }
+
+  sidebarRailButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetId = button.dataset.sidebarTarget;
+      if (!targetId) return;
+      setSidebarSection(targetId);
+    });
+  });
 
   if (deleteBtn) {
     deleteBtn.addEventListener("click", () => {
@@ -2214,6 +2577,26 @@ function bindControls() {
     });
   }
 
+  if (confirmRegionPreviewBtn) {
+    confirmRegionPreviewBtn.addEventListener("click", () => {
+      confirmRegionPreview();
+    });
+  }
+
+  if (cancelRegionPreviewBtn) {
+    cancelRegionPreviewBtn.addEventListener("click", () => {
+      closeRegionPreviewModal();
+      setStatus("已取消補翻");
+    });
+  }
+
+  if (closeRegionPreviewBtn) {
+    closeRegionPreviewBtn.addEventListener("click", () => {
+      closeRegionPreviewModal();
+      setStatus("已取消補翻");
+    });
+  }
+
   if (batchPageAllEl) {
     batchPageAllEl.addEventListener("change", () => {
       if (batchPageAllEl.checked) {
@@ -2260,7 +2643,7 @@ function bindControls() {
       }
       const raw = batchPageInputEl?.value?.trim() || "";
       if (!raw) {
-        setStatus("請勾選全部/之後，或輸入指定頁碼。");
+        setStatus("請勾選全部/之後，或輸入指定頁碼");
         return;
       }
       finishBatchPageModal({ mode: "manual", pages: raw });
@@ -2287,6 +2670,15 @@ function bindControls() {
     });
   }
 
+  if (regionPreviewModal) {
+    regionPreviewModal.addEventListener("click", (event) => {
+      if (event.target === regionPreviewModal) {
+        closeRegionPreviewModal();
+        setStatus("已取消補翻");
+      }
+    });
+  }
+
   if (batchPageModal) {
     batchPageModal.addEventListener("click", (event) => {
       if (event.target === batchPageModal) {
@@ -2297,6 +2689,11 @@ function bindControls() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      if (regionPreviewModal && !regionPreviewModal.hidden) {
+        closeRegionPreviewModal();
+        setStatus("已取消補翻");
+        return;
+      }
       if (batchPageModal && !batchPageModal.hidden) {
         finishBatchPageModal(null);
         return;
@@ -2337,6 +2734,19 @@ function bindControls() {
     });
   }
 
+  if (regionTranslateBtn) {
+    regionTranslateBtn.addEventListener("click", () => {
+      if (state.selectionMode === "retranslate") {
+        setSelectionMode("boxes");
+        setStatus("已取消補翻選區");
+        return;
+      }
+      clearSelection();
+      setSelectionMode("retranslate");
+      setStatus("請在頁面上框選要補翻的區域");
+    });
+  }
+
   if (previewDebugBtn) {
     previewDebugBtn.addEventListener("click", () => {
       setPreviewMode("debug");
@@ -2361,13 +2771,13 @@ function bindControls() {
       try {
         const res = await fetch(`/api/job/${jobId}/batch-translate`, { method: "POST" });
         if (!res.ok) {
-          setStatus("Batch 翻譯啟動失敗。");
+          setStatus("Batch 翻譯啟動失敗");
           setBatchButtonState("failed");
           return;
         }
         setTimeout(() => pollBatchStatus(jobId), 3000);
       } catch (error) {
-        setStatus("Batch 翻譯啟動失敗。");
+        setStatus("Batch 翻譯啟動失敗");
         setBatchButtonState("failed");
       }
     });
@@ -2383,13 +2793,13 @@ function bindControls() {
         const res = await fetch(`/api/job/${jobId}/batch-restore`, { method: "POST" });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setStatus(body.error ? `回復失敗：${body.error}` : "回復失敗。");
+          setStatus(body.error ? `回復失敗：${body.error}` : "回復失敗");
           return;
         }
-        await loadJobData(jobId);
-        setStatus("已回復翻譯結果。");
+        await loadJobData(jobId, { preserveActivePage: true });
+        setStatus("已回復翻譯結果");
       } catch (error) {
-        setStatus("回復失敗。");
+        setStatus("回復失敗");
       }
     });
   }
@@ -2438,6 +2848,7 @@ async function init() {
   if (!jobId) return;
   currentJobId = jobId;
   bindControls();
+  setSelectionMode("boxes");
   const data = await loadJobData(jobId);
   if (!data) return;
   glossaryEntries = Array.isArray(data.glossary) ? data.glossary : [];
@@ -2453,5 +2864,8 @@ async function init() {
 }
 
 if (document.body.classList.contains("editor")) {
+  setThumbsCollapsed(false);
+  syncViewModeButton();
+  setSidebarSection("sidebarPagesSection");
   init();
 }

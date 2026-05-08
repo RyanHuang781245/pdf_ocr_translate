@@ -191,6 +191,83 @@ def is_chart_block(block: dict[str, Any] | None) -> bool:
     return str((block or {}).get("label") or "").strip().lower() == "chart"
 
 
+def _bbox_contains(
+    outer: list[float] | None,
+    inner: list[float] | None,
+    *,
+    tolerance: float = 2.0,
+) -> bool:
+    if not outer or not inner or len(outer) != 4 or len(inner) != 4:
+        return False
+    return (
+        float(outer[0]) <= float(inner[0]) + tolerance
+        and float(outer[1]) <= float(inner[1]) + tolerance
+        and float(outer[2]) >= float(inner[2]) - tolerance
+        and float(outer[3]) >= float(inner[3]) - tolerance
+    )
+
+
+def filter_structured_blocks_for_mode(
+    paragraph_blocks: list[dict[str, Any]],
+    *,
+    document_mode: str,
+) -> list[dict[str, Any]]:
+    if resolve_document_mode(document_mode) != "form":
+        return paragraph_blocks
+
+    filtered: list[dict[str, Any]] = []
+    for idx, block in enumerate(paragraph_blocks):
+        label = str(block.get("label") or "").strip().lower()
+        if label not in {"figure_title", "header"}:
+            filtered.append(block)
+            continue
+
+        bbox = block.get("bbox")
+        if not (isinstance(bbox, list) and len(bbox) == 4):
+            filtered.append(block)
+            continue
+
+        is_union_block = False
+        for other_idx, other in enumerate(paragraph_blocks):
+            if idx == other_idx:
+                continue
+            other_label = str(other.get("label") or "").strip().lower()
+            if other_label != label:
+                continue
+            other_bbox = other.get("bbox")
+            if not _bbox_contains(bbox, other_bbox):
+                continue
+            block_area = max(0.0, float(bbox[2]) - float(bbox[0])) * max(0.0, float(bbox[3]) - float(bbox[1]))
+            other_area = max(0.0, float(other_bbox[2]) - float(other_bbox[0])) * max(0.0, float(other_bbox[3]) - float(other_bbox[1]))
+            if other_area <= 0 or block_area <= other_area:
+                continue
+            is_union_block = True
+            break
+
+        if not is_union_block:
+            filtered.append(block)
+
+    return filtered
+
+
+def should_translate_structured_block(
+    block: dict[str, Any] | None,
+    *,
+    document_mode: str,
+    merged_only: bool,
+) -> bool:
+    if not block or not block.get("should_translate"):
+        return False
+    if is_chart_block(block):
+        return False
+    if not merged_only:
+        return True
+    if resolve_document_mode(document_mode) != "form":
+        return False
+    label = str(block.get("label") or "").strip().lower()
+    return label in {"figure_title", "header"}
+
+
 def should_skip_ocr_line_for_structured_blocks(
     bbox: list[float] | None,
     paragraph_blocks: list[dict[str, Any]],
@@ -209,6 +286,58 @@ def should_skip_ocr_line_for_structured_blocks(
 
 def get_azure_client():
     return openai_config.create_sync_client()
+
+
+def _build_inline_glossary_instructions(glossary_entries: list[tuple[str, str]] | None) -> str:
+    if not glossary_entries:
+        return ""
+    lines = ["Use the following terminology when applicable:"]
+    for src, dst in glossary_entries[:50]:
+        src_text = str(src or "").strip()
+        dst_text = str(dst or "").strip()
+        if not src_text or not dst_text:
+            continue
+        lines.append(f"- {src_text} -> {dst_text}")
+    return "\n".join(lines)
+
+
+def translate_texts_for_region(
+    texts: list[str],
+    *,
+    target_lang: str,
+    model_name: str,
+    system_prompt: str | None = None,
+    glossary_entries: list[tuple[str, str]] | None = None,
+) -> list[str]:
+    if not texts:
+        return []
+
+    client = get_azure_client()
+    prompt_parts = [resolve_batch_prompt(target_lang, system_prompt)]
+    glossary_prompt = _build_inline_glossary_instructions(glossary_entries)
+    if glossary_prompt:
+        prompt_parts.append(glossary_prompt)
+    prompt_parts.append("Return only the translated text for the current input.")
+    final_prompt = "\n\n".join(part for part in prompt_parts if part).strip()
+
+    outputs: list[str] = []
+    for raw_text in texts:
+        source_text = str(raw_text or "").strip()
+        normalized_source = normalize_for_translation(source_text)
+        if not normalized_source:
+            outputs.append("")
+            continue
+        if is_numeric_only(normalized_source) or not _contains_cjk(normalized_source):
+            outputs.append(source_text)
+            continue
+        response = client.responses.create(
+            model=model_name,
+            instructions=final_prompt,
+            input=source_text,
+        )
+        translated = str(response.output_text or "").strip()
+        outputs.append(normalize_text(translated) or source_text)
+    return outputs
 
 
 
@@ -337,11 +466,17 @@ def build_batch_items(
         skip_table_lines = bool(table_bboxes)
         has_paragraph_flags = use_structured_blocks and ocr.has_paragraph_translate_flags(pp_page)
         paragraph_blocks = ocr.iter_paragraph_blocks(pp_page) if use_structured_blocks else []
-        if use_structured_blocks and not merged_only:
+        paragraph_blocks = filter_structured_blocks_for_mode(
+            paragraph_blocks,
+            document_mode=document_mode,
+        )
+        if use_structured_blocks:
             for block in paragraph_blocks:
-                if not block.get("should_translate"):
-                    continue
-                if is_chart_block(block):
+                if not should_translate_structured_block(
+                    block,
+                    document_mode=document_mode,
+                    merged_only=merged_only,
+                ):
                     continue
                 if table_bboxes and bbox_list_overlaps_tables(block.get("bbox"), table_bboxes):
                     continue
@@ -497,6 +632,10 @@ def build_edits_payload_from_translations(
         skip_table_lines = bool(table_bboxes)
         has_paragraph_flags = use_structured_blocks and ocr.has_paragraph_translate_flags(pp_page)
         paragraph_blocks = ocr.iter_paragraph_blocks(pp_page) if use_structured_blocks else []
+        paragraph_blocks = filter_structured_blocks_for_mode(
+            paragraph_blocks,
+            document_mode=document_mode,
+        )
         
 
         for idx, poly in enumerate(rec_polys):
@@ -547,12 +686,14 @@ def build_edits_payload_from_translations(
                 }
             )
 
-        if paragraph_blocks and not merged_only:
+        if paragraph_blocks:
             base_id = 200000
             for block in paragraph_blocks:
-                if not block.get("should_translate"):
-                    continue
-                if is_chart_block(block):
+                if not should_translate_structured_block(
+                    block,
+                    document_mode=document_mode,
+                    merged_only=merged_only,
+                ):
                     continue
                 if table_bboxes and bbox_list_overlaps_tables(block.get("bbox"), table_bboxes):
                     continue
