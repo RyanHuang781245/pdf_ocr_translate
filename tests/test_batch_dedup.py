@@ -512,17 +512,78 @@ def test_general_document_mode_keeps_chinese_missing_text_added_individually_cel
     }
     assert prefilled == {}
 
-    payload = build_edits_payload_from_translations(
+
+def test_general_document_mode_skips_ocr_lines_inside_bilingual_structured_blocks():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["中文段落"],
+            "rec_polys": [
+                [[10, 10], [90, 10], [90, 30], [10, 30]],
+            ],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "中文段落 English paragraph",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": False,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [],
+        }
+    }
+
+    items, alias_map, key_map, prefilled = build_batch_items(
         ocr_pages,
-        {"p0000-c0000": "translated cell"},
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
         pp_pages=pp_pages,
         document_mode="general",
     )
 
-    boxes = payload["pages"][0]["boxes"]
-    assert len(boxes) == 1
-    assert boxes[0]["id"] == 100000
-    assert boxes[0]["text"] == "translated cell"
+    assert items == []
+    assert alias_map == {}
+    assert key_map == {}
+    assert prefilled == {}
+
+
+def test_general_document_mode_payload_skips_ocr_lines_inside_bilingual_structured_blocks():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["中文段落"],
+            "rec_polys": [
+                [[10, 10], [90, 10], [90, 30], [10, 30]],
+            ],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "中文段落 English paragraph",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": False,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [],
+        }
+    }
+
+    payload = build_edits_payload_from_translations(
+        ocr_pages,
+        {"p0000-l0000": "Translated line"},
+        pp_pages=pp_pages,
+        document_mode="general",
+    )
+
+    assert payload["pages"][0]["boxes"] == []
 
 
 def test_scanned_document_mode_uses_ocr_lines_for_batch_items():

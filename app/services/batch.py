@@ -271,13 +271,16 @@ def should_translate_structured_block(
 def should_skip_ocr_line_for_structured_blocks(
     bbox: list[float] | None,
     paragraph_blocks: list[dict[str, Any]],
+    *,
+    document_mode: str,
 ) -> bool:
     if not bbox or len(bbox) != 4:
         return False
+    mode = resolve_document_mode(document_mode)
     for block in paragraph_blocks:
-        if not block.get("should_translate"):
-            continue
         if is_chart_block(block):
+            continue
+        if mode == "form" and not block.get("should_translate"):
             continue
         if bbox_list_overlaps_tables(bbox, [block.get("bbox")], min_overlap_ratio=0.15):
             return True
@@ -561,6 +564,7 @@ def build_batch_items(
                             float(bbox["y"]) + float(bbox["h"]),
                         ],
                         paragraph_blocks,
+                        document_mode=document_mode,
                     ):
                         continue
             elif has_paragraph_flags and idx < len(rec_polys):
@@ -573,6 +577,7 @@ def build_batch_items(
                         float(bbox["y"]) + float(bbox["h"]),
                     ],
                     paragraph_blocks,
+                    document_mode=document_mode,
                 ):
                     continue
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
@@ -749,6 +754,7 @@ def build_edits_payload_from_translations(
                     float(bbox["y"]) + float(bbox["h"]),
                 ],
                 paragraph_blocks,
+                document_mode=document_mode,
             ):
                 continue
             boxes.append(
