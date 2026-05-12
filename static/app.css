@@ -419,16 +419,76 @@ code {
 
 .form-note {
   margin: 1.5rem 0;
+  padding: 1.2rem;
+  background: rgba(47, 143, 78, 0.04);
+  border-radius: 12px;
+  border: 1px solid rgba(47, 143, 78, 0.15);
+}
+
+.form-note h4 {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+  color: var(--accent-deep);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.form-note h4 i {
+  font-size: 1.1rem;
 }
 
 .form-note p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
 }
 
 .form-note p + p {
-  margin-top: 0.4rem;
+  margin-top: 0.8rem;
+}
+
+.form-note code {
+  background: rgba(21, 36, 43, 0.05);
+  color: var(--ink);
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  margin-right: 0.2rem;
+}
+
+.form-note details {
+  margin-top: 0.6rem;
+  border-top: 1px solid rgba(21, 36, 43, 0.06);
+  padding-top: 0.6rem;
+}
+
+.form-note summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
+  user-select: none;
+}
+
+.form-note summary:hover {
+  color: var(--accent-deep);
+}
+
+.form-note .tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.form-note .tag {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  background: #fff;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  color: var(--muted);
 }
 
 label span {
@@ -813,7 +873,7 @@ body.editor .topbar {
 
 body.editor .workspace {
   display: grid;
-  grid-template-columns: 460px 1fr; /* 側邊欄寬度永久固定 */
+  grid-template-columns: 460px minmax(0, 1fr) 340px;
   gap: 0;
   height: 100vh;
   padding: var(--editor-nav-height) 0 0 0;
@@ -825,6 +885,87 @@ body.editor .workspace {
 body.editor .workspace > * {
   min-height: 0;
   min-width: 0;
+}
+
+.editor-context-sidebar {
+  background: rgba(246, 248, 250, 0.96);
+  border-left: 1px solid rgba(21, 36, 43, 0.08);
+  height: calc(100vh - var(--editor-nav-height));
+  overflow: hidden;
+}
+
+.context-panel {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.context-panel__header {
+  padding: 1rem 1.1rem 0.8rem;
+  border-bottom: 1px solid rgba(21, 36, 43, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.context-panel__header h2,
+.context-card h3 {
+  margin: 0;
+}
+
+.context-panel__body {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem 1.2rem;
+}
+
+.context-card {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(21, 36, 43, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.context-card h3 {
+  font-size: 0.95rem;
+}
+
+.context-pre {
+  margin: 0;
+  min-height: 76px;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(246, 248, 250, 0.92);
+  border: 1px solid rgba(21, 36, 43, 0.08);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.context-textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(21, 36, 43, 0.12);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.context-textarea:disabled {
+  background: rgba(246, 248, 250, 0.92);
+  color: var(--muted);
+  cursor: not-allowed;
 }
 
 .editor-sidebar {
@@ -1752,6 +1893,9 @@ body.editor .thumbs {
     grid-template-columns: 1fr;
   }
   .editor-sidebar {
+    display: none;
+  }
+  .editor-context-sidebar {
     display: none;
   }
 }

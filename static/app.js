@@ -35,6 +35,7 @@ const historyState = {
 };
 
 let controlsBound = false;
+let contextTranslatedEditKey = null;
 
 const statusEl = document.getElementById("status");
 const fontSizeEl = document.getElementById("fontSize");
@@ -90,6 +91,9 @@ const paragraphReplaceFromEl = document.getElementById("paragraphReplaceFrom");
 const paragraphReplaceToEl = document.getElementById("paragraphReplaceTo");
 const paragraphSyncTmEl = document.getElementById("paragraphSyncTm");
 const applyParagraphTermBtn = document.getElementById("applyParagraphTermBtn");
+const contextSummaryEl = document.getElementById("contextSummary");
+const contextSourceTextEl = document.getElementById("contextSourceText");
+const contextTranslatedTextEl = document.getElementById("contextTranslatedText");
 const viewerEl = document.querySelector(".viewer");
 const editedLink = document.getElementById("editedPdfLink");
 const previewEl = document.getElementById("pdfPreview");
@@ -373,10 +377,10 @@ function renderConsistencyPanel() {
   state.consistencyGroups = buildConsistencyGroups();
   if (!state.consistencyGroups.length) {
     state.selectedConsistencyKey = null;
-    consistencySummaryEl.textContent = "目前沒有偵測到文件內相同來源詞的譯文衝突。";
+    consistencySummaryEl.textContent = "目前沒有偵測到文件內相同來源詞的譯文衝突";
     const empty = document.createElement("div");
     empty.className = "hint";
-    empty.textContent = "如果你剛修改過文字內容，可以按上方按鈕重新掃描。";
+    empty.textContent = "如果你剛修改過文字內容，可以按上方按鈕重新掃描";
     consistencyListEl.appendChild(empty);
     renderConsistencyDetail(null);
     return;
@@ -385,7 +389,7 @@ function renderConsistencyPanel() {
   if (!getConsistencyGroupByKey(state.selectedConsistencyKey)) {
     state.selectedConsistencyKey = state.consistencyGroups[0].key;
   }
-  consistencySummaryEl.textContent = `找到 ${state.consistencyGroups.length} 組疑似不一致詞彙。`;
+  consistencySummaryEl.textContent = `找到 ${state.consistencyGroups.length} 組疑似不一致詞彙`;
   state.consistencyGroups.forEach((group) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -425,7 +429,7 @@ function escapeRegExp(text) {
 function isParagraphSourceText(text) {
   const value = String(text || "").trim();
   if (!value) return false;
-  return value.length >= 28 || /[\r\n]/.test(value) || /[，。,.;:；：!?]/.test(value);
+  return value.length >= 28 || /[\r\n]/.test(value) || /[，,.;:；：!?]/.test(value);
 }
 
 function isShortSourceTerm(text) {
@@ -635,10 +639,10 @@ function renderParagraphTermPanel() {
   state.paragraphTermGroups = buildParagraphTermGroups();
   if (!state.paragraphTermGroups.length) {
     state.selectedParagraphTermKey = null;
-    paragraphTermSummaryEl.textContent = "目前沒有偵測到需要人工統一的段落術語。";
+    paragraphTermSummaryEl.textContent = "目前沒有偵測到需要人工統一的段落術語";
     const empty = document.createElement("div");
     empty.className = "hint";
-    empty.textContent = "系統會優先使用文件中短詞與 glossary 當成候選術語。";
+    empty.textContent = "系統會優先使用文件中短詞與 glossary 當成候選術語";
     paragraphTermListEl.appendChild(empty);
     renderParagraphTermDetail(null);
     return;
@@ -647,7 +651,7 @@ function renderParagraphTermPanel() {
   if (!getParagraphTermGroupByKey(state.selectedParagraphTermKey)) {
     state.selectedParagraphTermKey = state.paragraphTermGroups[0].key;
   }
-  paragraphTermSummaryEl.textContent = `找到 ${state.paragraphTermGroups.length} 組段落術語可人工統一。`;
+  paragraphTermSummaryEl.textContent = `找到 ${state.paragraphTermGroups.length} 組段落術語可人工統一`;
   state.paragraphTermGroups.forEach((group) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -748,7 +752,7 @@ function renderMergeNotices() {
     mergeNoticeSummaryEl.textContent = "";
     return;
   }
-  mergeNoticeSummaryEl.textContent = `共有 ${pendingNotices.length} 筆模型疑似自行合併的段落，請人工確認。`;
+  mergeNoticeSummaryEl.textContent = `共有 ${pendingNotices.length} 筆模型疑似自行合併的段落，請人工確認`;
   pendingNotices.forEach((notice) => {
     const card = document.createElement("article");
     card.className = "merge-notice-card";
@@ -997,6 +1001,101 @@ function getSelectedBoxes() {
   return items;
 }
 
+function getSingleSelectedBox() {
+  const selected = getSelectedBoxes();
+  return selected.length === 1 ? selected[0] : null;
+}
+
+function getBoxElementTextNode(box) {
+  return box?.element?.querySelector(".text") || null;
+}
+
+function setBoxText(page, box, nextText) {
+  const value = String(nextText ?? "");
+  box.text = value;
+  const textEl = getBoxElementTextNode(box);
+  if (textEl) {
+    if (textEl.textContent !== value) {
+      textEl.textContent = value;
+      textEl.innerText = value;
+    }
+  }
+  if (box.noClip || box._isExpanded) {
+    updateBoxElement(page, box);
+  }
+}
+
+function beginBoxTextEdit(box) {
+  if (!box || box._editBefore) return;
+  box._editBefore = cloneBoxData(box);
+}
+
+function commitBoxTextEdit(pageIdx, boxIdx, finalText) {
+  const page = state.pages[pageIdx];
+  const box = page?.boxes[boxIdx];
+  if (!page || !box) return;
+  const normalized = String(finalText ?? "").trim();
+  setBoxText(page, box, normalized);
+  const before = box._editBefore;
+  delete box._editBefore;
+  if (!before) return;
+  const after = cloneBoxData(box);
+  if (before.text !== after.text) {
+    pushAction({
+      type: "update_boxes",
+      updates: [{ pageIdx, boxId: box.id, before, after }],
+    });
+  }
+}
+
+function setContextInspectorEmpty(message = "請先點選一個翻譯文字框") {
+  if (contextSummaryEl) contextSummaryEl.textContent = "請選取文字框";
+  if (contextSourceTextEl) contextSourceTextEl.textContent = message;
+  if (contextTranslatedTextEl) {
+    contextTranslatedTextEl.value = "";
+    contextTranslatedTextEl.placeholder = message;
+    contextTranslatedTextEl.disabled = true;
+  }
+  contextTranslatedEditKey = null;
+}
+
+function syncContextInspector() {
+  if (!contextSummaryEl) return;
+  const selected = getSelectedBoxes();
+  if (!selected.length) {
+    setContextInspectorEmpty();
+    return;
+  }
+  if (selected.length > 1) {
+    if (contextSummaryEl) contextSummaryEl.textContent = `已選取 ${selected.length} 個文字框`;
+    if (contextSourceTextEl) contextSourceTextEl.textContent = "多選時不顯示完整原文，請改為單選查看翻譯前內容";
+    if (contextTranslatedTextEl) {
+      contextTranslatedTextEl.value = "";
+      contextTranslatedTextEl.placeholder = "多選時不可直接編輯譯文，請改為單選";
+      contextTranslatedTextEl.disabled = true;
+    }
+    contextTranslatedEditKey = null;
+    return;
+  }
+
+  const { page, box, pageIdx, boxIdx } = selected[0];
+  if (contextSummaryEl) contextSummaryEl.textContent = `第 ${Number(page.pageIndex) + 1} 頁選取中`;
+  if (contextSourceTextEl) {
+    contextSourceTextEl.textContent = String(box.tmSourceText || "").trim() || "沒有可用的翻譯前內容";
+  }
+  if (contextTranslatedTextEl) {
+    const value = String(box.text || "").trim();
+    if (document.activeElement !== contextTranslatedTextEl || contextTranslatedEditKey !== boxKey(pageIdx, boxIdx)) {
+      contextTranslatedTextEl.value = value;
+    } else if (contextTranslatedTextEl.value !== value) {
+      contextTranslatedTextEl.value = value;
+    }
+    contextTranslatedTextEl.placeholder = "可在此直接編輯目前譯文";
+    contextTranslatedTextEl.disabled = false;
+  }
+  contextTranslatedEditKey = boxKey(pageIdx, boxIdx);
+}
+
 function applySelectionClasses() {
   state.pages.forEach((page, pageIdx) => {
     page.boxes.forEach((box, boxIdx) => {
@@ -1013,6 +1112,7 @@ function syncInspectorFromBox(box) {
   if (fontSizeNumberEl) fontSizeNumberEl.value = sizeValue;
   if (fontColorEl) fontColorEl.value = box.color;
   syncAlignmentButtons(box.align);
+  syncContextInspector();
 }
 
 function clearSelection() {
@@ -1020,6 +1120,7 @@ function clearSelection() {
   state.selectedBoxes.clear();
   applySelectionClasses();
   syncAlignmentButtons("left");
+  syncContextInspector();
 }
 
 function cloneBoxData(box) {
@@ -1291,6 +1392,7 @@ function setSelection(pageIdx, boxIdx, additive = false) {
   if (!selectedList.length) {
     state.selected = null;
     applySelectionClasses();
+    syncContextInspector();
     return;
   }
 
@@ -1914,6 +2016,7 @@ function buildState(data, options = {}) {
   }
   syncPageSelector();
   updatePageNavButtons();
+  setContextInspectorEmpty();
 }
 
 function updateBoxElement(page, box) {
@@ -1947,6 +2050,9 @@ function updateBoxElement(page, box) {
   box.element.classList.toggle("is-deleted", box.deleted);
   box.element.classList.toggle("no-clip", !!box.noClip);
   box.element.classList.toggle("is-expanded", expanded);
+  if (state.selectedBoxes.has(boxKey(state.pages.indexOf(page), page.boxes.indexOf(box)))) {
+    syncContextInspector();
+  }
 }
 
 function updatePageLayout(page) {
@@ -2681,24 +2787,21 @@ function createBoxElement(pageIdx, boxIdx) {
   textEl.addEventListener("focus", () => {
     selectBox(pageIdx, boxIdx, state.lastCtrlKey);
     state.lastCtrlKey = false;
-    if (!box._editBefore) {
-      box._editBefore = cloneBoxData(box);
-    }
+    beginBoxTextEdit(box);
   });
   
   textEl.addEventListener("input", () => {
-    box.text = textEl.innerText;
-    if (box.noClip || box._isExpanded) {
-      updateBoxElement(page, box);
-    }
+    setBoxText(page, box, textEl.innerText);
+    syncContextInspector();
   });
 
   textEl.addEventListener("blur", () => {
     const normalized = textEl.innerText.trim();
-    box.text = normalized;
     if (textEl.innerText !== normalized) {
       textEl.innerText = normalized;
     }
+    commitBoxTextEdit(pageIdx, boxIdx, normalized);
+    syncContextInspector();
   });
   
   ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach((dir) => {
@@ -2958,7 +3061,7 @@ async function applyConsistencyToDocument() {
   const targetText = normalizePreviewText(consistencyTargetTextEl?.value || "");
   if (!jobId || !group) return;
   if (!targetText) {
-    setStatus("請先輸入要統一套用的譯文。");
+    setStatus("請先輸入要統一套用的譯文");
     return;
   }
 
@@ -3005,15 +3108,15 @@ async function applyConsistencyToDocument() {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(body.error ? `一致性套用失敗: ${body.error}` : "一致性套用失敗。");
+      setStatus(body.error ? `一致性套用失敗: ${body.error}` : "一致性套用失敗");
       return;
     }
     if (body.edited_pdf_url) {
       updateEditedLink(body.edited_pdf_url);
     }
-    setStatus(`已統一 ${body.updated_count || updates.length} 個文字框。`);
+    setStatus(`已統一 ${body.updated_count || updates.length} 個文字框`);
   } catch (error) {
-    setStatus("一致性套用失敗。");
+    setStatus("一致性套用失敗");
   } finally {
     if (applyConsistencyBtn) {
       applyConsistencyBtn.disabled = false;
@@ -3029,7 +3132,7 @@ async function applyParagraphTermToDocument() {
   const replaceTo = normalizeConsistencyText(paragraphReplaceToEl?.value || "");
   if (!jobId || !group) return;
   if (!replaceFrom || !replaceTo) {
-    setStatus("請先輸入段落術語的替換前與替換後內容。");
+    setStatus("請先輸入段落術語的替換前與替換後內容");
     return;
   }
 
@@ -3052,13 +3155,13 @@ async function applyParagraphTermToDocument() {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setStatus(body.error ? `段落術語套用失敗: ${body.error}` : "段落術語套用失敗。");
+      setStatus(body.error ? `段落術語套用失敗: ${body.error}` : "段落術語套用失敗");
       return;
     }
     await loadJobData(jobId, { preserveActivePage: true });
-    setStatus(`已更新 ${body.updated_count || 0} 個段落文字框。`);
+    setStatus(`已更新 ${body.updated_count || 0} 個段落文字框`);
   } catch (error) {
-    setStatus("段落術語套用失敗。");
+    setStatus("段落術語套用失敗");
   } finally {
     if (applyParagraphTermBtn) {
       applyParagraphTermBtn.disabled = false;
@@ -3328,7 +3431,7 @@ function bindControls() {
   if (refreshConsistencyBtn) {
     refreshConsistencyBtn.addEventListener("click", () => {
       refreshAllConsistencyPanels();
-      setStatus("已重新掃描文件內的一致性問題。");
+      setStatus("已重新掃描文件內的一致性問題");
     });
   }
 
@@ -3522,6 +3625,30 @@ function bindControls() {
     downloadBtn.addEventListener("click", (event) => {
       event.preventDefault();
       saveEdits(true);
+    });
+  }
+
+  if (contextTranslatedTextEl) {
+    contextTranslatedTextEl.addEventListener("focus", () => {
+      const selected = getSingleSelectedBox();
+      if (!selected) return;
+      beginBoxTextEdit(selected.box);
+      contextTranslatedEditKey = boxKey(selected.pageIdx, selected.boxIdx);
+    });
+    contextTranslatedTextEl.addEventListener("input", () => {
+      const selected = getSingleSelectedBox();
+      if (!selected) return;
+      setBoxText(selected.page, selected.box, contextTranslatedTextEl.value);
+      syncContextInspector();
+    });
+    contextTranslatedTextEl.addEventListener("blur", () => {
+      const selected = getSingleSelectedBox();
+      if (!selected) {
+        syncContextInspector();
+        return;
+      }
+      commitBoxTextEdit(selected.pageIdx, selected.boxIdx, contextTranslatedTextEl.value);
+      syncContextInspector();
     });
   }
 

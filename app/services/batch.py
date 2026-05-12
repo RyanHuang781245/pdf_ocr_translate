@@ -725,18 +725,16 @@ def build_edits_payload_from_translations(
     document_term_map = document_terms.build_document_term_map(pp_pages)
 
     def build_tm_meta(source_text: str) -> dict[str, Any]:
-        if mode != "form":
-            return {}
         matched_term = document_terms.lookup_document_term(source_text, document_term_map)
         normalized_source = str((matched_term or {}).get("canonical_key") or normalize_for_translation(source_text))
-        if not normalized_source:
-            return {}
-        return {
+        payload = {
             "tm_source_text": str(source_text or ""),
-            "tm_source_normalized": normalized_source,
             "tm_target_lang": str(target_lang or "en"),
             "tm_document_mode": mode,
         }
+        if normalized_source:
+            payload["tm_source_normalized"] = normalized_source
+        return payload
     
     for page in ocr_pages:
         page_idx = int(page.get("page_index_0based", 0))

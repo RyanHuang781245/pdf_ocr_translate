@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Word 原版面翻譯</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
   <body class="home">
@@ -210,6 +211,17 @@
         } catch (error) {
           renderWordJobs([]);
         } finally {
+          wordJobsLoading = false;
+        }
+      }
+
+      wordJobsRefresh.addEventListener("click", loadWordJobs);
+      loadWordJobs();
+      setInterval(loadWordJobs, 10000);
+    </script>
+  </body>
+</html>
+  } finally {
           wordJobsLoading = false;
         }
       }

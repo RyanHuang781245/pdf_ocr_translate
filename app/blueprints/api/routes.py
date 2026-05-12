@@ -792,17 +792,15 @@ def retranslate_region(job_id: str):
     next_id = (max(existing_ids) + 1) if existing_ids else 300000
 
     def build_tm_meta(source_text: str) -> dict[str, str]:
-        if document_mode != "form":
-            return {}
         normalized_source = batch.normalize_for_translation(source_text)
-        if not normalized_source:
-            return {}
-        return {
+        payload = {
             "tm_source_text": str(source_text or ""),
-            "tm_source_normalized": normalized_source,
             "tm_target_lang": target_lang,
             "tm_document_mode": document_mode,
         }
+        if normalized_source:
+            payload["tm_source_normalized"] = normalized_source
+        return payload
 
     merged_bbox = region_data.get("merged_bbox")
     region_polys = region_data.get("rec_polys", []) or []

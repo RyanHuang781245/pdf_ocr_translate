@@ -158,7 +158,7 @@
                 <div id="mergeNoticeList" class="merge-notice-list"></div>
                 <hr />
               </div>
-              <p class="hint">找出同一份文件中相同來源詞被翻成不同譯文的地方，集中調整。</p>
+              <p class="hint">找出同一份文件中相同來源詞被翻成不同譯文的地方，集中調整</p>
               <div class="button-row">
                 <button id="refreshConsistencyBtn" class="ghost" type="button">重新掃描不一致詞彙</button>
               </div>
@@ -184,7 +184,7 @@
               </div>
               <hr />
               <h3>段落術語</h3>
-              <p class="hint">針對長段落中的重複術語做人工統一，不會整段覆蓋。</p>
+              <p class="hint">針對長段落中的重複術語做人工統一，不會整段覆蓋</p>
               <div id="paragraphTermSummary" class="hint"></div>
               <div id="paragraphTermList" class="consistency-list"></div>
               <div id="paragraphTermDetail" class="consistency-detail" hidden>
@@ -263,6 +263,30 @@
           <div id="pages" class="pages"></div>
         </div>
       </section>
+      <aside class="editor-context-sidebar">
+        <div class="context-panel">
+          <div class="context-panel__header">
+            <h2>來源內容</h2>
+            <p id="contextSummary" class="hint">請選取文字框</p>
+          </div>
+          <div class="context-panel__body">
+            <section class="context-card">
+              <h3>原始內容</h3>
+              <pre id="contextSourceText" class="context-pre">請先點選一個翻譯文字框</pre>
+            </section>
+            <section class="context-card">
+              <h3>翻譯結果</h3>
+              <textarea
+                id="contextTranslatedText"
+                class="context-textarea"
+                rows="10"
+                placeholder="請先點選一個翻譯文字框"
+                disabled
+              ></textarea>
+            </section>
+          </div>
+        </div>
+      </aside>
     </main>
     <div id="batchPageModal" class="modal" hidden>
       <div class="modal-card modal-card--compact" role="dialog" aria-modal="true" aria-labelledby="batchPageTitle">
@@ -284,7 +308,7 @@
             <span>指定頁碼</span>
             <input id="batchPageInput" type="text" placeholder="例如 1,3,5 或 2-6" />
           </label>
-          <p class="hint">勾選 `全部其他頁` 或 `來源頁之後` 時，會忽略頁碼輸入。</p>
+          <p class="hint">勾選 `全部其他頁` 或 `來源頁之後` 時，會忽略頁碼輸入</p>
           <div class="modal-actions">
             <button id="confirmBatchPageModal" class="primary" type="button">確認</button>
             <button id="cancelBatchPageModal" class="ghost" type="button">取消</button>

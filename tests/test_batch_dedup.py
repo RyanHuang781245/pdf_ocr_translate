@@ -1236,3 +1236,39 @@ def test_build_batch_items_orders_page_content_by_visual_flow_across_blocks_and_
         "p0007-c0002",
         "p0007-b0001",
     ]
+
+
+def test_build_edits_payload_keeps_source_text_metadata_for_general_force():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": [],
+            "rec_polys": [],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "原始段落內容",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [],
+        }
+    }
+
+    payload = build_edits_payload_from_translations(
+        ocr_pages,
+        {"p0000-b0000": "Translated paragraph"},
+        pp_pages=pp_pages,
+        target_lang="en",
+        document_mode="general_force",
+    )
+
+    box = payload["pages"][0]["boxes"][0]
+    assert box["tm_source_text"] == "原始段落內容"
+    assert box["tm_target_lang"] == "en"
+    assert box["tm_document_mode"] == "general_force"
