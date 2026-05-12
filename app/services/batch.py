@@ -203,6 +203,8 @@ def bbox_list_overlaps_tables(
 def is_chart_block(block: dict[str, Any] | None) -> bool:
     return str((block or {}).get("label") or "").strip().lower() == "chart"
 
+def is_image_block(block: dict[str, Any] | None) -> bool:
+    return str((block or {}).get("label") or "").strip().lower() == "image"
 
 def _bbox_contains(
     outer: list[float] | None,
@@ -273,6 +275,8 @@ def should_translate_structured_block(
         return False
     if is_chart_block(block):
         return False
+    if is_image_block(block):
+        return False
     mode = resolve_document_mode(document_mode)
     text = normalize_for_translation(str(block.get("text") or ""))
     if mode == "general_force":
@@ -298,6 +302,8 @@ def should_skip_ocr_line_for_structured_blocks(
     mode = resolve_document_mode(document_mode)
     for block in paragraph_blocks:
         if is_chart_block(block):
+            continue
+        if is_image_block(block):
             continue
         if mode == "form" and not block.get("should_translate"):
             continue
