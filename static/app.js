@@ -24,6 +24,7 @@ const state = {
   selectedConsistencyKey: null,
   paragraphTermGroups: [],
   selectedParagraphTermKey: null,
+  mergeNotices: [],
 };
 
 const historyState = {
@@ -66,6 +67,9 @@ const toggleViewModeBtn = document.getElementById("toggleViewModeBtn");
 const sidebarEl = document.querySelector(".editor-sidebar");
 const sidebarRailButtons = Array.from(document.querySelectorAll(".sidebar-rail__item"));
 const refreshConsistencyBtn = document.getElementById("refreshConsistencyBtn");
+const mergeNoticeSectionEl = document.getElementById("mergeNoticeSection");
+const mergeNoticeSummaryEl = document.getElementById("mergeNoticeSummary");
+const mergeNoticeListEl = document.getElementById("mergeNoticeList");
 const consistencySummaryEl = document.getElementById("consistencySummary");
 const consistencyListEl = document.getElementById("consistencyList");
 const consistencyDetailEl = document.getElementById("consistencyDetail");
@@ -668,7 +672,150 @@ function renderParagraphTermPanel() {
   renderParagraphTermDetail(getParagraphTermGroupByKey(state.selectedParagraphTermKey));
 }
 
+function getPendingMergeNotices() {
+  return (state.mergeNotices || []).filter((notice) => (notice?.status || "pending") === "pending");
+}
+
+function formatMergeNoticeScope(notice) {
+  const primaryPage = Number(notice?.primary_page_index_0based);
+  const secondaryPage = Number(notice?.secondary_page_index_0based);
+  if (!Number.isFinite(primaryPage)) return "未知頁面";
+  if (!Number.isFinite(secondaryPage) || secondaryPage === primaryPage) {
+    return `第 ${primaryPage + 1} 頁`;
+  }
+  return `第 ${primaryPage + 1} 頁 -> 第 ${secondaryPage + 1} 頁`;
+}
+
+async function updateMergeNoticeStatus(noticeId, status) {
+  const jobId = document.body.dataset.jobId;
+  if (!jobId || !noticeId) return false;
+  try {
+    const res = await fetch(`/api/job/${jobId}/merge-notices/${encodeURIComponent(noticeId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) return false;
+    const payload = await res.json().catch(() => ({}));
+    const notice = payload.notice || null;
+    if (notice) {
+      const idx = state.mergeNotices.findIndex((item) => item.notice_id === notice.notice_id);
+      if (idx >= 0) {
+        state.mergeNotices[idx] = notice;
+      } else {
+        state.mergeNotices.push(notice);
+      }
+    }
+    renderMergeNotices();
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function focusMergeNotice(notice) {
+  if (!notice) return;
+  const targetPageIdx = Number.isFinite(Number(notice.primary_page_index_0based))
+    ? Number(notice.primary_page_index_0based)
+    : 0;
+  setSidebarSection("sidebarConsistencySection");
+  setActivePage(targetPageIdx);
+  clearSelection();
+
+  const primaryBoxId = Number(notice.primary_box_id);
+  const secondaryPageIdx = Number(notice.secondary_page_index_0based);
+  const secondaryBoxId = Number(notice.secondary_box_id);
+
+  const primaryBoxIdx = state.pages[targetPageIdx]?.boxes.findIndex((box) => box.id === primaryBoxId) ?? -1;
+  if (primaryBoxIdx >= 0) {
+    setSelection(targetPageIdx, primaryBoxIdx, false);
+  }
+  if (secondaryPageIdx === targetPageIdx) {
+    const secondaryBoxIdx = state.pages[targetPageIdx]?.boxes.findIndex((box) => box.id === secondaryBoxId) ?? -1;
+    if (secondaryBoxIdx >= 0 && secondaryBoxIdx !== primaryBoxIdx) {
+      setSelection(targetPageIdx, secondaryBoxIdx, true);
+    }
+  }
+  setStatus(`已定位到 ${formatMergeNoticeScope(notice)} 的合併提醒`);
+}
+
+function renderMergeNotices() {
+  if (!mergeNoticeSectionEl || !mergeNoticeSummaryEl || !mergeNoticeListEl) return;
+  const pendingNotices = getPendingMergeNotices();
+  mergeNoticeListEl.innerHTML = "";
+  mergeNoticeSectionEl.hidden = pendingNotices.length === 0;
+  if (!pendingNotices.length) {
+    mergeNoticeSummaryEl.textContent = "";
+    return;
+  }
+  mergeNoticeSummaryEl.textContent = `共有 ${pendingNotices.length} 筆模型疑似自行合併的段落，請人工確認。`;
+  pendingNotices.forEach((notice) => {
+    const card = document.createElement("article");
+    card.className = "merge-notice-card";
+
+    const title = document.createElement("p");
+    title.className = "merge-notice-card__title";
+    title.textContent = `${formatMergeNoticeScope(notice)} · ${notice.primary_custom_id || ""} + ${notice.secondary_custom_id || ""}`;
+
+    const sourceLabel = document.createElement("p");
+    sourceLabel.className = "merge-notice-card__label";
+    sourceLabel.textContent = "來源文字";
+
+    const sourceBody = document.createElement("pre");
+    sourceBody.className = "merge-notice-card__body";
+    sourceBody.textContent = notice.source_text || "";
+
+    const targetLabel = document.createElement("p");
+    targetLabel.className = "merge-notice-card__label";
+    targetLabel.textContent = "模型合併後譯文";
+
+    const targetBody = document.createElement("pre");
+    targetBody.className = "merge-notice-card__body";
+    targetBody.textContent = notice.suggested_translation || "";
+
+    const actions = document.createElement("div");
+    actions.className = "button-row merge-notice-card__actions";
+
+    const inspectBtn = document.createElement("button");
+    inspectBtn.type = "button";
+    inspectBtn.className = "ghost";
+    inspectBtn.textContent = "前往檢查";
+    inspectBtn.addEventListener("click", () => focusMergeNotice(notice));
+
+    const acceptBtn = document.createElement("button");
+    acceptBtn.type = "button";
+    acceptBtn.className = "primary";
+    acceptBtn.textContent = "標記已處理";
+    acceptBtn.addEventListener("click", async () => {
+      const ok = await updateMergeNoticeStatus(notice.notice_id, "accepted");
+      setStatus(ok ? "已標記為處理完成" : "更新合併提醒失敗");
+    });
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.type = "button";
+    rejectBtn.className = "ghost";
+    rejectBtn.textContent = "忽略";
+    rejectBtn.addEventListener("click", async () => {
+      const ok = await updateMergeNoticeStatus(notice.notice_id, "rejected");
+      setStatus(ok ? "已忽略此合併提醒" : "更新合併提醒失敗");
+    });
+
+    actions.appendChild(inspectBtn);
+    actions.appendChild(acceptBtn);
+    actions.appendChild(rejectBtn);
+
+    card.appendChild(title);
+    card.appendChild(sourceLabel);
+    card.appendChild(sourceBody);
+    card.appendChild(targetLabel);
+    card.appendChild(targetBody);
+    card.appendChild(actions);
+    mergeNoticeListEl.appendChild(card);
+  });
+}
+
 function refreshAllConsistencyPanels() {
+  renderMergeNotices();
   renderConsistencyPanel();
   renderParagraphTermPanel();
 }
@@ -1707,6 +1854,7 @@ function buildState(data, options = {}) {
   state.pdfUrl = data.pdf_url || null;
   state.pdfDoc = null;
   state.downloadName = data.download_name || "edited.pdf";
+  state.mergeNotices = Array.isArray(data.merge_notices) ? data.merge_notices : [];
   state.pages = data.pages.map((page) => {
     const boxes = page.rec_polys.map((poly, index) => {
       const bbox = polyToBbox(poly);

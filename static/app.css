@@ -1023,6 +1023,58 @@ body.editor .panel {
   gap: 0.6rem;
 }
 
+.merge-notice-panel,
+.merge-notice-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.merge-notice-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.8rem;
+  border-radius: 12px;
+  border: 1px solid rgba(196, 146, 42, 0.22);
+  background: rgba(255, 248, 231, 0.78);
+}
+
+.merge-notice-card__title,
+.merge-notice-card__label {
+  margin: 0;
+  color: var(--ink);
+}
+
+.merge-notice-card__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.merge-notice-card__label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.merge-notice-card__body {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(21, 36, 43, 0.08);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.merge-notice-card__actions {
+  gap: 0.5rem;
+}
+
+.merge-notice-card__actions button {
+  flex: 1 1 0;
+}
+
 .consistency-card,
 .consistency-variant {
   display: grid;

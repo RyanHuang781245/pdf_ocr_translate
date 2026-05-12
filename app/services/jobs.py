@@ -519,6 +519,10 @@ def batch_prefill_path(job_dir_path: Path) -> Path:
     return job_dir_path / state.BATCH_PREFILL_NAME
 
 
+def merge_notices_path(job_dir_path: Path) -> Path:
+    return job_dir_path / "merge_notices.json"
+
+
 def job_meta_path(job_dir_path: Path) -> Path:
     return job_dir_path / "job_meta.json"
 
@@ -659,6 +663,80 @@ def load_batch_prefill_map(job_dir_path: Path) -> dict[str, str]:
             continue
         cleaned[k] = v
     return cleaned
+
+
+def write_merge_notices(job_dir_path: Path, notices: list[dict[str, Any]]) -> None:
+    merge_notices_path(job_dir_path).write_text(
+        json.dumps(notices, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def load_merge_notices(job_dir_path: Path) -> list[dict[str, Any]]:
+    path = merge_notices_path(job_dir_path)
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    cleaned: list[dict[str, Any]] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        notice_id = str(item.get("notice_id") or "").strip()
+        if not notice_id:
+            continue
+        item = dict(item)
+        item["notice_id"] = notice_id
+        item["status"] = str(item.get("status") or "pending").strip().lower() or "pending"
+        cleaned.append(item)
+    return cleaned
+
+
+def upsert_merge_notice(job_dir_path: Path, notice: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(notice, dict):
+        return None
+    notice_id = str(notice.get("notice_id") or "").strip()
+    if not notice_id:
+        return None
+    notices = load_merge_notices(job_dir_path)
+    payload = dict(notice)
+    payload["notice_id"] = notice_id
+    payload["status"] = str(payload.get("status") or "pending").strip().lower() or "pending"
+    payload["updated_at"] = time.time()
+    for idx, existing in enumerate(notices):
+        if str(existing.get("notice_id") or "") != notice_id:
+            continue
+        preserved_status = str(existing.get("status") or "pending").strip().lower() or "pending"
+        payload["status"] = preserved_status if preserved_status != "pending" else payload["status"]
+        payload["created_at"] = existing.get("created_at") or payload.get("created_at") or payload["updated_at"]
+        notices[idx] = payload
+        write_merge_notices(job_dir_path, notices)
+        return payload
+    payload["created_at"] = payload.get("created_at") or payload["updated_at"]
+    notices.append(payload)
+    write_merge_notices(job_dir_path, notices)
+    return payload
+
+
+def update_merge_notice_status(job_dir_path: Path, notice_id: str, status: str) -> dict[str, Any] | None:
+    normalized_notice_id = str(notice_id or "").strip()
+    normalized_status = str(status or "").strip().lower()
+    if not normalized_notice_id or normalized_status not in {"pending", "accepted", "rejected"}:
+        return None
+    notices = load_merge_notices(job_dir_path)
+    for idx, notice in enumerate(notices):
+        if str(notice.get("notice_id") or "") != normalized_notice_id:
+            continue
+        updated = dict(notice)
+        updated["status"] = normalized_status
+        updated["updated_at"] = time.time()
+        notices[idx] = updated
+        write_merge_notices(job_dir_path, notices)
+        return updated
+    return None
 
 
 def load_edits_map(job_dir_path: Path) -> dict[int, list[dict[str, Any]]]:

@@ -1169,3 +1169,70 @@ def test_document_terms_restore_trailing_colon_in_payload():
     boxes = payload["pages"][0]["boxes"]
     assert [box["text"] for box in boxes] == ["inspection frequency:", "inspection frequency"]
     assert [box["tm_source_normalized"] for box in boxes] == ["檢查頻率", "檢查頻率"]
+
+
+def test_build_batch_items_orders_page_content_by_visual_flow_across_blocks_and_cells():
+    ocr_pages = [
+        {
+            "page_index_0based": 7,
+            "rec_texts": [],
+            "rec_polys": [],
+        }
+    ]
+    pp_pages = {
+        7: {
+            "parsing_res_list": [
+                {
+                    "block_content": "Table3各廠牌使用cage材質及Thickness比較",
+                    "block_bbox": [0, 0, 300, 20],
+                    "should_translate": True,
+                    "block_label": "text",
+                },
+                {
+                    "block_content": "2.1.4Cage材質:Cp Ti",
+                    "block_bbox": [0, 120, 300, 150],
+                    "should_translate": True,
+                    "block_label": "text",
+                },
+            ],
+            "table_res_list": [
+                {
+                    "cell_box_list": [[0, 30, 300, 110]],
+                    "merged_cells": [
+                        {
+                            "cell_box": [0, 40, 80, 60],
+                            "merged_text": "材質",
+                            "should_translate": True,
+                        },
+                        {
+                            "cell_box": [90, 40, 170, 60],
+                            "merged_text": "品牌",
+                            "should_translate": True,
+                        },
+                        {
+                            "cell_box": [180, 40, 280, 60],
+                            "merged_text": "產品名",
+                            "should_translate": True,
+                        },
+                    ],
+                }
+            ],
+        }
+    }
+
+    items, _, _, _ = build_batch_items(
+        ocr_pages,
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
+        pp_pages=pp_pages,
+        document_mode="general_force",
+    )
+
+    assert [item["custom_id"] for item in items] == [
+        "p0007-b0000",
+        "p0007-c0000",
+        "p0007-c0001",
+        "p0007-c0002",
+        "p0007-b0001",
+    ]

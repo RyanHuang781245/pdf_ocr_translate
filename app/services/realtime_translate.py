@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 _GLOBAL_SEMAPHORE = threading.BoundedSemaphore(state.PDF_REALTIME_GLOBAL_CONCURRENCY)
 _NUMBERED_ITEM_RE = re.compile(r"(?<!\d)(\d+)\.(?=\s)")
 _REALTIME_DELIMITER_RE = re.compile(r"^<<<([^>\r\n]+)>>>\s*$", re.MULTILINE)
+_REALTIME_CUSTOM_ID_RE = re.compile(r"^p(\d+)-([lbc])(\d+)$")
 
 
 def _unwrap_code_fences(text: str) -> str:
@@ -174,6 +175,124 @@ def _extract_batch_item_payload(item: dict[str, Any]) -> tuple[str, str, str]:
     return custom_id, system_prompt, user_text
 
 
+def _parse_realtime_custom_id(custom_id: str) -> tuple[int, str, int] | None:
+    match = _REALTIME_CUSTOM_ID_RE.match(str(custom_id or "").strip())
+    if not match:
+        return None
+    return int(match.group(1)), str(match.group(2)), int(match.group(3))
+
+
+def _editor_box_id_from_custom_id(custom_id: str) -> int | None:
+    parsed = _parse_realtime_custom_id(custom_id)
+    if not parsed:
+        return None
+    _, kind, index = parsed
+    if kind == "l":
+        return index
+    if kind == "c":
+        return 100000 + index
+    if kind == "b":
+        return 200000 + index
+    return None
+
+
+def _extract_chunk_segments(output: str) -> tuple[str, list[tuple[str, str]]]:
+    cleaned = _unwrap_code_fences(output)
+    matches = list(_REALTIME_DELIMITER_RE.finditer(cleaned))
+    segments: list[tuple[str, str]] = []
+    for idx, match in enumerate(matches):
+        custom_id = str(match.group(1) or "").strip()
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(cleaned)
+        text = _normalize_realtime_translation(cleaned[start:end].strip())
+        segments.append((custom_id, text))
+    return cleaned, segments
+
+
+def _extract_merge_notice_candidates(output: str, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    _, segments = _extract_chunk_segments(output)
+    if not segments or not items:
+        return []
+
+    expected_ids = [_extract_batch_item_payload(item)[0] for item in items]
+    found_ids = [custom_id for custom_id, _ in segments]
+    if len(found_ids) >= len(expected_ids):
+        return []
+
+    item_meta: dict[str, dict[str, Any]] = {}
+    for item in items:
+        custom_id, _, user_text = _extract_batch_item_payload(item)
+        parsed = _parse_realtime_custom_id(custom_id)
+        if not parsed:
+            continue
+        page_idx, kind, _ = parsed
+        item_meta[custom_id] = {
+            "page_index_0based": page_idx,
+            "kind": kind,
+            "source_text": batch.glossary.restore_protected_glossary_terms(
+                batch.normalize_text(user_text)
+            ),
+            "editor_box_id": _editor_box_id_from_custom_id(custom_id),
+        }
+
+    segment_map = {custom_id: text for custom_id, text in segments if custom_id}
+    candidates: list[dict[str, Any]] = []
+    missing_ids = [custom_id for custom_id in expected_ids if custom_id not in found_ids]
+    for missing_id in missing_ids:
+        current_index = expected_ids.index(missing_id)
+        if current_index <= 0:
+            continue
+        previous_id = expected_ids[current_index - 1]
+        previous_text = segment_map.get(previous_id)
+        previous_meta = item_meta.get(previous_id)
+        missing_meta = item_meta.get(missing_id)
+        if not previous_text or not previous_meta or not missing_meta:
+            continue
+        candidates.append(
+            {
+                "notice_id": f"{previous_id}__{missing_id}",
+                "status": "pending",
+                "primary_custom_id": previous_id,
+                "secondary_custom_id": missing_id,
+                "primary_page_index_0based": previous_meta["page_index_0based"],
+                "secondary_page_index_0based": missing_meta["page_index_0based"],
+                "primary_box_id": previous_meta["editor_box_id"],
+                "secondary_box_id": missing_meta["editor_box_id"],
+                "primary_kind": previous_meta["kind"],
+                "secondary_kind": missing_meta["kind"],
+                "source_text": "\n".join(
+                    text
+                    for text in [
+                        str(previous_meta.get("source_text") or "").strip(),
+                        str(missing_meta.get("source_text") or "").strip(),
+                    ]
+                    if text
+                ),
+                "suggested_translation": previous_text,
+            }
+        )
+    return candidates
+
+
+def _record_merge_notice_candidates(
+    *,
+    job_dir: Path,
+    chunk_label: str,
+    items: list[dict[str, Any]],
+    output: str,
+    error: str,
+) -> None:
+    for notice in _extract_merge_notice_candidates(output, items):
+        jobs.upsert_merge_notice(
+            job_dir,
+            {
+                **notice,
+                "chunk_label": chunk_label,
+                "error": str(error or ""),
+            },
+        )
+
+
 def _build_chunk_prompt(*, system_prompt: str) -> str:
     return "\n\n".join(
         [
@@ -224,21 +343,16 @@ def _serialize_translation_chunk(items: list[dict[str, Any]]) -> str:
 
 
 def _parse_translation_chunk_output(output: str, expected_ids: list[str]) -> dict[str, str]:
-    cleaned = _unwrap_code_fences(output)
-    matches = list(_REALTIME_DELIMITER_RE.finditer(cleaned))
-    if len(matches) != len(expected_ids):
+    _, segments = _extract_chunk_segments(output)
+    if len(segments) != len(expected_ids):
         raise RuntimeError(
-            f"Expected {len(expected_ids)} delimiters but received {len(matches)}."
+            f"Expected {len(expected_ids)} delimiters but received {len(segments)}."
         )
 
     found_ids: list[str] = []
     translations: dict[str, str] = {}
-    for idx, match in enumerate(matches):
-        custom_id = str(match.group(1) or "").strip()
+    for custom_id, text in segments:
         found_ids.append(custom_id)
-        start = match.end()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(cleaned)
-        text = _normalize_realtime_translation(cleaned[start:end].strip())
         if not text:
             raise RuntimeError(f"Empty translation for {custom_id}.")
         translations[custom_id] = text
@@ -383,6 +497,7 @@ async def _translate_chunk(
     )
     estimated_tokens = rate_limiter.estimate_text_tokens(prompt) + rate_limiter.estimate_text_tokens(payload) + state.REALTIME_COMPLETION_TOKEN_BUDGET
 
+    last_content = ""
     for attempt in range(max_retries):
         try:
             await rate_limiter.REALTIME_RATE_LIMITER.acquire_async(model_name, estimated_tokens)
@@ -403,6 +518,7 @@ async def _translate_chunk(
             await asyncio.sleep(request_delay)
             parsed = response.parse()
             content = str(parsed.choices[0].message.content or "").strip()
+            last_content = content
             _record_chunk_response(
                 job_dir=job_dir,
                 chunk_label=chunk_label,
@@ -426,6 +542,14 @@ async def _translate_chunk(
                 error=str(exc),
             )
             if attempt == max_retries - 1:
+                if last_content:
+                    _record_merge_notice_candidates(
+                        job_dir=job_dir,
+                        chunk_label=chunk_label,
+                        items=items,
+                        output=last_content,
+                        error=str(exc),
+                    )
                 raise RuntimeError(f"Realtime chunk translation failed for {first_id}: {exc}") from exc
             await asyncio.sleep((2**attempt) + random.uniform(0, 0.5))
     return {}
@@ -508,6 +632,7 @@ def run_realtime_translate_job(
         stage="translate",
         extra_meta={"translate_started_at": time.time()},
     )
+    jobs.write_merge_notices(job_dir, [])
     jobs.write_batch_status(job_dir, "running", **status_meta, completed_chunks=0, total_chunks=0)
 
     try:

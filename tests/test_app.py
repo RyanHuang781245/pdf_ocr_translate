@@ -251,6 +251,35 @@ def test_glossary_get(client):
     assert payload.get("ok") is True
 
 
+def test_update_merge_notice_status(client, tmp_path, monkeypatch):
+    job_id = "c" * 32
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    jobs.write_merge_notices(
+        job_dir,
+        [
+            {
+                "notice_id": "p0001-l0001__p0001-l0002",
+                "status": "pending",
+                "primary_custom_id": "p0001-l0001",
+                "secondary_custom_id": "p0001-l0002",
+            }
+        ],
+    )
+
+    resp = client.post(
+        f"/api/job/{job_id}/merge-notices/p0001-l0001__p0001-l0002",
+        json={"status": "accepted"},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["notice"]["status"] == "accepted"
+    assert jobs.load_merge_notices(job_dir)[0]["status"] == "accepted"
+
+
 def test_save_job_writes_form_tm_from_editor_edits(client, tmp_path, monkeypatch):
     job_id = "a" * 32
     job_dir = tmp_path / "jobs" / job_id

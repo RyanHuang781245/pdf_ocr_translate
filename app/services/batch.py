@@ -119,6 +119,15 @@ def normalize_for_translation(text: str) -> str:
     return translation_memory.normalize_source_text(text)
 
 
+def _page_item_sort_key(bbox: list[float] | None, kind_order: int = 0) -> tuple[float, float, int]:
+    if not (isinstance(bbox, list) and len(bbox) == 4):
+        return (float("inf"), float("inf"), kind_order)
+    try:
+        return (round(float(bbox[1]), 1), round(float(bbox[0]), 1), kind_order)
+    except (TypeError, ValueError):
+        return (float("inf"), float("inf"), kind_order)
+
+
 def is_numeric_only(text: str) -> bool:
     clean = re.sub(r"\s+", "", str(text or ""))
     if not clean:
@@ -533,6 +542,8 @@ def build_batch_items(
         should_skip_paragraph_lines = has_paragraph_flags or (
             mode == "general_force" and bool(paragraph_blocks)
         )
+        page_candidates: list[tuple[tuple[float, float, int], str, str]] = []
+
         if use_structured_blocks:
             for block in paragraph_blocks:
                 if not should_translate_structured_block(
@@ -545,56 +556,63 @@ def build_batch_items(
                     continue
                 block_idx = int(block.get("block_index", 0))
                 custom_id = f"p{page_idx:04d}-b{block_idx:04d}"
-                _add_item(custom_id, block.get("text", ""))
+                page_candidates.append(
+                    (_page_item_sort_key(block.get("bbox"), 0), custom_id, str(block.get("text", "")))
+                )
 
         for cell_idx, cell in enumerate(merged_cells):
             if not should_translate_merged_cell(cell, document_mode):
                 continue
             custom_id = f"p{page_idx:04d}-c{cell_idx:04d}"
-            _add_item(custom_id, cell.get("merged_text", ""))
+            page_candidates.append(
+                (_page_item_sort_key(cell.get("cell_box"), 1), custom_id, str(cell.get("merged_text", "")))
+            )
 
         for idx, text in enumerate(texts):
             if merged_only:
                 continue
+            line_bbox_list: list[float] | None = None
             if skip_table_lines and table_bboxes and idx < len(rec_polys):
                 bbox = poly_to_bbox(rec_polys[idx])
                 if bbox:
+                    line_bbox_list = [
+                        float(bbox["x"]),
+                        float(bbox["y"]),
+                        float(bbox["x"]) + float(bbox["w"]),
+                        float(bbox["y"]) + float(bbox["h"]),
+                    ]
                     if bbox_list_overlaps_tables(
-                        [
-                            float(bbox["x"]),
-                            float(bbox["y"]),
-                            float(bbox["x"]) + float(bbox["w"]),
-                            float(bbox["y"]) + float(bbox["h"]),
-                        ],
+                        line_bbox_list,
                         table_bboxes,
                     ):
                         continue
                     if should_skip_paragraph_lines and should_skip_ocr_line_for_structured_blocks(
-                        [
-                            float(bbox["x"]),
-                            float(bbox["y"]),
-                            float(bbox["x"]) + float(bbox["w"]),
-                            float(bbox["y"]) + float(bbox["h"]),
-                        ],
+                        line_bbox_list,
                         paragraph_blocks,
                         document_mode=document_mode,
                     ):
                         continue
             elif should_skip_paragraph_lines and idx < len(rec_polys):
                 bbox = poly_to_bbox(rec_polys[idx])
-                if bbox and should_skip_ocr_line_for_structured_blocks(
-                    [
+                if bbox:
+                    line_bbox_list = [
                         float(bbox["x"]),
                         float(bbox["y"]),
                         float(bbox["x"]) + float(bbox["w"]),
                         float(bbox["y"]) + float(bbox["h"]),
-                    ],
-                    paragraph_blocks,
-                    document_mode=document_mode,
-                ):
-                    continue
+                    ]
+                    if should_skip_ocr_line_for_structured_blocks(
+                        line_bbox_list,
+                        paragraph_blocks,
+                        document_mode=document_mode,
+                    ):
+                        continue
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
-            _add_item(custom_id, text)
+            page_candidates.append((_page_item_sort_key(line_bbox_list, 2), custom_id, str(text or "")))
+
+        page_candidates.sort(key=lambda item: item[0])
+        for _, custom_id, raw_text in page_candidates:
+            _add_item(custom_id, raw_text)
 
     if tm_dirty:
         translation_memory.write_translation_memory(translation_memory_data)

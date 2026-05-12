@@ -119,3 +119,48 @@ def test_normalize_realtime_translation_restores_terms_and_numbered_items():
     assert realtime_translate._normalize_realtime_translation(text) == (
         "1. First step Quality System Regulation\n2. Second step"
     )
+
+
+def test_extract_merge_notice_candidates_from_missing_delimiter():
+    items = [
+        {
+            "custom_id": "p0009-b0007",
+            "body": {
+                "messages": [
+                    {"role": "system", "content": "base prompt"},
+                    {"role": "user", "content": "第一段原文"},
+                ]
+            },
+        },
+        {
+            "custom_id": "p0010-b0002",
+            "body": {
+                "messages": [
+                    {"role": "system", "content": "base prompt"},
+                    {"role": "user", "content": "第二段原文"},
+                ]
+            },
+        },
+    ]
+
+    candidates = realtime_translate._extract_merge_notice_candidates(
+        "<<<p0009-b0007>>>\nMerged translation spanning both pages",
+        items,
+    )
+
+    assert candidates == [
+        {
+            "notice_id": "p0009-b0007__p0010-b0002",
+            "status": "pending",
+            "primary_custom_id": "p0009-b0007",
+            "secondary_custom_id": "p0010-b0002",
+            "primary_page_index_0based": 9,
+            "secondary_page_index_0based": 10,
+            "primary_box_id": 200007,
+            "secondary_box_id": 200002,
+            "primary_kind": "b",
+            "secondary_kind": "b",
+            "source_text": "第一段原文\n第二段原文",
+            "suggested_translation": "Merged translation spanning both pages",
+        }
+    ]

@@ -95,9 +95,29 @@ def job_data(job_id: str):
         "translate_mode": jobs.normalize_translate_mode(config.get("translate_mode")),
         "glossary": glossary.load_global_glossary(),
         "system_prompt": system_prompt,
+        "merge_notices": jobs.load_merge_notices(job_dir),
         "pages": pages,
     }
     return jsonify(payload)
+
+
+@api_bp.route(
+    "/job/<job_id>/merge-notices/<notice_id>",
+    methods=["POST"],
+    endpoint="update_merge_notice",
+)
+def update_merge_notice(job_id: str, notice_id: str):
+    if not jobs.safe_job_id(job_id):
+        abort(404)
+    job_dir = jobs.job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+    payload = request.get_json(force=True) or {}
+    status = str(payload.get("status") or "").strip().lower()
+    updated = jobs.update_merge_notice_status(job_dir, notice_id, status)
+    if updated is None:
+        return jsonify({"ok": False, "error": "Merge notice not found or invalid status."}), 400
+    return jsonify({"ok": True, "notice": updated})
 
 
 @api_bp.route("/job/<job_id>/batch-translate", methods=["POST"], endpoint="batch_translate")
