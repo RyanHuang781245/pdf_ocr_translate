@@ -61,6 +61,7 @@ const nextPageBtn = document.getElementById("nextPage");
 const pageSelectEl = document.getElementById("pageSelect");
 const zoomRangeEl = document.getElementById("zoomRange");
 const zoomNumberEl = document.getElementById("zoomNumber");
+const fitToWidthBtn = document.getElementById("fitToWidthBtn");
 const pagesEl = document.getElementById("pages");
 const thumbsEl = document.getElementById("thumbs");
 const toggleThumbsBtn = document.getElementById("toggleThumbsBtn");
@@ -166,6 +167,22 @@ function setThumbsCollapsed(collapsed) {
   sidebarEl.classList.toggle("is-thumbs-collapsed", collapsed);
   toggleThumbsBtn.textContent = collapsed ? "顯示頁面縮圖" : "隱藏頁面縮圖";
   toggleThumbsBtn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+}
+
+function fitToWidth() {
+  if (!viewerEl || !state.pages.length) return;
+  const viewerWidth = viewerEl.clientWidth;
+  if (viewerWidth < 100) return;
+
+  const pageIdx = state.activePageIdx ?? 0;
+  const page = state.pages[pageIdx];
+  if (!page) return;
+
+  const naturalWidth = page.imageSize?.[0] || 1000;
+  const targetWidth = viewerWidth - 100; // Horizontal padding/margin 64
+  const idealZoom = targetWidth / naturalWidth;
+  
+  setZoomPercent(idealZoom * 100);
 }
 
 function setActiveSidebarRail(targetId) {
@@ -2002,9 +2019,17 @@ function buildState(data, options = {}) {
   });
   const maxIdx = Math.max(0, state.pages.length - 1);
   state.activePageIdx = Math.max(0, Math.min(activePageIdx, maxIdx));
-  state.zoom = 0.5;
-  if (zoomRangeEl) zoomRangeEl.value = "50";
-  if (zoomNumberEl) zoomNumberEl.value = "50";
+  
+  // Initial zoom logic: use fitToWidth instead of hardcoded 0.5
+  if (state.pages.length > 0) {
+    // We need to wait for the layout to settle slightly for clientWidth to be accurate
+    setTimeout(fitToWidth, 100);
+  } else {
+    state.zoom = 1.0;
+    if (zoomRangeEl) zoomRangeEl.value = "100";
+    if (zoomNumberEl) zoomNumberEl.value = "100";
+  }
+
   if (pageSelectEl) {
     pageSelectEl.innerHTML = "";
     state.pages.forEach((page, index) => {
@@ -3341,6 +3366,12 @@ function bindControls() {
     });
     zoomNumberEl.addEventListener("change", () => {
       applyZoomFromInput(Number(zoomNumberEl.value), true);
+    });
+  }
+
+  if (fitToWidthBtn) {
+    fitToWidthBtn.addEventListener("click", () => {
+      fitToWidth();
     });
   }
 

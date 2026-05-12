@@ -99,9 +99,13 @@
               <label>
                 <span>縮放 (%)</span>
                 <div class="input-row">
-                  <input id="zoomRange" type="range" min="25" max="200" value="50" />
-                  <input id="zoomNumber" type="number" min="25" max="200" value="50" />
+                  <input id="zoomRange" type="range" min="25" max="200" step="5" value="100" />
+                  <input id="zoomNumber" type="number" min="25" max="200" step="5" value="100" />
+                  <button id="fitToWidthBtn" class="ghost" type="button" title="符合寬度" style="padding: 0.45rem 0.8rem;">
+                    <i class="bi bi-arrows-angle-expand"></i>
+                  </button>
                 </div>
+
               </label>
               <div class="button-row">
                 <button id="toggleThumbsBtn" class="ghost" type="button" aria-expanded="true">隱藏頁面縮圖</button>
@@ -126,9 +130,9 @@
               <label>
                 <span>文字對齊</span>
                 <div class="segmented-control" role="group" aria-label="文字對齊">
-                  <button id="alignLeft" class="ghost is-active" type="button" data-align="left">靠左</button>
-                  <button id="alignCenter" class="ghost" type="button" data-align="center">置中</button>
-                  <button id="alignRight" class="ghost" type="button" data-align="right">靠右</button>
+                  <button id="alignLeft" class="ghost is-active" type="button" data-align="left"><i class="bi bi-justify-left"></i></button>
+                  <button id="alignCenter" class="ghost" type="button" data-align="center"><i class="bi bi-justify"></i></button>
+                  <button id="alignRight" class="ghost" type="button" data-align="right"><i class="bi bi-justify-right"></i></button>
                 </div>
               </label>
               <div class="button-row">

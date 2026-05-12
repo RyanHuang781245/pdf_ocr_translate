@@ -873,13 +873,19 @@ body.editor .topbar {
 
 body.editor .workspace {
   display: grid;
-  grid-template-columns: 460px minmax(0, 1fr) 340px;
+  grid-template-columns: auto minmax(0, 1fr) 300px;
   gap: 0;
   height: 100vh;
   padding: var(--editor-nav-height) 0 0 0;
   margin: 0;
   overflow: hidden;
   align-items: stretch;
+}
+
+@media (max-width: 1400px) {
+  body.editor .workspace {
+    grid-template-columns: auto minmax(0, 1fr) 280px;
+  }
 }
 
 body.editor .workspace > * {
@@ -906,7 +912,10 @@ body.editor .workspace > * {
   background: rgba(255, 255, 255, 0.92);
 }
 
-.context-panel__header h2,
+.context-panel__header h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.1rem;
+}
 .context-card h3 {
   margin: 0;
 }
@@ -970,7 +979,7 @@ body.editor .workspace > * {
 
 .editor-sidebar {
   display: grid;
-  grid-template-columns: 70px 230px 170px; /* 固定三欄寬度 */
+  grid-template-columns: 70px 220px 160px;
   gap: 0;
   min-height: 0;
   min-width: 0;
@@ -981,16 +990,28 @@ body.editor .workspace > * {
   margin: 0;
   height: calc(100vh - var(--editor-nav-height));
   align-self: stretch;
-  width: 460px;
+  width: auto;
+  transition: width 0.3s ease;
+}
+
+@media (max-width: 1400px) {
+  .editor-sidebar {
+    grid-template-columns: 64px 190px 140px;
+  }
 }
 
 .editor-sidebar.is-thumbs-collapsed {
-  grid-template-columns: 70px 230px 170px; /* 隱藏時維持 Grid 比例 */
+  grid-template-columns: 70px 220px 0px;
+}
+
+@media (max-width: 1400px) {
+  .editor-sidebar.is-thumbs-collapsed {
+    grid-template-columns: 64px 190px 0px;
+  }
 }
 
 .editor-sidebar.is-thumbs-collapsed .thumbs {
-  visibility: hidden; /* 僅隱藏內容，保留佔位空間 */
-  pointer-events: none;
+  display: none;
 }
 
 .sidebar-rail {
