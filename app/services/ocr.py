@@ -303,6 +303,64 @@ def wrap_text_lines(text: str, max_width: float, font: fitz.Font, font_size: flo
             
     return lines
 
+
+def insert_textbox_overflow_visible(
+    page: fitz.Page,
+    rect: fitz.Rect,
+    text: str,
+    *,
+    fontfile: str | None,
+    fontsize: float,
+    color: tuple[float, float, float],
+    align: int,
+    rotate: int,
+) -> dict[str, Any]:
+    rect = fitz.Rect(rect)
+    base_kwargs: dict[str, Any] = {
+        "fontsize": float(fontsize),
+        "color": color,
+        "align": align,
+        "rotate": rotate,
+    }
+    if fontfile:
+        base_kwargs["fontfile"] = fontfile
+    else:
+        base_kwargs["fontname"] = "helv"
+
+    shape = page.new_shape()
+    rc = shape.insert_textbox(rect, text, **base_kwargs)
+    if rc >= 0:
+        shape.commit()
+        return {
+            "ok": True,
+            "fontsize": float(fontsize),
+            "rect": rect,
+            "rc": rc,
+            "expanded": False,
+        }
+
+    target_rect = fitz.Rect(rect)
+    deficit = abs(float(rc))
+    if rotate == 0:
+        target_rect.y1 += deficit
+    elif rotate == 90:
+        target_rect.x1 += deficit
+    elif rotate == 180:
+        target_rect.y0 -= deficit
+    elif rotate == 270:
+        target_rect.x0 -= deficit
+
+    shape = page.new_shape()
+    rc = shape.insert_textbox(target_rect, text, **base_kwargs)
+    shape.commit()
+    return {
+        "ok": rc >= 0,
+        "fontsize": float(fontsize),
+        "rect": target_rect,
+        "rc": rc,
+        "expanded": target_rect != rect,
+    }
+
 def load_ocr_pages(job_dir: Path) -> list[dict[str, Any]]:
     json_dir = job_dir / "ocr_json"
     if not json_dir.exists():
@@ -753,41 +811,21 @@ def apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pat
             color = hex_to_rgb(box.get("color"))
             rotate = normalize_box_rotation(box.get("rotation"))
             pdf_rotate = (rotation + ((360 - rotate) % 360)) % 360
-            no_clip = bool(box.get("no_clip"))
             text_align = normalize_text_align(box.get("text_align"))
             # Editor-side rotation already updates the stored bbox geometry.
             # Use the saved rectangle directly so the generated PDF matches
             # the on-screen editor position and size.
             textbox_rect = fitz.Rect(rect)
-            insert_kwargs = {
-                "fontsize": font_size_pt,
-                "color": color,
-                "align": FITZ_TEXT_ALIGN[text_align],
-                # CSS rotation in the editor uses screen coordinates; PyMuPDF's
-                # textbox rotation is mirrored for 90/270, so convert here.
-                "rotate": pdf_rotate,
-            }
-            if fontfile:
-                insert_kwargs["fontfile"] = fontfile
-            else:
-                insert_kwargs["fontname"] = "helv"
-
-            box_shape = page.new_shape()
-            rc = box_shape.insert_textbox(textbox_rect, text, **insert_kwargs)
-            if rc < 0 and no_clip:
-                deficit = abs(float(rc))
-                expanded_rect = fitz.Rect(textbox_rect)
-                if pdf_rotate == 0:
-                    expanded_rect.y1 += deficit
-                elif pdf_rotate == 90:
-                    expanded_rect.x1 += deficit
-                elif pdf_rotate == 180:
-                    expanded_rect.y0 -= deficit
-                elif pdf_rotate == 270:
-                    expanded_rect.x0 -= deficit
-                box_shape = page.new_shape()
-                box_shape.insert_textbox(expanded_rect, text, **insert_kwargs)
-            box_shape.commit()
+            insert_textbox_overflow_visible(
+                page,
+                textbox_rect,
+                text,
+                fontfile=fontfile,
+                fontsize=font_size_pt,
+                color=color,
+                align=FITZ_TEXT_ALIGN[text_align],
+                rotate=pdf_rotate,
+            )
         if dbg_shape is not None:
             dbg_shape.commit()
 
