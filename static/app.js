@@ -1815,6 +1815,45 @@ function cloneBoxData(box) {
   };
 }
 
+function nudgeSelectedBoxes(deltaX, deltaY) {
+  const selected = getSelectedBoxes();
+  if (!selected.length) return false;
+
+  const updates = selected.map(({ pageIdx, page, box }) => {
+    if (!page || !box || box.deleted) return null;
+    const before = cloneBoxData(box);
+    const pageWidth = page.imageSize?.[0];
+    const pageHeight = page.imageSize?.[1];
+    const maxX = Number.isFinite(pageWidth) ? Math.max(0, pageWidth - box.bbox.w) : null;
+    const maxY = Number.isFinite(pageHeight) ? Math.max(0, pageHeight - box.bbox.h) : null;
+    const nextX = maxX === null
+      ? Math.max(0, box.bbox.x + deltaX)
+      : Math.min(Math.max(0, box.bbox.x + deltaX), maxX);
+    const nextY = maxY === null
+      ? Math.max(0, box.bbox.y + deltaY)
+      : Math.min(Math.max(0, box.bbox.y + deltaY), maxY);
+
+    if (nextX === box.bbox.x && nextY === box.bbox.y) {
+      return null;
+    }
+
+    box.bbox.x = nextX;
+    box.bbox.y = nextY;
+    updateBoxElement(page, box);
+    return {
+      pageIdx,
+      boxId: box.id,
+      before,
+      after: cloneBoxData(box),
+    };
+  }).filter(Boolean);
+
+  if (!updates.length) return false;
+  pushAction({ type: "update_boxes", updates });
+  syncContextInspector();
+  return true;
+}
+
 function rotateBoxGeometry(box, nextRotation, page) {
   const previous = normalizeBoxRotation(box.rotation);
   const target = normalizeBoxRotation(nextRotation);
@@ -4684,6 +4723,20 @@ function bindControls() {
         pasteClipboardBoxes();
         return;
       }
+    }
+
+    if (!isEditing && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+      const step = event.shiftKey ? 10 : 1;
+      let moved = false;
+      if (event.key === "ArrowUp") moved = nudgeSelectedBoxes(0, -step);
+      if (event.key === "ArrowDown") moved = nudgeSelectedBoxes(0, step);
+      if (event.key === "ArrowLeft") moved = nudgeSelectedBoxes(-step, 0);
+      if (event.key === "ArrowRight") moved = nudgeSelectedBoxes(step, 0);
+      if (moved) {
+        event.preventDefault();
+        setStatus(`已移動 ${getSelectedBoxes().length} 個文字框`);
+      }
+      return;
     }
 
     if (event.key !== "Delete") return;
