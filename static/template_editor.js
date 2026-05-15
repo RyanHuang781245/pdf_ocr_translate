@@ -2711,7 +2711,7 @@ function pasteClipboardBoxes() {
     if (idx === 0) {
       state.selected = { pageIdx, boxIdx };
       syncInspectorFromBox(state.pages[pageIdx]?.boxes[boxIdx]);
-      setActivePage(pageIdx);
+      setActivePage(pageIdx, { scroll: false });
     }
   });
   applySelectionClasses();
