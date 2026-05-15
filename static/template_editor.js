@@ -58,7 +58,6 @@ const batchApplyBoxesBtn = document.getElementById("batchApplyBoxes");
 const batchDeleteBoxesBtn = document.getElementById("batchDeleteBoxes");
 const saveBtn = document.getElementById("saveBtn");
 const downloadBtn = document.getElementById("downloadBtn");
-const headerTemplateBtn = document.getElementById("headerTemplateBtn");
 const menuBtn = document.getElementById("menuBtn");
 const menuDropdown = document.getElementById("menuDropdown");
 const regionTranslateBtn = document.getElementById("regionTranslateBtn");
@@ -230,7 +229,7 @@ function setActiveSidebarRail(targetId) {
 }
 
 function setSidebarSection(targetId) {
-  const sections = ["sidebarPagesSection", "sidebarToolsSection", "sidebarConsistencySection", "sidebarShortcutsSection"];
+  const sections = ["sidebarPagesSection", "sidebarToolsSection", "sidebarShortcutsSection"];
   sections.forEach((sectionId) => {
     const sectionEl = document.getElementById(sectionId);
     if (!sectionEl) return;
@@ -239,9 +238,6 @@ function setSidebarSection(targetId) {
     sectionEl.classList.toggle("is-active", active);
   });
   setActiveSidebarRail(targetId);
-  if (targetId === "sidebarConsistencySection") {
-    refreshAllConsistencyPanels();
-  }
 }
 
 function syncViewModeButton() {
@@ -1059,10 +1055,9 @@ function renderTemplateOptions(selectedId = "") {
   placeholder.textContent = "請選擇模板";
   templateSelectEl.appendChild(placeholder);
   documentTemplates.forEach((template) => {
-    if (template.status && template.status !== "saved") return;
     const option = document.createElement("option");
     option.value = template.id;
-    option.textContent = template.name || template.display_name || template.id;
+    option.textContent = template.name;
     if (template.id === selectedId) {
       option.selected = true;
     }
@@ -1151,12 +1146,21 @@ function buildTemplatePayloadFromState(templateName) {
   }).filter(Boolean);
 
   return {
+    id: document.body.dataset.templateId || "",
+    source_job_id: document.body.dataset.jobId || "",
+    display_name: document.body.dataset.templateDisplayName || document.body.dataset.jobId || "",
     name: String(templateName || "").trim(),
     pages,
   };
 }
 
 async function saveCurrentAsTemplate() {
+  flushPendingBoxEdits();
+  const saved = await saveEdits(false, { silent: true });
+  if (!saved) {
+    setStatus("儲存模板前，保存目前編輯失敗");
+    return;
+  }
   const name = templateNameEl?.value?.trim() || "";
   if (!name) {
     setStatus("請先輸入模板名稱");
@@ -1171,6 +1175,7 @@ async function saveCurrentAsTemplate() {
   if (saveTemplateBtn) {
     saveTemplateBtn.disabled = true;
     saveTemplateBtn.textContent = "儲存中...";
+    closeTemplateManagerModal();
   }
   try {
     const res = await fetch(`/api/document-templates`, {
@@ -1197,13 +1202,18 @@ async function saveCurrentAsTemplate() {
 }
 
 function openTemplateManagerModal() {
+  flushPendingBoxEdits();
   if (!templateManagerModal) return;
   templateManagerModal.hidden = false;
+  const currentTemplateId = document.body.dataset.templateId || templateSelectEl?.value || "";
+  if (templateNameEl && !templateNameEl.value.trim()) {
+    templateNameEl.value = document.body.dataset.templateName || "";
+  }
   setTemplateApplyPreset("all");
   if (templateApplyInputEl) {
     templateApplyInputEl.value = "";
   }
-  loadDocumentTemplates({ selectedId: templateSelectEl?.value || "" });
+  loadDocumentTemplates({ selectedId: currentTemplateId });
   loadTemplateTargetJobs();
 }
 
@@ -1238,7 +1248,7 @@ function getTemplateTargetPageLabel(templatePageIdxs) {
   return `模板頁：${pageLabels}`;
 }
 
-function getTemplateApplyTargetPages(template) {
+async function askTemplateTargetPages(template) {
   const templatePageIdxs = getTemplatePageIndexes(template);
   if (!templatePageIdxs.length) {
     setStatus("模板沒有可套用的頁面");
@@ -1278,7 +1288,7 @@ async function applyTemplateToDocument() {
     setStatus("請先選擇模板");
     return;
   }
-  const applyTarget = getTemplateApplyTargetPages(template);
+  const applyTarget = await askTemplateTargetPages(template);
   if (!applyTarget) {
     return;
   }
@@ -1337,7 +1347,7 @@ async function applyTemplateToDocument() {
       if (!allowedPageSet.has(pageIdx)) return;
       addTemplateBoxesToPage(templatePage.boxes || [], pageIdx);
     });
-  };
+  }
 
   if (!createdBoxes.length) {
     setStatus("模板沒有可套用到目前文件的頁面");
@@ -1541,6 +1551,16 @@ function commitBoxTextEdit(pageIdx, boxIdx, finalText) {
       updates: [{ pageIdx, boxId: box.id, before, after }],
     });
   }
+}
+
+function flushPendingBoxEdits() {
+  state.pages.forEach((page, pageIdx) => {
+    page.boxes.forEach((box, boxIdx) => {
+      if (!box || !box._editBefore) return;
+      commitBoxTextEdit(pageIdx, boxIdx, box.text);
+    });
+  });
+  syncContextInspector();
 }
 
 function setContextInspectorEmpty(message = "請先點選一個翻譯文字框") {
@@ -4222,12 +4242,6 @@ function bindControls() {
     });
   }
 
-  if (headerTemplateBtn) {
-    headerTemplateBtn.addEventListener("click", () => {
-      openTemplateManagerModal();
-    });
-  }
-
   if (closeGlossaryPrompt) {
     closeGlossaryPrompt.addEventListener("click", () => {
       closeGlossaryModal();
@@ -4637,6 +4651,9 @@ async function init() {
   const jobId = document.body.dataset.jobId;
   if (!jobId) return;
   currentJobId = jobId;
+  if (templateNameEl && document.body.dataset.templateName) {
+    templateNameEl.value = document.body.dataset.templateName;
+  }
   bindControls();
   setSelectionMode("boxes");
   const data = await loadJobData(jobId);

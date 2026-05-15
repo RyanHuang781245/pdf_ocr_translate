@@ -18,6 +18,8 @@ if callable(load_dotenv):
 BASE_DIR = Path(__file__).resolve().parents[2]
 OUT_ROOT = BASE_DIR / "out"
 JOB_ROOT = OUT_ROOT / "jobs"
+TEMPLATE_ROOT = OUT_ROOT / "templates"
+TEMPLATE_JOB_ROOT = TEMPLATE_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
 DOC_WORKSPACE_ROOT = OUT_ROOT / "doc_workspace"
 
@@ -47,6 +49,9 @@ GLOSSARY_PROCESS_PATH = os.getenv(
 GLOBAL_GLOSSARY_PATH = os.getenv(
     "GLOBAL_GLOSSARY_PATH",
     str((BASE_DIR / "glossary" / "global_glossary.json")),
+)
+DOCUMENT_TEMPLATES_PATH = Path(
+    os.getenv("DOCUMENT_TEMPLATES_PATH", str(TEMPLATE_ROOT / "document_templates.json"))
 )
 AZURE_BATCH_SYSTEM_PROMPT = os.getenv(
     "AZURE_BATCH_SYSTEM_PROMPT",

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 
-from ...services import doc_workspace, jobs, pipeline, state, submit_quota, word_translate
+from ...services import doc_workspace, document_templates, jobs, pipeline, state, submit_quota, word_translate
 
 main_bp = Blueprint(
     "main",
@@ -55,6 +55,32 @@ def overlay_workspace() -> str:
         "main/overlay_workspace.html",
         batch_model=state.AZURE_BATCH_MODEL,
         realtime_model=state.PDF_REALTIME_TRANSLATE_MODEL,
+    )
+
+
+@main_bp.route("/workspace/pdf-overlay/templates", methods=["GET"], endpoint="overlay_templates_page")
+def overlay_templates_page() -> str:
+    return render_template("main/overlay_templates.html")
+
+
+@main_bp.route(
+    "/workspace/pdf-overlay/templates/<job_id>",
+    methods=["GET"],
+    endpoint="template_editor_page",
+)
+def template_editor_page(job_id: str) -> str:
+    if not jobs.safe_job_id(job_id):
+        abort(404)
+    job_dir = jobs.job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+    template_record = document_templates.get_document_template_by_job(job_id)
+    return render_template(
+        "main/template_editor.html",
+        job_id=job_id,
+        template_record=template_record,
+        job_name=jobs.get_job_name(job_dir),
+        debug_pdf_url=url_for("jobs.job_file", job_id=job_id, filename="overlay_debug.pdf"),
     )
 
 
@@ -130,6 +156,69 @@ def upload() -> str:
     jobs.notify_jobs_update()
 
     return redirect(url_for(".overlay_workspace"))
+
+
+@main_bp.route("/upload-template-source", methods=["POST"], endpoint="upload_template_source")
+def upload_template_source() -> str:
+    files = request.files.getlist("pdf")
+    if not files or all(f.filename == "" for f in files):
+        abort(400, "Missing PDF file.")
+
+    state.TEMPLATE_JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    state.UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+
+    dpi = 200
+    template_page = max(1, int(request.form.get("page", 1)))
+    translate_source_lang = "auto"
+    translate_target_lang = "en"
+    translate_mode = "batch"
+    translate_model = state.AZURE_BATCH_MODEL
+    keep_lang = "all"
+    enable_translate = False
+    document_mode = "scanned"
+    creator_name = ""
+    _enforce_submit_quota(creator_name)
+    created_job_id = ""
+
+    for file in files:
+        if not file or file.filename == "":
+            continue
+        ext = Path(file.filename).suffix.lower()
+        if ext not in state.ALLOWED_EXTENSIONS:
+            continue
+        tmp_path = state.UPLOAD_ROOT / _safe_upload_name(file.filename or "", ".pdf")
+        file.save(tmp_path)
+        display_name = _display_name_from_filename(file.filename or "", "template")
+        created_job_id = pipeline.enqueue_job_from_upload(
+            tmp_path,
+            display_name,
+            dpi,
+            template_page,
+            template_page,
+            translate_source_lang,
+            translate_target_lang,
+            translate_model,
+            translate_mode,
+            keep_lang,
+            enable_translate,
+            document_mode,
+            creator_name,
+            job_root=state.TEMPLATE_JOB_ROOT,
+        )
+        template_job_dir = jobs.job_dir(created_job_id, job_root=state.TEMPLATE_JOB_ROOT)
+        template_job_dir.mkdir(parents=True, exist_ok=True)
+        jobs.update_job_meta(template_job_dir, template_source=True)
+        document_templates.create_template_draft(
+            source_job_id=created_job_id,
+            display_name=display_name,
+        )
+        try:
+            tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    jobs.notify_jobs_update()
+    return redirect(url_for(".overlay_templates_page"))
 
 
 @main_bp.route("/upload-doc-workspace", methods=["POST"], endpoint="upload_doc_workspace")

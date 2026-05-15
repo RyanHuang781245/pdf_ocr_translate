@@ -151,8 +151,16 @@ def build_docx_name(job_id: str, job_name: str | None) -> str:
     return build_download_name(job_id, job_name, ext="docx", suffix="translated")
 
 
-def job_dir(job_id: str) -> Path:
-    return state.JOB_ROOT / job_id
+def job_dir(job_id: str, *, job_root: Path | None = None) -> Path:
+    if job_root is not None:
+        return job_root / job_id
+    primary = state.JOB_ROOT / job_id
+    if primary.exists():
+        return primary
+    template = state.TEMPLATE_JOB_ROOT / job_id
+    if template.exists():
+        return template
+    return primary
 
 
 def job_timestamp(path: Path) -> float:
@@ -290,8 +298,14 @@ def infer_job_store_status(job_dir_path: Path, meta: dict[str, Any]) -> tuple[st
     return _job_store_status_for_ocr(job_dir_path, meta)
 
 
-def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
+def build_jobs_list(
+    job_type: str | None = None,
+    *,
+    include_template_sources: bool = True,
+    only_template_sources: bool = False,
+) -> list[dict[str, Any]]:
     state.JOB_ROOT.mkdir(parents=True, exist_ok=True)
+    state.TEMPLATE_JOB_ROOT.mkdir(parents=True, exist_ok=True)
     jobs = []
     records = job_store.list_jobs(job_type)
 
@@ -300,6 +314,12 @@ def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
         current_job_type = record.job_type
         job_id = record.job_id
         job_meta = load_job_meta(job_dir_path) or {}
+        is_template_source = bool(job_meta.get("template_source"))
+        if current_job_type == "ocr_overlay":
+            if only_template_sources and not is_template_source:
+                continue
+            if not include_template_sources and is_template_source:
+                continue
 
         pdf_path = job_dir_path / f"{job_id}.pdf"
         debug_pdf_path = job_dir_path / "overlay_debug.pdf"
@@ -477,6 +497,7 @@ def build_jobs_list(job_type: str | None = None) -> list[dict[str, Any]]:
                 "status_label": status_label,
                 "status": status_label,
                 "job_name": job_name,
+                "template_source": is_template_source,
                 "creator_name": str(job_meta.get("creator_name") or "").strip() or None,
                 "document_mode": normalize_document_mode(
                     record.document_mode or job_meta.get("document_mode")
@@ -819,12 +840,18 @@ def build_translated_zip(job_ids: set[str] | None) -> tuple[io.BytesIO, int]:
 
 
 def delete_job_dir(job_id: str) -> tuple[bool, str | None]:
-    job_dir_path = job_dir(job_id)
-    if job_dir_path.exists():
+    removed = False
+    errors: list[str] = []
+    for job_dir_path in (state.JOB_ROOT / job_id, state.TEMPLATE_JOB_ROOT / job_id):
+        if not job_dir_path.exists():
+            continue
         try:
             shutil.rmtree(job_dir_path)
+            removed = True
         except Exception as exc:
-            return False, str(exc)
+            errors.append(str(exc))
+    if errors:
+        return False, "; ".join(errors)
     job_store.delete_job(job_id)
     notify_jobs_update()
     return True, None

@@ -14,6 +14,216 @@ def test_index_ok(client):
     assert "text/html" in resp.content_type
 
 
+def test_overlay_templates_page_ok(client):
+    resp = client.get("/workspace/pdf-overlay/templates")
+    assert resp.status_code == 200
+    assert "text/html" in resp.content_type
+
+
+def test_upload_template_source_creates_draft(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
+    monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")
+    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
+    captured: list[dict[str, object]] = []
+
+    def fake_enqueue(
+        source_pdf,
+        display_name,
+        dpi,
+        start_page,
+        end_page,
+        translate_source_lang,
+        translate_target_lang,
+        translate_model,
+        translate_mode,
+        keep_lang,
+        enable_translate,
+        document_mode,
+        creator_name="",
+        job_root=None,
+    ):
+        captured.append(
+            {
+                "display_name": display_name,
+                "enable_translate": enable_translate,
+                "document_mode": document_mode,
+                "start_page": start_page,
+                "end_page": end_page,
+                "job_root": job_root,
+            }
+        )
+        return "9" * 32
+
+    monkeypatch.setattr(
+        "app.blueprints.main.routes.pipeline.enqueue_job_from_upload",
+        fake_enqueue,
+    )
+
+    resp = client.post(
+        "/upload-template-source",
+        data={"pdf": (io.BytesIO(b"%PDF-1.4"), "template-source.pdf"), "page": "3"},
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 302
+    assert captured == [
+        {
+            "display_name": "template-source",
+            "enable_translate": False,
+            "document_mode": "scanned",
+            "start_page": 3,
+            "end_page": 3,
+            "job_root": tmp_path / "templates" / "jobs",
+        }
+    ]
+    templates = json.loads(state.DOCUMENT_TEMPLATES_PATH.read_text(encoding="utf-8"))
+    assert len(templates) == 1
+    assert templates[0]["status"] == "draft"
+    assert templates[0]["source_job_id"] == "9" * 32
+
+
+def test_api_jobs_excludes_template_source_jobs(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
+    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
+    job_id = "4" * 32
+    job_dir = tmp_path / "templates" / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    jobs.write_job_meta(
+        job_dir,
+        {
+            "job_name": "template-source",
+            "job_type": "ocr_overlay",
+            "document_mode": "scanned",
+            "template_source": True,
+        },
+    )
+    class Record:
+        def __init__(self):
+            self.job_id = job_id
+            self.job_type = "ocr_overlay"
+            self.status = "queued"
+            self.stage = "queued"
+            self.progress = 0.0
+            self.target_lang = None
+            self.document_mode = "scanned"
+
+    monkeypatch.setattr(jobs.job_store, "list_jobs", lambda job_type=None: [Record()])
+
+    resp = client.get("/api/jobs")
+    assert resp.status_code == 200
+    assert resp.get_json()["jobs"] == []
+
+    template_resp = client.get("/api/template-jobs")
+    assert template_resp.status_code == 200
+    assert len(template_resp.get_json()["jobs"]) == 1
+
+
+def test_template_editor_page_ok(client, tmp_path, monkeypatch):
+    job_id = "1" * 32
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+
+    resp = client.get(f"/workspace/pdf-overlay/templates/{job_id}")
+    assert resp.status_code == 200
+    assert "text/html" in resp.content_type
+    body = resp.get_data(as_text=True)
+    assert 'id="saveBtn"' not in body
+    assert "batchRestoreBtn" not in body
+    assert "sidebarConsistencySection" not in body
+    assert "glossaryPromptBtn" not in body
+    assert "batchTranslateBtn" not in body
+    assert "contextRetranslateBtn" not in body
+
+
+def test_editor_page_shows_template_entry(client, tmp_path, monkeypatch):
+    job_id = "3" * 32
+    job_dir = tmp_path / "jobs" / job_id
+    job_dir.mkdir(parents=True)
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+
+    resp = client.get(f"/job/{job_id}")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "headerTemplateBtn" in body
+    assert "templateManagerModal" in body
+
+
+def test_apply_document_template_to_job(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
+    job_id = "2" * 32
+    job_dir = tmp_path / "jobs" / job_id
+    ocr_dir = job_dir / "ocr_json"
+    ocr_dir.mkdir(parents=True)
+
+    (ocr_dir / "page_0001_res_with_pdf_coords.json").write_text(
+        json.dumps(
+            {
+                "page_index_0based": 0,
+                "input_path": "page1.png",
+                "coord_transform": {"image_size_px": [1000, 2000]},
+                "rec_polys": [[[10, 20], [110, 20], [110, 60], [10, 60]]],
+                "rec_texts": ["原始框"],
+                "edit_texts": ["原始框"],
+                "rec_scores": [0.99],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    client.post(
+        "/api/document-templates",
+        json={
+            "name": "表單模板",
+            "pages": [
+                {
+                    "page_index_0based": 0,
+                    "boxes": [
+                        {
+                            "x_ratio": 0.2,
+                            "y_ratio": 0.3,
+                            "w_ratio": 0.2,
+                            "h_ratio": 0.05,
+                            "text": "Template Text",
+                            "font_size": 18,
+                            "color": "#123456",
+                            "text_align": "center",
+                            "rotation": 0,
+                            "no_clip": False,
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    template_id = client.get("/api/document-templates").get_json()["templates"][0]["id"]
+
+    monkeypatch.setattr(
+        "app.blueprints.api.routes.ocr.apply_edits_to_pdf",
+        lambda current_job_id, current_job_dir, edits: Path(current_job_dir) / "edited.pdf",
+    )
+
+    resp = client.post(
+        f"/api/document-templates/{template_id}/apply",
+        json={"job_id": job_id},
+    )
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["created_count"] == 1
+
+    saved = json.loads((job_dir / "edits.json").read_text(encoding="utf-8"))
+    boxes = saved["pages"][0]["boxes"]
+    assert len(boxes) == 2
+    assert boxes[1]["text"] == "Template Text"
+    assert boxes[1]["bbox"] == {"x": 200.0, "y": 600.0, "w": 200.0, "h": 100.0}
+
+
 def test_upload_missing_pdf(client):
     resp = client.post("/upload", data={})
     assert resp.status_code == 400
@@ -258,6 +468,110 @@ def test_glossary_get(client):
     payload = resp.get_json()
     assert isinstance(payload, dict)
     assert payload.get("ok") is True
+
+
+def test_document_templates_crud(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
+    monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
+
+    resp = client.get("/api/document-templates")
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["templates"] == []
+
+    create_resp = client.post(
+        "/api/document-templates",
+        json={
+            "name": "表單 A",
+            "pages": [
+                {
+                    "page_index_0based": 0,
+                    "boxes": [
+                        {
+                            "x_ratio": 0.1,
+                            "y_ratio": 0.2,
+                            "w_ratio": 0.3,
+                            "h_ratio": 0.04,
+                            "text": "Inspection Frequency",
+                            "font_size": 18,
+                            "color": "#112233",
+                            "text_align": "center",
+                            "rotation": 90,
+                            "no_clip": True,
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    assert create_resp.status_code == 200
+    created = create_resp.get_json()["template"]
+    assert created["name"] == "表單 A"
+    assert created["status"] == "saved"
+    assert created["pages"][0]["boxes"][0]["rotation"] == 90
+    assert created["pages"][0]["boxes"][0]["text_align"] == "center"
+
+    stored = json.loads(state.DOCUMENT_TEMPLATES_PATH.read_text(encoding="utf-8"))
+    assert stored[0]["pages"][0]["boxes"][0]["x_ratio"] == 0.1
+
+    list_resp = client.get("/api/document-templates")
+    assert list_resp.status_code == 200
+    listed = list_resp.get_json()["templates"]
+    assert len(listed) == 1
+    assert listed[0]["id"] == created["id"]
+
+    delete_resp = client.delete(f"/api/document-templates/{created['id']}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.get_json()["deleted"] is True
+
+    final_resp = client.get("/api/document-templates")
+    assert final_resp.get_json()["templates"] == []
+
+
+def test_delete_document_template_removes_source_job_dir(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
+    monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
+    template_job_id = "7" * 32
+    template_job_dir = state.TEMPLATE_JOB_ROOT / template_job_id
+    template_job_dir.mkdir(parents=True)
+    jobs.write_job_meta(
+        template_job_dir,
+        {
+            "job_name": "template-source",
+            "job_type": "ocr_overlay",
+            "document_mode": "scanned",
+            "template_source": True,
+        },
+    )
+
+    create_resp = client.post(
+        "/api/document-templates",
+        json={
+            "name": "表單 A",
+            "source_job_id": template_job_id,
+            "pages": [
+                {
+                    "page_index_0based": 0,
+                    "boxes": [
+                        {
+                            "x_ratio": 0.1,
+                            "y_ratio": 0.2,
+                            "w_ratio": 0.3,
+                            "h_ratio": 0.04,
+                            "text": "Inspection Frequency",
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    template_id = create_resp.get_json()["template"]["id"]
+
+    delete_resp = client.delete(f"/api/document-templates/{template_id}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.get_json()["deleted"] is True
+    assert not template_job_dir.exists()
 
 
 def test_update_merge_notice_status(client, tmp_path, monkeypatch):

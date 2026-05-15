@@ -8,7 +8,7 @@ from typing import Any
 
 from flask import Blueprint, Response, abort, jsonify, request, send_file, stream_with_context, url_for
 
-from ...services import batch, doc_workspace, glossary, jobs, ocr, state, translation_memory, word_translate
+from ...services import batch, doc_workspace, document_templates, glossary, jobs, ocr, state, translation_memory, word_translate
 
 logger = logging.getLogger(__name__)
 
@@ -255,9 +255,208 @@ def global_glossary():
     return jsonify({"ok": True, "glossary": glossary.load_global_glossary()})
 
 
+@api_bp.route("/document-templates", methods=["GET", "POST"], endpoint="document_templates")
+def manage_document_templates():
+    if request.method == "GET":
+        return jsonify({"ok": True, "templates": document_templates.load_document_templates()})
+
+    payload = request.get_json(force=True) or {}
+    try:
+        template = document_templates.save_document_template(payload)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, "template": template})
+
+
+@api_bp.route(
+    "/document-templates/<template_id>",
+    methods=["DELETE"],
+    endpoint="delete_document_template",
+)
+def delete_document_template(template_id: str):
+    template = document_templates.get_document_template(template_id)
+    if template is None:
+        return jsonify({"ok": False, "error": "Template not found."}), 404
+    source_job_id = str(template.get("source_job_id") or "").strip()
+    if source_job_id:
+        deleted_job, error = jobs.delete_job_dir(source_job_id)
+        if not deleted_job and error:
+            return jsonify({"ok": False, "error": error}), 500
+    deleted = document_templates.delete_document_template(template_id)
+    if not deleted:
+        return jsonify({"ok": False, "error": "Template not found."}), 404
+    return jsonify({"ok": True, "deleted": True})
+
+
+def _build_page_boxes_for_save(
+    page_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    def _item(values: Any, index: int, default: Any) -> Any:
+        if isinstance(values, list) and index < len(values):
+            return values[index]
+        return default
+
+    boxes: list[dict[str, Any]] = []
+    rec_polys = page_payload.get("rec_polys") or []
+    count = len(rec_polys)
+    for index in range(count):
+        bbox = batch.poly_to_bbox(rec_polys[index])
+        if not bbox:
+            continue
+        boxes.append(
+            {
+                "id": int(_item(page_payload.get("box_ids"), index, index) or index),
+                "deleted": False,
+                "bbox": bbox,
+                "text": str(_item(page_payload.get("edit_texts"), index, "") or ""),
+                "font_size": float(_item(page_payload.get("font_sizes"), index, 0.0) or 0.0),
+                "no_clip": bool(_item(page_payload.get("no_clips"), index, False)),
+                "color": str(_item(page_payload.get("colors"), index, state.DEFAULT_TEXT_COLOR) or state.DEFAULT_TEXT_COLOR),
+                "text_align": str(_item(page_payload.get("alignments"), index, "left") or "left"),
+                "rotation": int(_item(page_payload.get("rotations"), index, 0) or 0),
+                "auto_generated": bool(_item(page_payload.get("auto_generated_flags"), index, True)),
+                "tm_source_text": str(_item(page_payload.get("tm_source_texts"), index, "") or ""),
+                "tm_source_normalized": str(_item(page_payload.get("tm_source_normalizeds"), index, "") or ""),
+                "tm_target_lang": str(_item(page_payload.get("tm_target_langs"), index, "") or ""),
+                "tm_document_mode": str(_item(page_payload.get("tm_document_modes"), index, "") or ""),
+            }
+        )
+    return boxes
+
+
+@api_bp.route(
+    "/document-templates/<template_id>/apply",
+    methods=["POST"],
+    endpoint="apply_document_template",
+)
+def apply_document_template(template_id: str):
+    template = document_templates.get_document_template(template_id)
+    if template is None:
+        return jsonify({"ok": False, "error": "Template not found."}), 404
+
+    payload = request.get_json(force=True) or {}
+    job_id = str(payload.get("job_id") or "").strip()
+    if not jobs.safe_job_id(job_id):
+        return jsonify({"ok": False, "error": "Invalid job id."}), 400
+    job_dir = jobs.job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+
+    json_dir = job_dir / "ocr_json"
+    if not json_dir.exists():
+        abort(404)
+
+    edits_map = jobs.load_edits_map(job_dir)
+    json_paths = sorted(json_dir.glob("*_res_with_pdf_coords.json"))
+    pages_payload: list[dict[str, Any]] = []
+    all_boxes: list[dict[str, Any]] = []
+    template_pages = {
+        int(page.get("page_index_0based") or 0): page
+        for page in template.get("pages", [])
+        if isinstance(page, dict)
+    }
+
+    next_id = 1
+    for path in json_paths:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        page_idx = int(data.get("page_index_0based", 0))
+        edits_boxes = edits_map.get(page_idx) if page_idx in edits_map else None
+        page_payload = ocr.load_page_data(path, edits_boxes=edits_boxes, data=data)
+        boxes = _build_page_boxes_for_save(page_payload)
+        all_boxes.extend(boxes)
+        pages_payload.append(
+            {
+                "page_index_0based": page_idx,
+                "image_size_px": page_payload.get("image_size_px"),
+                "boxes": boxes,
+            }
+        )
+        page_max = max((int(box.get("id") or 0) for box in boxes), default=0)
+        next_id = max(next_id, page_max + 1)
+
+    created_count = 0
+    for page in pages_payload:
+        page_idx = int(page["page_index_0based"])
+        template_page = template_pages.get(page_idx)
+        image_size = page.get("image_size_px") or []
+        if not template_page or not isinstance(image_size, list) or len(image_size) != 2:
+            continue
+        width = float(image_size[0] or 0.0)
+        height = float(image_size[1] or 0.0)
+        if width <= 0 or height <= 0:
+            continue
+        for template_box in template_page.get("boxes", []):
+            if not isinstance(template_box, dict):
+                continue
+            box_w = max(1.0, float(template_box.get("w_ratio") or 0.0) * width)
+            box_h = max(1.0, float(template_box.get("h_ratio") or 0.0) * height)
+            box_x = max(0.0, min(float(template_box.get("x_ratio") or 0.0) * width, max(0.0, width - box_w)))
+            box_y = max(0.0, min(float(template_box.get("y_ratio") or 0.0) * height, max(0.0, height - box_h)))
+            page["boxes"].append(
+                {
+                    "id": next_id,
+                    "deleted": False,
+                    "bbox": {"x": box_x, "y": box_y, "w": box_w, "h": box_h},
+                    "text": str(template_box.get("text") or ""),
+                    "font_size": float(template_box.get("font_size") or state.DEFAULT_FONT_SIZE_PX),
+                    "no_clip": bool(template_box.get("no_clip")),
+                    "color": str(template_box.get("color") or state.DEFAULT_TEXT_COLOR),
+                    "text_align": str(template_box.get("text_align") or "left"),
+                    "rotation": int(template_box.get("rotation") or 0),
+                    "auto_generated": True,
+                    "tm_source_text": "",
+                    "tm_source_normalized": "",
+                    "tm_target_lang": "",
+                    "tm_document_mode": "",
+                }
+            )
+            next_id += 1
+            created_count += 1
+
+    if not created_count:
+        return jsonify({"ok": False, "error": "Template has no matching target pages."}), 400
+
+    edits_payload = {
+        "pages": [
+            {
+                "page_index_0based": page["page_index_0based"],
+                "boxes": page["boxes"],
+            }
+            for page in pages_payload
+        ]
+    }
+    (job_dir / "edits.json").write_text(
+        json.dumps(edits_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    try:
+        edited_pdf = ocr.apply_edits_to_pdf(job_id, job_dir, edits_payload)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    jobs.notify_jobs_update()
+    return jsonify(
+        {
+            "ok": True,
+            "job_id": job_id,
+            "created_count": created_count,
+            "edited_pdf_url": url_for("jobs.job_file", job_id=job_id, filename=edited_pdf.name),
+        }
+    )
+
+
 @api_bp.route("/jobs", methods=["GET"], endpoint="list_jobs")
 def list_jobs():
-    jobs_list = jobs.build_jobs_list(job_type="ocr_overlay")
+    jobs_list = jobs.build_jobs_list(job_type="ocr_overlay", include_template_sources=False)
+    return jsonify({"jobs": jobs_list})
+
+
+@api_bp.route("/template-jobs", methods=["GET"], endpoint="list_template_jobs")
+def list_template_jobs():
+    jobs_list = jobs.build_jobs_list(
+        job_type="ocr_overlay",
+        include_template_sources=True,
+        only_template_sources=True,
+    )
     return jsonify({"jobs": jobs_list})
 
 
@@ -383,7 +582,7 @@ def jobs_stream():
     def generate():
         last_payload = None
         while True:
-            payload = {"jobs": jobs.build_jobs_list(job_type="ocr_overlay")}
+            payload = {"jobs": jobs.build_jobs_list(job_type="ocr_overlay", include_template_sources=False)}
             data = json.dumps(payload, ensure_ascii=False)
             if data != last_payload:
                 last_payload = data

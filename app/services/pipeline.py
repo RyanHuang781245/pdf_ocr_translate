@@ -143,9 +143,10 @@ def enqueue_job_from_upload(
     enable_translate: bool,
     document_mode: str,
     creator_name: str = "",
+    job_root: Path | None = None,
 ) -> str:
     job_id = uuid.uuid4().hex
-    job_dir = jobs.job_dir(job_id)
+    job_dir = jobs.job_dir(job_id, job_root=job_root)
     job_dir.mkdir(parents=True, exist_ok=True)
     job_name = display_name
     now_ts = time.time()

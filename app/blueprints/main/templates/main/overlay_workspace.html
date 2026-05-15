@@ -12,7 +12,10 @@
       <header class="hero">
         <div class="hero-title-split">
           <h1>PDF 原版面翻譯</h1>
-          <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
+          <div class="button-row--tight">
+            <a class="ghost back-link" href="{{ url_for('.overlay_templates_page') }}">欄位翻譯模板</a>
+            <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
+          </div>
         </div>
         <!-- <p class="eyebrow">PDF -> OCR -> Translate -> Overlay</p> -->
       </header>
@@ -294,7 +297,7 @@
           const translateDuration = formatDuration(job.translate_duration_seconds);
           const ocrText = ocrDuration ? ` · OCR: ${ocrDuration}` : "";
           const translateText = translateDuration ? ` · 翻譯: ${translateDuration}` : "";
-          meta.textContent = `Updated: ${formatDate(job.updated_at)} · Status: ${statusLabel}${durationText}${ocrText}${translateText}`;
+          meta.textContent = `上傳時間: ${formatDate(job.updated_at)} · 狀態: ${statusLabel}${durationText}${ocrText}${translateText}`;
 
           const actions = document.createElement("div");
           actions.className = "job-actions";
@@ -338,6 +341,13 @@
             downloadLink.className = "ghost";
             downloadLink.download = job.download_name || `${job.job_id}.pdf`;
             actions.appendChild(downloadLink);
+          } else if (!isActiveJob(job) && job.debug_pdf_url) {
+            const fallbackDownloadLink = document.createElement("a");
+            fallbackDownloadLink.href = `${job.debug_pdf_url}?download=1`;
+            fallbackDownloadLink.textContent = "下載已翻譯文件";
+            fallbackDownloadLink.className = "ghost";
+            fallbackDownloadLink.download = job.download_name || `${job.job_id}.pdf`;
+            actions.appendChild(fallbackDownloadLink);
           }
 
           if (canRetryJob(job)) {
