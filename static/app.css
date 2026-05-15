@@ -44,6 +44,38 @@ code {
   animation: rise 0.7s ease;
 }
 
+.shell--wide {
+  max-width: 1400px;
+}
+
+.overlay-layout {
+  display: grid;
+  grid-template-columns: minmax(350px, 420px) 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .overlay-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-section {
+  border-top: 1px solid var(--edge);
+  margin-top: 1.5rem;
+  padding-top: 1.2rem;
+}
+
+.form-section-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.8rem;
+}
+
 .hero h1 {
   font-size: clamp(2.4rem, 4vw, 3.4rem);
   margin: 0.2rem 0 0.8rem;

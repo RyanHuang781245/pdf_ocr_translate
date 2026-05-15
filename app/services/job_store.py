@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, create_engine, func, select, text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, create_engine, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -67,44 +67,7 @@ class DocumentTemplateRecord(Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source_job_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="saved")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
-class DocumentTemplatePageRecord(Base):
-    __tablename__ = "document_template_pages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    template_id: Mapped[str] = mapped_column(
-        String(32),
-        ForeignKey("document_templates.template_id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    page_index_0based: Mapped[int] = mapped_column(Integer, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-
-class DocumentTemplateBoxRecord(Base):
-    __tablename__ = "document_template_boxes"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    page_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("document_template_pages.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    x_ratio: Mapped[float] = mapped_column(Float, nullable=False)
-    y_ratio: Mapped[float] = mapped_column(Float, nullable=False)
-    w_ratio: Mapped[float] = mapped_column(Float, nullable=False)
-    h_ratio: Mapped[float] = mapped_column(Float, nullable=False)
-    text: Mapped[str] = mapped_column(Text, nullable=False)
-    font_size: Mapped[float] = mapped_column(Float, nullable=False)
-    color: Mapped[str] = mapped_column(String(20), nullable=False)
-    text_align: Mapped[str] = mapped_column(String(20), nullable=False)
-    rotation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    no_clip: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -116,8 +79,6 @@ REQUIRED_TABLES = (
     "job_artifacts",
     "job_events",
     "document_templates",
-    "document_template_pages",
-    "document_template_boxes",
 )
 
 
@@ -142,16 +103,14 @@ def _assert_required_tables() -> None:
         raise RuntimeError("Database engine not initialized.")
     query = text(
         """
-        SELECT TABLE_NAME
-        FROM INFORMATION_SCHEMA.TABLES
+        SELECT TABLE_NAME, COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
         WHERE TABLE_SCHEMA = 'dbo'
           AND TABLE_NAME IN (
             'jobs',
             'job_artifacts',
             'job_events',
-            'document_templates',
-            'document_template_pages',
-            'document_template_boxes'
+            'document_templates'
           );
         """
     )
@@ -163,6 +122,16 @@ def _assert_required_tables() -> None:
         names = ", ".join(missing)
         raise RuntimeError(
             f"Missing required SQL Server tables: {names}. Run scripts/init_sqlserver_schema.sql first."
+        )
+    template_columns = {
+        str(row[1]).lower()
+        for row in rows
+        if str(row[0]).lower() == "document_templates"
+    }
+    if "payload_json" not in template_columns:
+        raise RuntimeError(
+            "Missing required SQL Server column: document_templates.payload_json. "
+            "Update the database schema before starting the app."
         )
 
 
