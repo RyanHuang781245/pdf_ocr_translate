@@ -3315,6 +3315,12 @@ function startRangeSelection(event, pageIdx) {
   }
 }
 
+function clampSelectionCoordinate(value, maxValue) {
+  if (!Number.isFinite(value)) return 0;
+  if (!Number.isFinite(maxValue) || maxValue <= 0) return Math.max(0, value);
+  return Math.max(0, Math.min(value, maxValue));
+}
+
 function updateRangeSelection(event) {
   if (!state.selecting) return;
   const { startX, startY, rectEl, overlayEl, scrollLeft, scrollTop } = state.selecting;
@@ -3335,8 +3341,12 @@ function updateRangeSelection(event) {
     state.selecting.scrollLeft = pagesEl?.scrollLeft ?? scrollLeft;
     state.selecting.scrollTop = pagesEl?.scrollTop ?? scrollTop;
   }
-  const currentX = clientX - bounds.left + scrollDx;
-  const currentY = clientY - bounds.top + scrollDy;
+  const rawCurrentX = clientX - bounds.left + scrollDx;
+  const rawCurrentY = clientY - bounds.top + scrollDy;
+  const maxX = overlayEl.clientWidth;
+  const maxY = overlayEl.clientHeight;
+  const currentX = clampSelectionCoordinate(rawCurrentX, maxX);
+  const currentY = clampSelectionCoordinate(rawCurrentY, maxY);
   const left = Math.min(startX, currentX);
   const top = Math.min(startY, currentY);
   const width = Math.abs(currentX - startX);
