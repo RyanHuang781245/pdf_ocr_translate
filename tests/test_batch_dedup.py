@@ -591,6 +591,75 @@ def test_general_document_mode_payload_skips_ocr_lines_inside_bilingual_structur
     assert payload["pages"][0]["boxes"] == []
 
 
+def test_general_document_mode_skips_mixed_structured_blocks_for_batch_items():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": [],
+            "rec_polys": [],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "骨科植入物 Orthopedic Implants",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [],
+        }
+    }
+
+    items, alias_map, key_map, prefilled = build_batch_items(
+        ocr_pages,
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
+        pp_pages=pp_pages,
+        document_mode="general",
+    )
+
+    assert items == []
+    assert alias_map == {}
+    assert key_map == {}
+    assert prefilled == {}
+
+
+def test_general_document_mode_payload_skips_mixed_structured_blocks():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": [],
+            "rec_polys": [],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "骨科植入物 Orthopedic Implants",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [],
+        }
+    }
+
+    payload = build_edits_payload_from_translations(
+        ocr_pages,
+        {"p0000-b0000": "Translated bilingual block"},
+        pp_pages=pp_pages,
+        document_mode="general",
+    )
+
+    assert payload["pages"][0]["boxes"] == []
+
+
 def test_general_force_translate_mode_keeps_bilingual_structured_blocks_for_batch_items():
     ocr_pages = [
         {

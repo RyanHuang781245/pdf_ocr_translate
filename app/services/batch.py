@@ -354,6 +354,12 @@ def should_translate_structured_block(
         return should_translate_text(text, source_lang=source_lang, target_lang=target_lang)
     if not block.get("should_translate"):
         return False
+    if mode == "general" and is_mixed_source_target_text(
+        text,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    ):
+        return False
     if not merged_only:
         return True
     if mode != "form":
