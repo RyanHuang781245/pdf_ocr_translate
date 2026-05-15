@@ -882,6 +882,26 @@ function refreshAllConsistencyPanels() {
 let glossaryEntries = [];
 let currentJobId = null;
 let batchPageModalResolver = null;
+let editingGlossaryIndex = -1;
+
+function resetGlossaryEditorState() {
+  editingGlossaryIndex = -1;
+  if (glossaryCnEl) glossaryCnEl.value = "";
+  if (glossaryEnEl) glossaryEnEl.value = "";
+  if (addGlossaryBtn) addGlossaryBtn.textContent = "加入詞彙";
+  if (addGlossaryRetranslateBtn) addGlossaryRetranslateBtn.textContent = "加入詞彙並重翻命中框";
+}
+
+function startGlossaryEdit(index) {
+  const entry = glossaryEntries[index];
+  if (!entry) return;
+  editingGlossaryIndex = index;
+  if (glossaryCnEl) glossaryCnEl.value = String(entry.cn || "");
+  if (glossaryEnEl) glossaryEnEl.value = String(entry.en || "");
+  if (addGlossaryBtn) addGlossaryBtn.textContent = "儲存修改";
+  if (addGlossaryRetranslateBtn) addGlossaryRetranslateBtn.textContent = "儲存修改並重翻命中框";
+  glossaryCnEl?.focus();
+}
 
 function renderGlossary() {
   if (!glossaryListEl) return;
@@ -900,17 +920,30 @@ function renderGlossary() {
     cn.textContent = entry.cn;
     const en = document.createElement("span");
     en.textContent = entry.en;
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "ghost";
+    edit.textContent = "修改";
+    edit.addEventListener("click", () => {
+      startGlossaryEdit(index);
+    });
     const del = document.createElement("button");
     del.type = "button";
     del.className = "ghost";
     del.textContent = "刪除";
     del.addEventListener("click", () => {
       glossaryEntries.splice(index, 1);
+      if (editingGlossaryIndex === index) {
+        resetGlossaryEditorState();
+      } else if (editingGlossaryIndex > index) {
+        editingGlossaryIndex -= 1;
+      }
       renderGlossary();
       saveGlossary();
     });
     row.appendChild(cn);
     row.appendChild(en);
+    row.appendChild(edit);
     row.appendChild(del);
     glossaryListEl.appendChild(row);
   });
@@ -965,10 +998,15 @@ async function addGlossaryEntry(options = {}) {
     setStatus("請輸入中文與英文詞彙");
     return false;
   }
+  const originalCn = editingGlossaryIndex >= 0
+    ? String(glossaryEntries[editingGlossaryIndex]?.cn || "").trim()
+    : "";
+  if (editingGlossaryIndex >= 0) {
+    glossaryEntries.splice(editingGlossaryIndex, 1);
+  }
   glossaryEntries = glossaryEntries.filter((entry) => String(entry?.cn || "").trim() !== cn);
   glossaryEntries.unshift({ cn, en });
-  glossaryCnEl.value = "";
-  glossaryEnEl.value = "";
+  resetGlossaryEditorState();
   renderGlossary();
   refreshAllConsistencyPanels();
   const savedGlossary = await saveGlossary();
@@ -977,7 +1015,7 @@ async function addGlossaryEntry(options = {}) {
     return false;
   }
   if (!retranslate) {
-    setStatus("已加入詞彙");
+    setStatus(originalCn ? "已修改詞彙" : "已加入詞彙");
     return true;
   }
   if (!currentJobId) {
@@ -994,7 +1032,7 @@ async function addGlossaryEntry(options = {}) {
     addGlossaryRetranslateBtn.disabled = true;
     addGlossaryRetranslateBtn.textContent = "重翻中...";
   }
-  setStatus(`已加入詞彙，正在重翻包含「${cn}」的命中框...`);
+  setStatus(`${originalCn ? "已修改詞彙" : "已加入詞彙"}，正在重翻包含「${cn}」的命中框...`);
   try {
     const res = await fetch(`/api/job/${currentJobId}/glossary-retranslate`, {
       method: "POST",

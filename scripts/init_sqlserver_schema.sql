@@ -1,3 +1,9 @@
+IF OBJECT_ID(N'dbo.document_template_boxes', N'U') IS NOT NULL
+    DROP TABLE dbo.document_template_boxes;
+IF OBJECT_ID(N'dbo.document_template_pages', N'U') IS NOT NULL
+    DROP TABLE dbo.document_template_pages;
+IF OBJECT_ID(N'dbo.document_templates', N'U') IS NOT NULL
+    DROP TABLE dbo.document_templates;
 IF OBJECT_ID(N'dbo.job_events', N'U') IS NOT NULL
     DROP TABLE dbo.job_events;
 IF OBJECT_ID(N'dbo.job_artifacts', N'U') IS NOT NULL
@@ -51,6 +57,51 @@ CREATE TABLE dbo.job_events (
 );
 GO
 
+CREATE TABLE dbo.document_templates (
+    template_id char(32) NOT NULL,
+    name nvarchar(255) NOT NULL CONSTRAINT DF_document_templates_name DEFAULT (N''),
+    display_name nvarchar(255) NULL,
+    source_job_id char(32) NULL,
+    status varchar(20) NOT NULL CONSTRAINT DF_document_templates_status DEFAULT ('saved'),
+    created_at datetime2(6) NOT NULL CONSTRAINT DF_document_templates_created_at DEFAULT (SYSUTCDATETIME()),
+    updated_at datetime2(6) NOT NULL CONSTRAINT DF_document_templates_updated_at DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_document_templates PRIMARY KEY CLUSTERED (template_id)
+);
+GO
+
+CREATE TABLE dbo.document_template_pages (
+    id bigint IDENTITY(1,1) NOT NULL,
+    template_id char(32) NOT NULL,
+    page_index_0based int NOT NULL,
+    created_at datetime2(6) NOT NULL CONSTRAINT DF_document_template_pages_created_at DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_document_template_pages PRIMARY KEY CLUSTERED (id),
+    CONSTRAINT FK_document_template_pages_templates
+        FOREIGN KEY (template_id) REFERENCES dbo.document_templates(template_id) ON DELETE CASCADE,
+    CONSTRAINT UQ_document_template_pages_template_page UNIQUE (template_id, page_index_0based)
+);
+GO
+
+CREATE TABLE dbo.document_template_boxes (
+    id bigint IDENTITY(1,1) NOT NULL,
+    page_id bigint NOT NULL,
+    x_ratio float NOT NULL,
+    y_ratio float NOT NULL,
+    w_ratio float NOT NULL,
+    h_ratio float NOT NULL,
+    text nvarchar(max) NOT NULL,
+    font_size float NOT NULL,
+    color varchar(20) NOT NULL,
+    text_align varchar(20) NOT NULL,
+    rotation int NOT NULL CONSTRAINT DF_document_template_boxes_rotation DEFAULT (0),
+    no_clip bit NOT NULL CONSTRAINT DF_document_template_boxes_no_clip DEFAULT (0),
+    created_at datetime2(6) NOT NULL CONSTRAINT DF_document_template_boxes_created_at DEFAULT (SYSUTCDATETIME()),
+    updated_at datetime2(6) NOT NULL CONSTRAINT DF_document_template_boxes_updated_at DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_document_template_boxes PRIMARY KEY CLUSTERED (id),
+    CONSTRAINT FK_document_template_boxes_pages
+        FOREIGN KEY (page_id) REFERENCES dbo.document_template_pages(id) ON DELETE CASCADE
+);
+GO
+
 CREATE INDEX IX_jobs_status_created_at
 ON dbo.jobs (status, created_at);
 GO
@@ -69,4 +120,20 @@ GO
 
 CREATE INDEX IX_job_events_job_id_created_at
 ON dbo.job_events (job_id, created_at DESC);
+GO
+
+CREATE INDEX IX_document_templates_source_job_id
+ON dbo.document_templates (source_job_id);
+GO
+
+CREATE INDEX IX_document_templates_updated_at
+ON dbo.document_templates (updated_at DESC);
+GO
+
+CREATE INDEX IX_document_template_pages_template_id
+ON dbo.document_template_pages (template_id);
+GO
+
+CREATE INDEX IX_document_template_boxes_page_id
+ON dbo.document_template_boxes (page_id);
 GO

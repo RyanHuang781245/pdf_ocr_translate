@@ -446,17 +446,13 @@ def apply_document_template(template_id: str):
 
 @api_bp.route("/jobs", methods=["GET"], endpoint="list_jobs")
 def list_jobs():
-    jobs_list = jobs.build_jobs_list(job_type="ocr_overlay", include_template_sources=False)
+    jobs_list = jobs.build_jobs_list(job_type="ocr_overlay")
     return jsonify({"jobs": jobs_list})
 
 
 @api_bp.route("/template-jobs", methods=["GET"], endpoint="list_template_jobs")
 def list_template_jobs():
-    jobs_list = jobs.build_jobs_list(
-        job_type="ocr_overlay",
-        include_template_sources=True,
-        only_template_sources=True,
-    )
+    jobs_list = jobs.build_jobs_list(job_type="template_source")
     return jsonify({"jobs": jobs_list})
 
 
@@ -582,7 +578,7 @@ def jobs_stream():
     def generate():
         last_payload = None
         while True:
-            payload = {"jobs": jobs.build_jobs_list(job_type="ocr_overlay", include_template_sources=False)}
+            payload = {"jobs": jobs.build_jobs_list(job_type="ocr_overlay")}
             data = json.dumps(payload, ensure_ascii=False)
             if data != last_payload:
                 last_payload = data

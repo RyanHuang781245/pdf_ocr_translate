@@ -144,6 +144,7 @@ def enqueue_job_from_upload(
     document_mode: str,
     creator_name: str = "",
     job_root: Path | None = None,
+    job_type: str = "ocr_overlay",
 ) -> str:
     job_id = uuid.uuid4().hex
     job_dir = jobs.job_dir(job_id, job_root=job_root)
@@ -156,7 +157,7 @@ def enqueue_job_from_upload(
         {
             "job_name": job_name,
             "creator_name": creator_name,
-            "job_type": "ocr_overlay",
+            "job_type": job_type,
             "document_mode": normalized_document_mode,
             "translate_mode": jobs.normalize_translate_mode(translate_mode),
             "processing_started_at": now_ts,
@@ -165,7 +166,7 @@ def enqueue_job_from_upload(
     )
     jobs.job_store.create_job(
         job_id=job_id,
-        job_type="ocr_overlay",
+        job_type=job_type,
         stage="queued",
         job_name=job_name,
         target_lang=translate_target_lang if enable_translate else None,

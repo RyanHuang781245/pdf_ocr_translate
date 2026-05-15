@@ -1214,7 +1214,7 @@ body.editor .panel {
 
 .glossary-item {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr auto auto;
   gap: 0.4rem;
   align-items: center;
   padding: 0.4rem 0.6rem;

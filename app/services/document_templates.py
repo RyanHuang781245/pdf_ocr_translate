@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
-from . import state
+from sqlalchemy import delete, select
+
+from . import job_store, state
 
 
 def _clamp_ratio(value: Any) -> float:
@@ -105,7 +108,60 @@ def _normalize_template(template: Any) -> dict[str, Any] | None:
     }
 
 
-def load_document_templates() -> list[dict[str, Any]]:
+def _to_timestamp(value: datetime | None) -> float:
+    if value is None:
+        return time.time()
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return float(value.timestamp())
+
+
+def _to_datetime(timestamp: float | None) -> datetime:
+    if timestamp is None:
+        timestamp = time.time()
+    return datetime.fromtimestamp(float(timestamp), tz=timezone.utc)
+
+
+def _template_from_record(
+    record: job_store.DocumentTemplateRecord,
+    pages: list[job_store.DocumentTemplatePageRecord],
+    boxes_by_page: dict[int, list[job_store.DocumentTemplateBoxRecord]],
+) -> dict[str, Any]:
+    payload_pages: list[dict[str, Any]] = []
+    for page in sorted(pages, key=lambda item: item.page_index_0based):
+        payload_pages.append(
+            {
+                "page_index_0based": int(page.page_index_0based),
+                "boxes": [
+                    {
+                        "x_ratio": float(box.x_ratio),
+                        "y_ratio": float(box.y_ratio),
+                        "w_ratio": float(box.w_ratio),
+                        "h_ratio": float(box.h_ratio),
+                        "text": str(box.text or ""),
+                        "font_size": float(box.font_size),
+                        "color": str(box.color or state.DEFAULT_TEXT_COLOR),
+                        "text_align": str(box.text_align or "left"),
+                        "rotation": int(box.rotation or 0),
+                        "no_clip": bool(box.no_clip),
+                    }
+                    for box in boxes_by_page.get(page.id, [])
+                ],
+            }
+        )
+    return {
+        "id": record.template_id,
+        "name": str(record.name or ""),
+        "display_name": str(record.display_name or record.name or record.template_id),
+        "status": str(record.status or "draft"),
+        "source_job_id": str(record.source_job_id or ""),
+        "created_at": _to_timestamp(record.created_at),
+        "updated_at": _to_timestamp(record.updated_at),
+        "pages": payload_pages,
+    }
+
+
+def _load_legacy_templates() -> list[dict[str, Any]]:
     path = state.DOCUMENT_TEMPLATES_PATH
     if not path.exists():
         return []
@@ -116,45 +172,177 @@ def load_document_templates() -> list[dict[str, Any]]:
     if not isinstance(data, list):
         return []
     cleaned: list[dict[str, Any]] = []
-    changed = False
     for item in data:
         normalized = _normalize_template(item)
-        if not normalized:
-            changed = True
-            continue
-        cleaned.append(normalized)
-        if normalized != item:
-            changed = True
+        if normalized:
+            cleaned.append(normalized)
     cleaned.sort(key=lambda item: (item["updated_at"], item["created_at"]), reverse=True)
-    if changed:
-        write_document_templates(cleaned)
     return cleaned
 
 
-def write_document_templates(templates: list[dict[str, Any]]) -> None:
-    path = state.DOCUMENT_TEMPLATES_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(templates, ensure_ascii=False, indent=2), encoding="utf-8")
+def _seed_from_legacy_if_needed() -> None:
+    try:
+        existing_count = job_store.count_document_templates()
+    except Exception:
+        return
+    if existing_count > 0:
+        return
+    legacy_templates = _load_legacy_templates()
+    if not legacy_templates:
+        return
+    for template in legacy_templates:
+        _upsert_template(template)
+
+
+def _upsert_template(normalized: dict[str, Any]) -> dict[str, Any]:
+    with job_store.session_scope() as session:
+        record = session.get(job_store.DocumentTemplateRecord, normalized["id"])
+        if record is None and normalized.get("source_job_id"):
+            record = session.scalar(
+                select(job_store.DocumentTemplateRecord).where(
+                    job_store.DocumentTemplateRecord.source_job_id == normalized["source_job_id"]
+                )
+            )
+        created_at = _to_datetime(float(normalized.get("created_at") or time.time()))
+        updated_at = _to_datetime(float(normalized.get("updated_at") or time.time()))
+        if record is None:
+            record = job_store.DocumentTemplateRecord(
+                template_id=normalized["id"],
+                name="",
+                display_name="",
+                source_job_id=None,
+                status=str(normalized.get("status") or "draft"),
+                created_at=created_at,
+                updated_at=updated_at,
+            )
+            session.add(record)
+        else:
+            record.updated_at = updated_at
+        record.name = str(normalized.get("name") or "")
+        record.display_name = str(normalized.get("display_name") or record.name or record.template_id)
+        record.source_job_id = str(normalized.get("source_job_id") or "") or None
+        record.status = str(normalized.get("status") or "draft")
+        record.created_at = created_at
+        session.flush()
+
+        existing_pages = list(
+            session.scalars(
+                select(job_store.DocumentTemplatePageRecord).where(
+                    job_store.DocumentTemplatePageRecord.template_id == record.template_id
+                )
+            ).all()
+        )
+        if existing_pages:
+            page_ids = [page.id for page in existing_pages]
+            session.execute(
+                delete(job_store.DocumentTemplateBoxRecord).where(
+                    job_store.DocumentTemplateBoxRecord.page_id.in_(page_ids)
+                )
+            )
+            session.execute(
+                delete(job_store.DocumentTemplatePageRecord).where(
+                    job_store.DocumentTemplatePageRecord.template_id == record.template_id
+                )
+            )
+            session.flush()
+
+        for page in normalized.get("pages", []):
+            page_record = job_store.DocumentTemplatePageRecord(
+                template_id=record.template_id,
+                page_index_0based=int(page.get("page_index_0based") or 0),
+                created_at=updated_at,
+            )
+            session.add(page_record)
+            session.flush()
+            for box in page.get("boxes", []):
+                session.add(
+                    job_store.DocumentTemplateBoxRecord(
+                        page_id=page_record.id,
+                        x_ratio=float(box.get("x_ratio") or 0.0),
+                        y_ratio=float(box.get("y_ratio") or 0.0),
+                        w_ratio=float(box.get("w_ratio") or 0.0),
+                        h_ratio=float(box.get("h_ratio") or 0.0),
+                        text=str(box.get("text") or ""),
+                        font_size=float(box.get("font_size") or state.DEFAULT_FONT_SIZE_PX),
+                        color=str(box.get("color") or state.DEFAULT_TEXT_COLOR),
+                        text_align=str(box.get("text_align") or "left"),
+                        rotation=int(box.get("rotation") or 0),
+                        no_clip=bool(box.get("no_clip", False)),
+                        created_at=updated_at,
+                        updated_at=updated_at,
+                    )
+                )
+        session.flush()
+        return record_to_template(record, session=session)
+
+
+def record_to_template(
+    record: job_store.DocumentTemplateRecord,
+    *,
+    session,
+) -> dict[str, Any]:
+    pages = list(
+        session.scalars(
+            select(job_store.DocumentTemplatePageRecord).where(
+                job_store.DocumentTemplatePageRecord.template_id == record.template_id
+            )
+        ).all()
+    )
+    page_ids = [page.id for page in pages]
+    boxes_by_page: dict[int, list[job_store.DocumentTemplateBoxRecord]] = {}
+    if page_ids:
+        boxes = list(
+            session.scalars(
+                select(job_store.DocumentTemplateBoxRecord).where(
+                    job_store.DocumentTemplateBoxRecord.page_id.in_(page_ids)
+                )
+            ).all()
+        )
+        for box in boxes:
+            boxes_by_page.setdefault(box.page_id, []).append(box)
+    return _template_from_record(record, pages, boxes_by_page)
+
+
+def load_document_templates() -> list[dict[str, Any]]:
+    _seed_from_legacy_if_needed()
+    with job_store.session_scope() as session:
+        records = list(
+            session.scalars(
+                select(job_store.DocumentTemplateRecord).order_by(
+                    job_store.DocumentTemplateRecord.updated_at.desc(),
+                    job_store.DocumentTemplateRecord.created_at.desc(),
+                )
+            ).all()
+        )
+        return [record_to_template(record, session=session) for record in records]
 
 
 def get_document_template(template_id: str) -> dict[str, Any] | None:
     cleaned_id = str(template_id or "").strip()
     if not cleaned_id:
         return None
-    for template in load_document_templates():
-        if template["id"] == cleaned_id:
-            return template
-    return None
+    _seed_from_legacy_if_needed()
+    with job_store.session_scope() as session:
+        record = session.get(job_store.DocumentTemplateRecord, cleaned_id)
+        if record is None:
+            return None
+        return record_to_template(record, session=session)
 
 
 def get_document_template_by_job(job_id: str) -> dict[str, Any] | None:
     cleaned_job_id = str(job_id or "").strip()
     if not cleaned_job_id:
         return None
-    for template in load_document_templates():
-        if template.get("source_job_id") == cleaned_job_id:
-            return template
-    return None
+    _seed_from_legacy_if_needed()
+    with job_store.session_scope() as session:
+        record = session.scalar(
+            select(job_store.DocumentTemplateRecord).where(
+                job_store.DocumentTemplateRecord.source_job_id == cleaned_job_id
+            )
+        )
+        if record is None:
+            return None
+        return record_to_template(record, session=session)
 
 
 def create_template_draft(*, source_job_id: str, display_name: str) -> dict[str, Any]:
@@ -172,60 +360,64 @@ def create_template_draft(*, source_job_id: str, display_name: str) -> dict[str,
         "updated_at": now_ts,
         "pages": [],
     }
-    templates = load_document_templates()
-    templates.append(draft)
-    write_document_templates(templates)
-    return draft
+    return _upsert_template(draft)
 
 
 def save_document_template(payload: dict[str, Any]) -> dict[str, Any]:
     template_id = str(payload.get("id") or "").strip()
     source_job_id = str(payload.get("source_job_id") or "").strip()
-    templates = load_document_templates()
     existing = None
-    existing_index = None
-    for index, item in enumerate(templates):
-        if template_id and item["id"] == template_id:
-            existing = item
-            existing_index = index
-            break
+    if template_id:
+        existing = get_document_template(template_id)
     if existing is None and source_job_id:
-        for index, item in enumerate(templates):
-            if item.get("source_job_id") == source_job_id:
-                existing = item
-                existing_index = index
-                break
+        existing = get_document_template_by_job(source_job_id)
 
     normalized = _normalize_template(
         {
-          "id": template_id or (existing or {}).get("id"),
-          "name": payload.get("name") or (existing or {}).get("name") or "",
-          "display_name": payload.get("display_name") or (existing or {}).get("display_name") or payload.get("name") or "",
-          "status": "saved",
-          "source_job_id": source_job_id or (existing or {}).get("source_job_id") or "",
-          "created_at": (existing or {}).get("created_at"),
-          "updated_at": time.time(),
-          "pages": payload.get("pages", []),
+            "id": template_id or (existing or {}).get("id"),
+            "name": payload.get("name") or (existing or {}).get("name") or "",
+            "display_name": payload.get("display_name")
+            or (existing or {}).get("display_name")
+            or payload.get("name")
+            or "",
+            "status": "saved",
+            "source_job_id": source_job_id or (existing or {}).get("source_job_id") or "",
+            "created_at": (existing or {}).get("created_at"),
+            "updated_at": time.time(),
+            "pages": payload.get("pages", []),
         }
     )
     if not normalized or not normalized["pages"]:
         raise ValueError("Invalid document template payload.")
-    if existing_index is not None:
-        templates[existing_index] = normalized
-    else:
-        templates.append(normalized)
-    templates.sort(key=lambda item: (item["updated_at"], item["created_at"]), reverse=True)
-    write_document_templates(templates)
-    return normalized
+    return _upsert_template(normalized)
 
 
 def delete_document_template(template_id: str) -> bool:
     cleaned_id = str(template_id or "").strip()
     if not cleaned_id:
         return False
-    templates = load_document_templates()
-    remaining = [item for item in templates if item["id"] != cleaned_id]
-    if len(remaining) == len(templates):
-        return False
-    write_document_templates(remaining)
-    return True
+    with job_store.session_scope() as session:
+        record = session.get(job_store.DocumentTemplateRecord, cleaned_id)
+        if record is None:
+            return False
+        pages = list(
+            session.scalars(
+                select(job_store.DocumentTemplatePageRecord).where(
+                    job_store.DocumentTemplatePageRecord.template_id == cleaned_id
+                )
+            ).all()
+        )
+        page_ids = [page.id for page in pages]
+        if page_ids:
+            session.execute(
+                delete(job_store.DocumentTemplateBoxRecord).where(
+                    job_store.DocumentTemplateBoxRecord.page_id.in_(page_ids)
+                )
+            )
+        session.execute(
+            delete(job_store.DocumentTemplatePageRecord).where(
+                job_store.DocumentTemplatePageRecord.template_id == cleaned_id
+            )
+        )
+        session.delete(record)
+        return True

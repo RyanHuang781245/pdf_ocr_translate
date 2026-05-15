@@ -93,6 +93,8 @@ def get_job_type(job_dir_path: Path) -> str:
         return "doc_workspace"
     if job_type == "word_translate":
         return "word_translate"
+    if job_type == "template_source":
+        return "template_source"
     return "ocr_overlay"
 
 
@@ -300,9 +302,6 @@ def infer_job_store_status(job_dir_path: Path, meta: dict[str, Any]) -> tuple[st
 
 def build_jobs_list(
     job_type: str | None = None,
-    *,
-    include_template_sources: bool = True,
-    only_template_sources: bool = False,
 ) -> list[dict[str, Any]]:
     state.JOB_ROOT.mkdir(parents=True, exist_ok=True)
     state.TEMPLATE_JOB_ROOT.mkdir(parents=True, exist_ok=True)
@@ -314,12 +313,7 @@ def build_jobs_list(
         current_job_type = record.job_type
         job_id = record.job_id
         job_meta = load_job_meta(job_dir_path) or {}
-        is_template_source = bool(job_meta.get("template_source"))
-        if current_job_type == "ocr_overlay":
-            if only_template_sources and not is_template_source:
-                continue
-            if not include_template_sources and is_template_source:
-                continue
+        is_template_source = current_job_type == "template_source"
 
         pdf_path = job_dir_path / f"{job_id}.pdf"
         debug_pdf_path = job_dir_path / "overlay_debug.pdf"
@@ -870,7 +864,7 @@ def retry_job(job_id: str) -> tuple[bool, str | None]:
 
     payload = job_store.deserialize_payload(record)
     stage = "queued"
-    if record.job_type == "ocr_overlay":
+    if record.job_type in {"ocr_overlay", "template_source"}:
         has_ocr_output = (job_dir_path / "ocr_json").exists()
         has_batch_config = load_batch_config(job_dir_path) is not None
         if has_ocr_output and has_batch_config:

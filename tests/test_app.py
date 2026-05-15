@@ -24,7 +24,6 @@ def test_upload_template_source_creates_draft(client, tmp_path, monkeypatch):
     monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
     monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
     monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")
-    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
     captured: list[dict[str, object]] = []
 
     def fake_enqueue(
@@ -42,6 +41,7 @@ def test_upload_template_source_creates_draft(client, tmp_path, monkeypatch):
         document_mode,
         creator_name="",
         job_root=None,
+        job_type="ocr_overlay",
     ):
         captured.append(
             {
@@ -51,6 +51,7 @@ def test_upload_template_source_creates_draft(client, tmp_path, monkeypatch):
                 "start_page": start_page,
                 "end_page": end_page,
                 "job_root": job_root,
+                "job_type": job_type,
             }
         )
         return "9" * 32
@@ -75,9 +76,10 @@ def test_upload_template_source_creates_draft(client, tmp_path, monkeypatch):
             "start_page": 3,
             "end_page": 3,
             "job_root": tmp_path / "templates" / "jobs",
+            "job_type": "template_source",
         }
     ]
-    templates = json.loads(state.DOCUMENT_TEMPLATES_PATH.read_text(encoding="utf-8"))
+    templates = client.get("/api/document-templates").get_json()["templates"]
     assert len(templates) == 1
     assert templates[0]["status"] == "draft"
     assert templates[0]["source_job_id"] == "9" * 32
@@ -86,7 +88,6 @@ def test_upload_template_source_creates_draft(client, tmp_path, monkeypatch):
 def test_api_jobs_excludes_template_source_jobs(client, tmp_path, monkeypatch):
     monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
     monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
-    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
     job_id = "4" * 32
     job_dir = tmp_path / "templates" / "jobs" / job_id
     job_dir.mkdir(parents=True)
@@ -94,22 +95,25 @@ def test_api_jobs_excludes_template_source_jobs(client, tmp_path, monkeypatch):
         job_dir,
         {
             "job_name": "template-source",
-            "job_type": "ocr_overlay",
+            "job_type": "template_source",
             "document_mode": "scanned",
-            "template_source": True,
         },
     )
     class Record:
-        def __init__(self):
+        def __init__(self, current_job_type):
             self.job_id = job_id
-            self.job_type = "ocr_overlay"
+            self.job_type = current_job_type
             self.status = "queued"
             self.stage = "queued"
             self.progress = 0.0
             self.target_lang = None
             self.document_mode = "scanned"
 
-    monkeypatch.setattr(jobs.job_store, "list_jobs", lambda job_type=None: [Record()])
+    monkeypatch.setattr(
+        jobs.job_store,
+        "list_jobs",
+        lambda job_type=None: [Record(job_type)] if job_type == "template_source" else [],
+    )
 
     resp = client.get("/api/jobs")
     assert resp.status_code == 200
@@ -148,13 +152,12 @@ def test_editor_page_shows_template_entry(client, tmp_path, monkeypatch):
     resp = client.get(f"/job/{job_id}")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
-    assert "headerTemplateBtn" in body
+    assert "templateManagerBtn" in body
     assert "templateManagerModal" in body
 
 
 def test_apply_document_template_to_job(client, tmp_path, monkeypatch):
     monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
-    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
     job_id = "2" * 32
     job_dir = tmp_path / "jobs" / job_id
     ocr_dir = job_dir / "ocr_json"
@@ -472,7 +475,6 @@ def test_glossary_get(client):
 
 
 def test_document_templates_crud(client, tmp_path, monkeypatch):
-    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
     monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
 
     resp = client.get("/api/document-templates")
@@ -513,7 +515,7 @@ def test_document_templates_crud(client, tmp_path, monkeypatch):
     assert created["pages"][0]["boxes"][0]["rotation"] == 90
     assert created["pages"][0]["boxes"][0]["text_align"] == "center"
 
-    stored = json.loads(state.DOCUMENT_TEMPLATES_PATH.read_text(encoding="utf-8"))
+    stored = client.get("/api/document-templates").get_json()["templates"]
     assert stored[0]["pages"][0]["boxes"][0]["x_ratio"] == 0.1
 
     list_resp = client.get("/api/document-templates")
@@ -531,7 +533,6 @@ def test_document_templates_crud(client, tmp_path, monkeypatch):
 
 
 def test_delete_document_template_removes_source_job_dir(client, tmp_path, monkeypatch):
-    monkeypatch.setattr(state, "DOCUMENT_TEMPLATES_PATH", tmp_path / "document_templates.json")
     monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", tmp_path / "templates" / "jobs")
     template_job_id = "7" * 32
     template_job_dir = state.TEMPLATE_JOB_ROOT / template_job_id
@@ -540,9 +541,8 @@ def test_delete_document_template_removes_source_job_dir(client, tmp_path, monke
         template_job_dir,
         {
             "job_name": "template-source",
-            "job_type": "ocr_overlay",
+            "job_type": "template_source",
             "document_mode": "scanned",
-            "template_source": True,
         },
     )
 

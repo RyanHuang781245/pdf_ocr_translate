@@ -204,10 +204,8 @@ def upload_template_source() -> str:
             document_mode,
             creator_name,
             job_root=state.TEMPLATE_JOB_ROOT,
+            job_type="template_source",
         )
-        template_job_dir = jobs.job_dir(created_job_id, job_root=state.TEMPLATE_JOB_ROOT)
-        template_job_dir.mkdir(parents=True, exist_ok=True)
-        jobs.update_job_meta(template_job_dir, template_source=True)
         document_templates.create_template_draft(
             source_job_id=created_job_id,
             display_name=display_name,

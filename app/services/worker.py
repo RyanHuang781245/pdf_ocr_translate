@@ -35,7 +35,7 @@ def process_job(job_id: str) -> None:
         jobs.set_job_state(job_dir, status="cancelled", stage="cancelled", completed_at=time.time())
         return
 
-    if record.job_type == "ocr_overlay":
+    if record.job_type in {"ocr_overlay", "template_source"}:
         if bool(payload.get("resume_translate_only")) or str(record.stage or "").lower() == "translate":
             config = jobs.load_batch_config(job_dir) or {}
             translate_mode = jobs.normalize_translate_mode(
