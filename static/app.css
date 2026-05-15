@@ -335,6 +335,11 @@ code {
   background: rgba(227, 129, 58, 0.18);
 }
 
+.job-badge--other {
+  color: #5a3f8c;
+  background: rgba(120, 98, 184, 0.16);
+}
+
 .job-badge--scanned {
   color: #9a5314;
   background: rgba(235, 154, 64, 0.2);

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import glob
 import json
+import logging
 import os
 import re
 from typing import Any
 
 _model = None
 _model_load_failed = False
+logger = logging.getLogger(__name__)
 
 
 def get_model():
@@ -21,8 +23,9 @@ def get_model():
 
             _model = SentenceTransformer("BAAI/bge-m3", device="cpu")
             print("Model loaded.")
-        except Exception:
+        except Exception as exc:
             _model_load_failed = True
+            logger.exception("Failed to load BGE-M3 model: %s", exc)
             return None
     return _model
 

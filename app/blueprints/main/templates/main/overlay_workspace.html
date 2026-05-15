@@ -55,10 +55,11 @@
             </label>
             <label>
               <span>文件模式</span>
-              <select name="document_mode">
+              <select id="documentModeSelect" name="document_mode">
                 <option value="form" selected>表單文件</option>
                 <option value="general">一般文件</option>
                 <option value="general_force">一般文件（中文必翻）</option>
+                <option value="other">其他文件</option>
                 <option value="scanned">掃描文件</option>
               </select>
             </label>
@@ -72,7 +73,7 @@
             </label>
             <label>
               <span>來源語言</span>
-              <select name="source_lang">
+              <select id="sourceLangSelect" name="source_lang" disabled>
                 <option value="auto" selected>自動偵測 (auto)</option>
                 <option value="en">English (en)</option>
                 <option value="zh">繁體中文 (zh)</option>
@@ -98,6 +99,7 @@
             <p><code>表單文件</code><br>適用頁面以表格為主的文件<br>(Q-2001, Q-2010, Q-2014, Q-2013, Q-2011, Q-2156,<br>Q-2001, Q-2473, Q-2006, Q-2007, Q-2300, Q-2285, Q-2286,<br>Q-2027, Q-2039, Q-2088, Q-2404, Q-2531, Q-2530, Q-2439,<br>Q-2005, Q-2497, Q-2305)</p>
             <p><code>一般文件</code><br>適用 Q-2305, Q-2005 格式的文件</p>
             <p><code>一般文件（中文必翻）</code><br>不做中英文對照檢查，只要段落或表格內容含中文就翻譯</p>
+            <p><code>其他文件</code><br>適用非既有格式的文件，只有此模式會使用來源語言設定</p>
             <p><code>掃描文件</code><br>適用頁面以掃描為主的文件<br>(Q-2024, Q-2031, Q-2112, Q-2034, Q-2255, Q-2350, Q-2060)</p>
           </div>
           <button class="primary" type="submit">開始批次處理</button>
@@ -131,6 +133,8 @@
       const uploadFilesSummary = document.getElementById("uploadFilesSummary");
       const uploadFilesToggle = document.getElementById("uploadFilesToggle");
       const uploadFilesList = document.getElementById("uploadFilesList");
+      const documentModeSelect = document.getElementById("documentModeSelect");
+      const sourceLangSelect = document.getElementById("sourceLangSelect");
       let translateModeSelect = document.getElementById("translateModeSelect");
       const translateModelSelect = document.getElementById("translateModelSelect");
       const selectedJobs = new Set();
@@ -153,6 +157,8 @@
 
       function formatDocumentMode(mode) {
         switch ((mode || "").toLowerCase()) {
+          case "other":
+            return "其他文件";
           case "general_force":
             return "一般文件（中文必翻）";
           case "general":
@@ -162,6 +168,15 @@
           case "form":
           default:
             return "表單文件";
+        }
+      }
+
+      function syncSourceLangControl() {
+        if (!documentModeSelect || !sourceLangSelect) return;
+        const allowSourceLang = (documentModeSelect.value || "").toLowerCase() === "other";
+        sourceLangSelect.disabled = !allowSourceLang;
+        if (!allowSourceLang) {
+          sourceLangSelect.value = "auto";
         }
       }
 
@@ -520,7 +535,9 @@
       jobsSelectNone.addEventListener("click", () => setAllSelections(false));
       ensureTranslateModeControl();
       translateModeSelect?.addEventListener("change", syncTranslateModelSelection);
+      documentModeSelect?.addEventListener("change", syncSourceLangControl);
       syncTranslateModelSelection();
+      syncSourceLangControl();
       bindUploadFiles();
       loadJobs();
       connectJobsStream();

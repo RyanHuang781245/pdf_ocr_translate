@@ -1079,7 +1079,7 @@ def overlay_one_page(
     if dbg_shape is not None:
         dbg_shape.commit()
 
-    print(f"[DEBUG] page={page.number} tables={len(table_bboxes)} merged_cells={len(precise_overlay_items)} ocr_line_hits={hit}")
+    # print(f"[DEBUG] page={page.number} tables={len(table_bboxes)} merged_cells={len(precise_overlay_items)} ocr_line_hits={hit}")
 
 
 

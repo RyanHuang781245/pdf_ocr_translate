@@ -100,6 +100,8 @@ def get_job_type(job_dir_path: Path) -> str:
 
 def normalize_document_mode(value: Any) -> str:
     mode = str(value or "").strip().lower()
+    if mode in {"other", "other_document", "other_documents"}:
+        return "other"
     if mode in {"general_force_translate", "general_force"}:
         return "general_force"
     if mode == "general":

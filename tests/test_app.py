@@ -359,6 +359,122 @@ def test_upload_pdf_overlay_accepts_general_force_translate_mode(client, tmp_pat
     ]
 
 
+def test_upload_pdf_overlay_only_other_mode_keeps_explicit_source_lang(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")
+    captured: list[dict[str, str]] = []
+
+    def fake_enqueue(
+        source_pdf,
+        display_name,
+        dpi,
+        start_page,
+        end_page,
+        translate_source_lang,
+        translate_target_lang,
+        translate_model,
+        translate_mode,
+        keep_lang,
+        enable_translate,
+        document_mode,
+        creator_name="",
+    ):
+        captured.append(
+            {
+                "display_name": display_name,
+                "source_lang": translate_source_lang,
+                "document_mode": document_mode,
+            }
+        )
+        return "c" * 32
+
+    monkeypatch.setattr(
+        "app.blueprints.main.routes.pipeline.enqueue_job_from_upload",
+        fake_enqueue,
+    )
+
+    resp = client.post(
+        "/upload",
+        data={
+            "translate": "on",
+            "translate_mode": "batch",
+            "source_lang": "en",
+            "target_lang": "zh",
+            "model": "batch-model",
+            "document_mode": "other",
+            "pdf": (io.BytesIO(b"%PDF-1.4"), "sample.pdf"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 302
+    assert captured == [
+        {
+            "display_name": "sample",
+            "source_lang": "en",
+            "document_mode": "other",
+        }
+    ]
+
+
+def test_upload_pdf_overlay_non_other_mode_forces_auto_source_lang(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")
+    captured: list[dict[str, str]] = []
+
+    def fake_enqueue(
+        source_pdf,
+        display_name,
+        dpi,
+        start_page,
+        end_page,
+        translate_source_lang,
+        translate_target_lang,
+        translate_model,
+        translate_mode,
+        keep_lang,
+        enable_translate,
+        document_mode,
+        creator_name="",
+    ):
+        captured.append(
+            {
+                "display_name": display_name,
+                "source_lang": translate_source_lang,
+                "document_mode": document_mode,
+            }
+        )
+        return "d" * 32
+
+    monkeypatch.setattr(
+        "app.blueprints.main.routes.pipeline.enqueue_job_from_upload",
+        fake_enqueue,
+    )
+
+    resp = client.post(
+        "/upload",
+        data={
+            "translate": "on",
+            "translate_mode": "batch",
+            "source_lang": "en",
+            "target_lang": "zh",
+            "model": "batch-model",
+            "document_mode": "general",
+            "pdf": (io.BytesIO(b"%PDF-1.4"), "sample.pdf"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 302
+    assert captured == [
+        {
+            "display_name": "sample",
+            "source_lang": "auto",
+            "document_mode": "general",
+        }
+    ]
+
+
 def test_upload_rejects_when_submit_quota_exceeded(client, tmp_path, monkeypatch):
     monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
     monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")

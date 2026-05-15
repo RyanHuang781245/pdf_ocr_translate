@@ -466,6 +466,97 @@ def test_general_document_mode_keeps_chinese_only_merged_cells_for_edits_payload
     assert boxes[0]["text"] == "translated cell"
 
 
+def test_general_document_mode_merged_cells_ignore_explicit_source_language():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": [],
+            "rec_polys": [],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [],
+            "table_res_list": [
+                {
+                    "cell_box_list": [[0, 0, 100, 100]],
+                    "merged_cells": [
+                        {
+                            "cell_box": [10, 10, 90, 90],
+                            "merged_text": "English only",
+                            "should_translate": True,
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+
+    items, alias_map, key_map, prefilled = build_batch_items(
+        ocr_pages,
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
+        pp_pages=pp_pages,
+        target_lang="zh",
+        source_lang="en",
+        document_mode="general",
+    )
+
+    assert items == []
+    assert alias_map == {}
+    assert key_map == {}
+    assert prefilled == {}
+
+
+def test_other_document_mode_merged_cells_use_explicit_source_language():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": [],
+            "rec_polys": [],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [],
+            "table_res_list": [
+                {
+                    "cell_box_list": [[0, 0, 100, 100]],
+                    "merged_cells": [
+                        {
+                            "cell_box": [10, 10, 90, 90],
+                            "merged_text": "English only",
+                            "should_translate": True,
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+
+    items, alias_map, key_map, prefilled = build_batch_items(
+        ocr_pages,
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
+        pp_pages=pp_pages,
+        target_lang="zh",
+        source_lang="en",
+        document_mode="other",
+    )
+
+    assert [item["custom_id"] for item in items] == ["p0000-c0000"]
+    assert alias_map == {}
+    assert key_map == {
+        "p0000-c0000": {
+            "source_text": "English only",
+            "source_normalized": "English only",
+        }
+    }
+    assert prefilled == {}
+
+
 def test_general_document_mode_keeps_chinese_missing_text_added_individually_cells():
     ocr_pages = [
         {
@@ -658,6 +749,87 @@ def test_general_document_mode_payload_skips_mixed_structured_blocks():
     )
 
     assert payload["pages"][0]["boxes"] == []
+
+
+def test_general_document_mode_keeps_ocr_lines_when_mixed_structured_block_is_skipped():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["骨科植入物"],
+            "rec_polys": [
+                [[10, 10], [90, 10], [90, 30], [10, 30]],
+            ],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "骨科植入物 Orthopedic Implants",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [],
+        }
+    }
+
+    items, alias_map, key_map, prefilled = build_batch_items(
+        ocr_pages,
+        model_name="dummy-model",
+        system_prompt="translate",
+        glossary_entries=[],
+        pp_pages=pp_pages,
+        document_mode="general",
+    )
+
+    assert [item["custom_id"] for item in items] == ["p0000-l0000"]
+    assert alias_map == {}
+    assert key_map == {
+        "p0000-l0000": {
+            "source_text": "骨科植入物",
+            "source_normalized": "骨科植入物",
+        }
+    }
+    assert prefilled == {}
+
+
+def test_general_document_mode_payload_keeps_ocr_lines_when_mixed_structured_block_is_skipped():
+    ocr_pages = [
+        {
+            "page_index_0based": 0,
+            "rec_texts": ["骨科植入物"],
+            "rec_polys": [
+                [[10, 10], [90, 10], [90, 30], [10, 30]],
+            ],
+        }
+    ]
+    pp_pages = {
+        0: {
+            "parsing_res_list": [
+                {
+                    "block_content": "骨科植入物 Orthopedic Implants",
+                    "block_bbox": [0, 0, 120, 40],
+                    "should_translate": True,
+                    "block_label": "text",
+                }
+            ],
+            "table_res_list": [],
+        }
+    }
+
+    payload = build_edits_payload_from_translations(
+        ocr_pages,
+        {"p0000-l0000": "Orthopedic Implants"},
+        pp_pages=pp_pages,
+        document_mode="general",
+    )
+
+    boxes = payload["pages"][0]["boxes"]
+    assert len(boxes) == 1
+    assert boxes[0]["id"] == 0
+    assert boxes[0]["text"] == "Orthopedic Implants"
 
 
 def test_general_force_translate_mode_keeps_bilingual_structured_blocks_for_batch_items():

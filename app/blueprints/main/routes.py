@@ -119,6 +119,8 @@ def upload() -> str:
     translate_model = request.form.get("model", default_translate_model).strip() or default_translate_model
     keep_lang = request.form.get("keep_lang", "all").strip().lower() or "all"
     document_mode = jobs.normalize_document_mode(request.form.get("document_mode"))
+    if document_mode != "other":
+        translate_source_lang = "auto"
     creator_name = _display_creator_name(request.form.get("creator_name", ""))
     _enforce_submit_quota(creator_name)
     if keep_lang not in {"all", "zh", "en"}:

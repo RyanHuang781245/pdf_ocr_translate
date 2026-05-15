@@ -79,11 +79,11 @@ def resolve_document_mode(value: Any) -> str:
 
 
 def use_merged_cells_for_mode(document_mode: str) -> bool:
-    return resolve_document_mode(document_mode) in {"form", "general", "general_force"}
+    return resolve_document_mode(document_mode) in {"form", "general", "general_force", "other"}
 
 
 def use_structured_blocks_for_mode(document_mode: str) -> bool:
-    return resolve_document_mode(document_mode) in {"form", "general", "general_force"}
+    return resolve_document_mode(document_mode) in {"form", "general", "general_force", "other"}
 
 
 def prefer_merged_cells_only(document_mode: str, merged_cells: list[dict[str, Any]]) -> bool:
@@ -125,6 +125,17 @@ def _infer_source_lang_for_target(target_lang: str) -> str:
     return "auto"
 
 
+def _uses_explicit_source_lang(document_mode: str) -> bool:
+    return resolve_document_mode(document_mode) == "other"
+
+
+def _legacy_should_translate_cjk_text(text: str) -> bool:
+    normalized_text = normalize_for_translation(str(text or ""))
+    if not normalized_text or is_numeric_only(normalized_text):
+        return False
+    return _contains_cjk(normalized_text)
+
+
 def should_translate_text(
     text: str,
     *,
@@ -164,7 +175,9 @@ def should_translate_merged_cell(cell: dict[str, Any], document_mode: str) -> bo
     text = normalize_for_translation(str(cell.get("merged_text") or ""))
     target_lang = str(cell.get("_target_lang") or "en")
     source_lang = str(cell.get("_source_lang") or "auto")
-    if not should_translate_text(text, source_lang=source_lang, target_lang=target_lang):
+    if mode != "other" and not _legacy_should_translate_cjk_text(text):
+        return False
+    if mode == "other" and not should_translate_text(text, source_lang=source_lang, target_lang=target_lang):
         return False
     if mode == "general_force":
         return True
@@ -172,7 +185,11 @@ def should_translate_merged_cell(cell: dict[str, Any], document_mode: str) -> bo
         return False
     if mode == "form":
         return True
-    return not is_mixed_source_target_text(text, source_lang=source_lang, target_lang=target_lang)
+    if mode == "general":
+        return _contains_cjk(text) and not _contains_english(text)
+    if mode == "other":
+        return not is_mixed_source_target_text(text, source_lang=source_lang, target_lang=target_lang)
+    return _contains_cjk(text) and not _contains_english(text)
 
 
 def normalize_text(text: str) -> str:
@@ -351,10 +368,10 @@ def should_translate_structured_block(
     target_lang = str((block or {}).get("_target_lang") or "en")
     source_lang = str((block or {}).get("_source_lang") or "auto")
     if mode == "general_force":
-        return should_translate_text(text, source_lang=source_lang, target_lang=target_lang)
+        return _legacy_should_translate_cjk_text(text)
     if not block.get("should_translate"):
         return False
-    if mode == "general" and is_mixed_source_target_text(
+    if mode in {"general", "other"} and is_mixed_source_target_text(
         text,
         source_lang=source_lang,
         target_lang=target_lang,
@@ -371,18 +388,13 @@ def should_translate_structured_block(
 def should_skip_ocr_line_for_structured_blocks(
     bbox: list[float] | None,
     paragraph_blocks: list[dict[str, Any]],
-    *,
-    document_mode: str,
 ) -> bool:
     if not bbox or len(bbox) != 4:
         return False
-    mode = resolve_document_mode(document_mode)
     for block in paragraph_blocks:
         if is_chart_block(block):
             continue
         if is_image_block(block):
-            continue
-        if mode == "form" and not block.get("should_translate"):
             continue
         if bbox_list_overlaps_tables(bbox, [block.get("bbox")], min_overlap_ratio=0.15):
             return True
@@ -446,11 +458,15 @@ def translate_texts_for_region(
         if not normalized_source:
             outputs.append("")
             continue
-        if not should_translate_text(
-            normalized_source,
-            source_lang=source_lang,
-            target_lang=target_lang,
-        ):
+        if source_lang == "auto":
+            should_translate = _legacy_should_translate_cjk_text(normalized_source)
+        else:
+            should_translate = should_translate_text(
+                normalized_source,
+                source_lang=source_lang,
+                target_lang=target_lang,
+            )
+        if not should_translate:
             outputs.append(source_text)
             continue
         protected_source = glossary.apply_glossary_with_protection(
@@ -543,6 +559,7 @@ def build_batch_items(
     seen: dict[str, str] = {}
     pp_pages = pp_pages or {}
     mode = resolve_document_mode(document_mode)
+    use_explicit_source_lang = _uses_explicit_source_lang(mode)
     translate_merged_cells = use_merged_cells_for_mode(document_mode)
     use_structured_blocks = use_structured_blocks_for_mode(document_mode)
     document_term_map = document_terms.build_document_term_map(pp_pages)
@@ -559,11 +576,15 @@ def build_batch_items(
         normalized_source = normalize_for_translation(source_text)
         if not normalized_source:
             return
-        if not should_translate_text(
-            normalized_source,
-            source_lang=source_lang,
-            target_lang=target_lang,
-        ):
+        if use_explicit_source_lang:
+            should_translate = should_translate_text(
+                normalized_source,
+                source_lang=source_lang,
+                target_lang=target_lang,
+            )
+        else:
+            should_translate = _legacy_should_translate_cjk_text(normalized_source)
+        if not should_translate:
             return
         matched_term = document_terms.lookup_document_term(source_text, document_term_map)
         canonical_source_text = str((matched_term or {}).get("best_source_text") or source_text)
@@ -652,20 +673,27 @@ def build_batch_items(
             paragraph_blocks,
             document_mode=document_mode,
         )
+        translatable_paragraph_blocks: list[dict[str, Any]] = []
+        blocking_paragraph_blocks: list[dict[str, Any]] = []
+        if use_structured_blocks:
+            for block in paragraph_blocks:
+                block_with_lang = {**block, "_source_lang": source_lang, "_target_lang": target_lang}
+                if should_translate_structured_block(
+                    block_with_lang,
+                    document_mode=document_mode,
+                    merged_only=merged_only,
+                ):
+                    translatable_paragraph_blocks.append(block_with_lang)
+                    blocking_paragraph_blocks.append(block_with_lang)
+                elif not block.get("should_translate"):
+                    blocking_paragraph_blocks.append(block_with_lang)
         should_skip_paragraph_lines = has_paragraph_flags or (
             mode == "general_force" and bool(paragraph_blocks)
         )
         page_candidates: list[tuple[tuple[float, float, int], str, str]] = []
 
         if use_structured_blocks:
-            for block in paragraph_blocks:
-                block = {**block, "_source_lang": source_lang, "_target_lang": target_lang}
-                if not should_translate_structured_block(
-                    block,
-                    document_mode=document_mode,
-                    merged_only=merged_only,
-                ):
-                    continue
+            for block in translatable_paragraph_blocks:
                 if table_bboxes and bbox_list_overlaps_tables(block.get("bbox"), table_bboxes):
                     continue
                 block_idx = int(block.get("block_index", 0))
@@ -703,8 +731,7 @@ def build_batch_items(
                         continue
                     if should_skip_paragraph_lines and should_skip_ocr_line_for_structured_blocks(
                         line_bbox_list,
-                        paragraph_blocks,
-                        document_mode=document_mode,
+                        blocking_paragraph_blocks,
                     ):
                         continue
             elif should_skip_paragraph_lines and idx < len(rec_polys):
@@ -718,8 +745,7 @@ def build_batch_items(
                     ]
                     if should_skip_ocr_line_for_structured_blocks(
                         line_bbox_list,
-                        paragraph_blocks,
-                        document_mode=document_mode,
+                        blocking_paragraph_blocks,
                     ):
                         continue
             custom_id = f"p{page_idx:04d}-l{idx:04d}"
@@ -899,6 +925,20 @@ def build_edits_payload_from_translations(
             paragraph_blocks,
             document_mode=document_mode,
         )
+        translatable_paragraph_blocks: list[dict[str, Any]] = []
+        blocking_paragraph_blocks: list[dict[str, Any]] = []
+        if use_structured_blocks:
+            for block in paragraph_blocks:
+                block_with_lang = {**block, "_source_lang": source_lang, "_target_lang": target_lang}
+                if should_translate_structured_block(
+                    block_with_lang,
+                    document_mode=document_mode,
+                    merged_only=merged_only,
+                ):
+                    translatable_paragraph_blocks.append(block_with_lang)
+                    blocking_paragraph_blocks.append(block_with_lang)
+                elif not block.get("should_translate"):
+                    blocking_paragraph_blocks.append(block_with_lang)
         should_skip_paragraph_lines = has_paragraph_flags or (
             mode == "general_force" and bool(paragraph_blocks)
         )
@@ -942,8 +982,7 @@ def build_edits_payload_from_translations(
                     float(bbox["x"]) + float(bbox["w"]),
                     float(bbox["y"]) + float(bbox["h"]),
                 ],
-                paragraph_blocks,
-                document_mode=document_mode,
+                blocking_paragraph_blocks,
             ):
                 continue
             boxes.append(
@@ -958,16 +997,9 @@ def build_edits_payload_from_translations(
                 }
             )
 
-        if paragraph_blocks:
+        if translatable_paragraph_blocks:
             base_id = 200000
-            for block in paragraph_blocks:
-                block = {**block, "_source_lang": source_lang, "_target_lang": target_lang}
-                if not should_translate_structured_block(
-                    block,
-                    document_mode=document_mode,
-                    merged_only=merged_only,
-                ):
-                    continue
+            for block in translatable_paragraph_blocks:
                 if table_bboxes and bbox_list_overlaps_tables(block.get("bbox"), table_bboxes):
                     continue
                 block_idx = int(block.get("block_index", 0))
