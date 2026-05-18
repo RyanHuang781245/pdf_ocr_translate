@@ -827,6 +827,10 @@ button.primary:hover {
   color: #ec2b0de1;
 }
 
+.glossary-status--success {
+  color: var(--accent-deep);
+}
+
 .glossary-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(340px, 420px);
@@ -835,6 +839,11 @@ button.primary:hover {
 }
 
 .glossary-column {
+  display: grid;
+  gap: 1rem;
+}
+
+.glossary-form-stack {
   display: grid;
   gap: 1rem;
 }

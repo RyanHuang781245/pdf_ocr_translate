@@ -49,6 +49,7 @@ function setGlossaryStatus(message, isError = false) {
   if (!glossaryStatusEl) return;
   glossaryStatusEl.textContent = message || "";
   glossaryStatusEl.classList.toggle("glossary-status--error", Boolean(isError));
+  glossaryStatusEl.classList.toggle("glossary-status--success", Boolean(message) && !isError);
 }
 
 function normalizeText(value) {
@@ -533,6 +534,11 @@ async function saveCurrentGlossary() {
     setGlossaryStatus("請輸入完整的中文與英文詞彙", true);
     return;
   }
+  const originalButtonText = saveGlossaryBtn?.textContent || "儲存";
+  if (saveGlossaryBtn) {
+    saveGlossaryBtn.disabled = true;
+    saveGlossaryBtn.textContent = "儲存中...";
+  }
 
   const currentEntry = glossaryState.selectedCn ? getEffectiveEntry(glossaryState.selectedCn) : null;
   let targetCn = cn;
@@ -565,8 +571,20 @@ async function saveCurrentGlossary() {
     renderGlossaryList();
     renderDetailPanel();
     setGlossaryStatus(`已儲存詞彙「${targetCn}」`);
+    if (saveGlossaryBtn) {
+      saveGlossaryBtn.textContent = "已儲存";
+      window.setTimeout(() => {
+        if (saveGlossaryBtn.textContent === "已儲存") {
+          renderDetailPanel();
+        }
+      }, 1200);
+    }
   } catch (error) {
     setGlossaryStatus(error.message || "儲存 glossary 失敗", true);
+    if (saveGlossaryBtn) {
+      saveGlossaryBtn.textContent = originalButtonText;
+      syncGlossaryActionState();
+    }
   }
 }
 
