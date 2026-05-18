@@ -55,6 +55,7 @@
       const templatesEmpty = document.getElementById("templatesEmpty");
       const templatesRefresh = document.getElementById("templatesRefresh");
       let jobMap = new Map();
+      let templatesSource = null;
 
       function formatDate(ts) {
         if (!ts) return "Unknown";
@@ -183,8 +184,43 @@
         }
       }
 
+      async function refreshTemplatesFromJobs(jobs) {
+        jobMap = new Map((jobs || []).map((item) => [item.job_id, item]));
+        try {
+          const res = await fetch("/api/document-templates");
+          if (!res.ok) {
+            renderTemplates([]);
+            return;
+          }
+          const payload = await res.json();
+          renderTemplates(payload.templates || []);
+        } catch (error) {
+          renderTemplates([]);
+        }
+      }
+
+      function connectTemplatesStream() {
+        if (!window.EventSource) return;
+        if (templatesSource) templatesSource.close();
+        templatesSource = new EventSource("/api/template-jobs/stream");
+        templatesSource.addEventListener("jobs", async (event) => {
+          try {
+            const payload = JSON.parse(event.data) || {};
+            await refreshTemplatesFromJobs(payload.jobs || []);
+          } catch (error) {}
+        });
+        templatesSource.onerror = () => {
+          if (templatesSource) {
+            templatesSource.close();
+            templatesSource = null;
+          }
+          setTimeout(connectTemplatesStream, 5000);
+        };
+      }
+
       templatesRefresh?.addEventListener("click", loadTemplates);
       loadTemplates();
+      connectTemplatesStream();
     </script>
   </body>
 </html>

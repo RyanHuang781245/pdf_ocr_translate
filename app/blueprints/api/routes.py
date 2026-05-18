@@ -593,6 +593,27 @@ def jobs_stream():
     return resp
 
 
+@api_bp.route("/template-jobs/stream", methods=["GET"], endpoint="template_jobs_stream")
+def template_jobs_stream():
+    @stream_with_context
+    def generate():
+        last_payload = None
+        while True:
+            payload = {"jobs": jobs.build_jobs_list(job_type="template_source")}
+            data = json.dumps(payload, ensure_ascii=False)
+            if data != last_payload:
+                last_payload = data
+                yield f"event: jobs\ndata: {data}\n\n"
+            else:
+                yield ": ping\n\n"
+            time.sleep(3)
+
+    resp = Response(generate(), mimetype="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    return resp
+
+
 @api_bp.route("/job/<job_id>", methods=["DELETE"], endpoint="delete_job")
 def delete_job(job_id: str):
     if not jobs.safe_job_id(job_id):
