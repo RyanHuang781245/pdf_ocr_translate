@@ -592,7 +592,14 @@
         });
         uploadInput.addEventListener("change", () => {
           const nextFiles = Array.from(uploadInput.files || []);
-          selectedFiles = nextFiles;
+          const seen = new Set(selectedFiles.map((file) => fileKey(file)));
+          nextFiles.forEach((file) => {
+            const key = fileKey(file);
+            if (seen.has(key)) return;
+            selectedFiles.push(file);
+            seen.add(key);
+          });
+          syncUploadInputFiles();
           renderUploadFiles();
         });
         renderUploadFiles();
