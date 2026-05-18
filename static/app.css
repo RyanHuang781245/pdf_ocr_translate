@@ -762,6 +762,27 @@ button.primary:hover {
   width: 22%;
 }
 
+.glossary-import-table--invalid th:first-child,
+.glossary-import-table--invalid td:first-child {
+  width: 88px;
+}
+
+.glossary-import-table--invalid th:nth-child(2),
+.glossary-import-table--invalid td:nth-child(2) {
+  width: 22%;
+}
+
+.glossary-import-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.2rem;
+}
+
+.glossary-import-more__btn {
+  padding: 0.4rem 1rem;
+  font-size: 0.86rem;
+}
+
 .glossary-import-row {
   display: grid;
   grid-template-columns: minmax(100px, 180px) minmax(0, 1fr) minmax(0, 1fr) auto;

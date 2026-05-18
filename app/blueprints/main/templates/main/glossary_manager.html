@@ -26,7 +26,8 @@
         <div class="glossary-import-card">
           <div class="jobs-header">
             <div>
-              <h2>上傳系統詞彙表</h2>
+              <h2>匯入系統詞彙表</h2>
+              <span>系統詞彙表檔案格式為<code>.xlsx</code>，欄位需包含 <code>cn</code> 中文詞彙和 <code>en</code> 英文詞彙兩個欄位</span>
             </div>
           </div>
           <div class="glossary-import-grid">
@@ -36,7 +37,6 @@
             </label>
             <div class="glossary-toolbar-actions">
               <div id="systemImportStatus" class="hint">尚未上傳系統詞彙表</div>
-              <button id="exportSystemGlossaryBtn" class="ghost" type="button">匯出系統詞彙表</button>
               <button id="previewSystemGlossaryBtn" class="ghost" type="button">檢查匯入內容</button>
               <button id="applySystemGlossaryBtn" class="primary" type="button" hidden disabled>套用到系統詞彙</button>
             </div>
@@ -61,7 +61,8 @@
           </label>
           <div class="glossary-toolbar-actions">
             <button id="glossaryNewBtn" class="primary" type="button">新增自訂詞彙</button>
-            <button id="glossaryRefreshBtn" class="ghost" type="button">重新整理</button>
+            <button id="exportSystemGlossaryBtn" class="ghost" type="button">匯出系統詞彙表</button>
+            <button id="glossaryRefreshBtn" class="ghost" type="button"><i class="bi bi-arrow-clockwise"></i></button>
           </div>
         </div>
 

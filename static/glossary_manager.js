@@ -32,6 +32,11 @@ const glossaryState = {
   selectedCn: null,
   mode: "new",
   pendingSystemImport: null,
+  importPreviewLimits: {
+    preview: 30,
+    duplicates: 20,
+    invalid: 20,
+  },
 };
 
 const importStatusLabelMap = {
@@ -88,6 +93,14 @@ function syncGlossaryActionState() {
   if (!saveGlossaryBtn || saveGlossaryBtn.hidden) return;
   const hasChanges = hasPendingGlossaryChanges();
   saveGlossaryBtn.disabled = !hasChanges;
+}
+
+function resetImportPreviewLimits() {
+  glossaryState.importPreviewLimits = {
+    preview: 30,
+    duplicates: 20,
+    invalid: 20,
+  };
 }
 
 function rebuildEffectiveGlossary() {
@@ -155,6 +168,9 @@ function renderSystemImportPreview() {
   const previewRows = Array.isArray(payload.preview_rows) ? payload.preview_rows : [];
   const showUnchanged = Boolean(showUnchangedPreviewEl?.checked);
   const hasBlockingIssues = duplicates.length > 0 || invalidRows.length > 0;
+  const duplicateLimit = glossaryState.importPreviewLimits.duplicates;
+  const invalidLimit = glossaryState.importPreviewLimits.invalid;
+  const previewLimit = glossaryState.importPreviewLimits.preview;
   applySystemGlossaryBtn.hidden = false;
   systemImportSummaryEl.hidden = false;
   systemImportPreviewEl.hidden = false;
@@ -170,6 +186,7 @@ function renderSystemImportPreview() {
 
   const blocks = [];
   if (duplicates.length) {
+    const visibleDuplicates = duplicates.slice(0, duplicateLimit);
     blocks.push(`
       <div class="glossary-import-block">
         <h3>重複詞彙列</h3>
@@ -184,7 +201,7 @@ function renderSystemImportPreview() {
               </tr>
             </thead>
             <tbody>
-              ${duplicates.slice(0, 20).map((row) => `
+              ${visibleDuplicates.map((row) => `
                 <tr>
                   <td>row ${row.row}</td>
                   <td>${row.cn}</td>
@@ -195,15 +212,21 @@ function renderSystemImportPreview() {
             </tbody>
           </table>
         </div>
+        ${duplicates.length > visibleDuplicates.length ? `
+          <div class="glossary-import-more">
+            <button class="ghost glossary-import-more__btn" type="button" data-more-target="duplicates">顯示更多 (${duplicates.length - visibleDuplicates.length})</button>
+          </div>
+        ` : ""}
       </div>
     `);
   }
   if (invalidRows.length) {
+    const visibleInvalidRows = invalidRows.slice(0, invalidLimit);
     blocks.push(`
       <div class="glossary-import-block">
         <h3>無效列</h3>
         <div class="glossary-import-table-wrap">
-          <table class="glossary-import-table glossary-import-table--duplicates">
+          <table class="glossary-import-table glossary-import-table--invalid">
             <thead>
               <tr>
                 <th>列號</th>
@@ -213,7 +236,7 @@ function renderSystemImportPreview() {
               </tr>
             </thead>
             <tbody>
-              ${invalidRows.slice(0, 20).map((row) => `
+              ${visibleInvalidRows.map((row) => `
                 <tr>
                   <td>row ${row.row}</td>
                   <td>${row.cn || "-"}</td>
@@ -224,13 +247,19 @@ function renderSystemImportPreview() {
             </tbody>
           </table>
         </div>
+        ${invalidRows.length > visibleInvalidRows.length ? `
+          <div class="glossary-import-more">
+            <button class="ghost glossary-import-more__btn" type="button" data-more-target="invalid">顯示更多 (${invalidRows.length - visibleInvalidRows.length})</button>
+          </div>
+        ` : ""}
       </div>
     `);
   }
   const visibleRows = previewRows
     .filter((row) => showUnchanged || row.status !== "unchanged")
-    .slice(0, 30);
-  if (visibleRows.length) {
+    .slice(0, previewLimit);
+  if (previewRows.length) {
+    const filteredPreviewRows = previewRows.filter((row) => showUnchanged || row.status !== "unchanged");
     blocks.push(`
       <div class="glossary-import-block">
         <div class="glossary-import-block__header">
@@ -240,41 +269,59 @@ function renderSystemImportPreview() {
             <span>顯示未變更</span>
           </label>
         </div>
-        <div class="glossary-import-table-wrap">
-          <table class="glossary-import-table glossary-import-table--preview">
-            <thead>
-              <tr>
-                <th>中文詞彙</th>
-                <th>目前系統英文詞彙</th>
-                <th>匯入英文詞彙</th>
-                <th>狀態</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${visibleRows.map((row) => `
+        ${visibleRows.length ? `
+          <div class="glossary-import-table-wrap">
+            <table class="glossary-import-table glossary-import-table--preview">
+              <thead>
                 <tr>
-                  <td>${row.cn}</td>
-                  <td>${row.current_en || "-"}</td>
-                  <td>${row.next_en || ""}</td>
-                  <td>
-                    <span class="job-badge ${
-                      row.status === "update"
-                        ? "job-badge--general_force"
-                        : row.status === "add"
-                          ? "job-badge--form"
-                          : ""
-                    }">${importStatusLabelMap[row.status] || row.status}</span>
-                  </td>
+                  <th>中文詞彙</th>
+                  <th>目前系統英文詞彙</th>
+                  <th>匯入英文詞彙</th>
+                  <th>狀態</th>
                 </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                ${visibleRows.map((row) => `
+                  <tr>
+                    <td>${row.cn}</td>
+                    <td>${row.current_en || "-"}</td>
+                    <td>${row.next_en || ""}</td>
+                    <td>
+                      <span class="job-badge ${
+                        row.status === "update"
+                          ? "job-badge--general_force"
+                          : row.status === "add"
+                            ? "job-badge--form"
+                            : ""
+                      }">${importStatusLabelMap[row.status] || row.status}</span>
+                    </td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+          ${filteredPreviewRows.length > visibleRows.length ? `
+            <div class="glossary-import-more">
+              <button class="ghost glossary-import-more__btn" type="button" data-more-target="preview">顯示更多 (${filteredPreviewRows.length - visibleRows.length})</button>
+            </div>
+          ` : ""}
+        ` : `
+          <div class="hint">目前只包含未變更項目，勾選「顯示未變更」即可查看。</div>
+        `}
       </div>
     `);
   }
   systemImportPreviewEl.innerHTML = blocks.join("");
   document.getElementById("showUnchangedPreview")?.addEventListener("change", renderSystemImportPreview);
+  systemImportPreviewEl.querySelectorAll("[data-more-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = String(button.getAttribute("data-more-target") || "");
+      if (target === "preview" || target === "duplicates" || target === "invalid") {
+        glossaryState.importPreviewLimits[target] += 30;
+        renderSystemImportPreview();
+      }
+    });
+  });
 }
 
 function filteredGlossaryItems() {
@@ -559,6 +606,7 @@ async function previewSystemGlossaryImport() {
       throw new Error(payload.error || "預覽匯入失敗");
     }
     glossaryState.pendingSystemImport = payload;
+    resetImportPreviewLimits();
     renderSystemImportPreview();
     if ((payload.duplicates || []).length || (payload.invalid_rows || []).length) {
       setSystemImportStatus(`已解析 ${file.name}，請先排除詞彙表重複詞彙列與無效列，排除後再重新上傳`, true);
@@ -567,6 +615,7 @@ async function previewSystemGlossaryImport() {
     }
   } catch (error) {
     glossaryState.pendingSystemImport = null;
+    resetImportPreviewLimits();
     renderSystemImportPreview();
     setSystemImportStatus(error.message || "預覽匯入失敗", true);
   }
@@ -601,6 +650,7 @@ async function applySystemGlossaryImport() {
     glossaryState.userGlossary = Array.isArray(applied.user_glossary) ? applied.user_glossary : glossaryState.userGlossary;
     glossaryState.effectiveGlossary = Array.isArray(applied.effective_glossary) ? applied.effective_glossary : glossaryState.effectiveGlossary;
     glossaryState.pendingSystemImport = null;
+    resetImportPreviewLimits();
     renderSummary();
     renderGlossaryList();
     renderDetailPanel();
