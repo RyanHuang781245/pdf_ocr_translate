@@ -44,38 +44,6 @@ code {
   animation: rise 0.7s ease;
 }
 
-.shell--wide {
-  max-width: 1400px;
-}
-
-.overlay-layout {
-  display: grid;
-  grid-template-columns: minmax(350px, 420px) 1fr;
-  gap: 2rem;
-  align-items: start;
-}
-
-@media (max-width: 1024px) {
-  .overlay-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-.form-section {
-  border-top: 1px solid var(--edge);
-  margin-top: 1.5rem;
-  padding-top: 1.2rem;
-}
-
-.form-section-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 0.8rem;
-}
-
 .hero h1 {
   font-size: clamp(2.4rem, 4vw, 3.4rem);
   margin: 0.2rem 0 0.8rem;
@@ -254,11 +222,31 @@ code {
 
 .upload-files ul {
   margin: 0.3rem 0 0;
-  padding-left: 1.1rem;
+  padding-left: 0;
+  list-style: none;
 }
 
 .upload-files li {
   line-height: 1.4;
+}
+
+.upload-files-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.2rem 0;
+}
+
+.upload-files-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.upload-files-remove {
+  flex-shrink: 0;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.8rem;
 }
 
 .jobs-board {
