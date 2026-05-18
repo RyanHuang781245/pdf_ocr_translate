@@ -280,8 +280,14 @@ def glossary_system_import_preview():
 def glossary_system_import_apply():
     payload = request.get_json(force=True) or {}
     items = payload.get("items", [])
+    duplicates = payload.get("duplicates", [])
+    invalid_rows = payload.get("invalid_rows", [])
     if not isinstance(items, list):
         return jsonify({"ok": False, "error": "Invalid glossary payload."}), 400
+    if isinstance(duplicates, list) and duplicates:
+        return jsonify({"ok": False, "error": "請先排除重複詞彙列，再確認合併。"}), 400
+    if isinstance(invalid_rows, list) and invalid_rows:
+        return jsonify({"ok": False, "error": "請先排除無效列，再確認合併。"}), 400
     merged_items = glossary.apply_system_glossary_import(items)
     jobs.notify_jobs_update()
     return jsonify(

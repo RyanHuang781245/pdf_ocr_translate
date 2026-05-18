@@ -201,7 +201,7 @@ code {
 .upload-card {
   background: var(--panel);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  /* box-shadow: var(--shadow); */
   padding: 2rem;
   border: 1px solid var(--edge);
 }
@@ -460,6 +460,12 @@ code {
   margin: 1.5rem 0;
 }
 
+.glossary-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
 .form-note {
   margin: 1.5rem 0;
   padding: 1.2rem;
@@ -650,7 +656,7 @@ button.primary:hover {
 
 .glossary-import-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* grid-template-columns: minmax(0, 1fr) auto; */
   gap: 1rem;
   align-items: center;
 }
@@ -661,6 +667,18 @@ button.primary:hover {
   flex-wrap: wrap;
 }
 
+.glossary-inline-toggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.glossary-inline-toggle input {
+  width: auto;
+}
+
 .glossary-import-preview {
   display: grid;
   gap: 0.9rem;
@@ -668,7 +686,7 @@ button.primary:hover {
 
 .glossary-import-block {
   border: 1px solid var(--edge);
-  border-radius: 14px;
+  border-radius: 7px;
   padding: 0.9rem 1rem;
   background: rgba(255, 255, 255, 0.5);
   display: grid;
@@ -678,6 +696,70 @@ button.primary:hover {
 .glossary-import-block h3 {
   margin: 0;
   font-size: 0.96rem;
+}
+
+.glossary-import-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.glossary-import-table-wrap {
+  overflow-x: auto;
+}
+
+.glossary-import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  table-layout: fixed;
+}
+
+.glossary-import-table th,
+.glossary-import-table td {
+  padding: 0.7rem 0.5rem;
+  border-bottom: 1px solid rgba(21, 36, 43, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.glossary-import-table th {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.glossary-import-table td {
+  overflow-wrap: anywhere;
+}
+
+.glossary-import-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.glossary-import-table--preview th:last-child,
+.glossary-import-table--preview td:last-child {
+  width: 120px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.glossary-import-table--preview td:last-child .job-badge {
+  min-width: 64px;
+  justify-content: center;
+}
+
+.glossary-import-table--duplicates th:first-child,
+.glossary-import-table--duplicates td:first-child {
+  width: 88px;
+}
+
+.glossary-import-table--duplicates th:nth-child(2),
+.glossary-import-table--duplicates td:nth-child(2) {
+  width: 22%;
 }
 
 .glossary-import-row {
@@ -701,6 +783,7 @@ button.primary:hover {
 
 .glossary-toolbar-actions {
   display: flex;
+  align-items: start;
   gap: 0.6rem;
   justify-content: flex-end;
   flex-wrap: wrap;
@@ -710,8 +793,17 @@ button.primary:hover {
   min-height: 1.25rem;
 }
 
+.glossary-import-card .hint {
+  text-align: left;
+}
+
+#systemImportStatus {
+  margin-right: auto;
+  text-align: left;
+}
+
 .glossary-status--error {
-  color: #a22d1b;
+  color: #ec2b0de1;
 }
 
 .glossary-layout {
@@ -752,6 +844,9 @@ button.primary:hover {
 
 .glossary-library-list {
   gap: 0.7rem;
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: 0.35rem;
 }
 
 .glossary-row {
@@ -770,9 +865,17 @@ button.primary:hover {
   box-shadow: 0 10px 24px rgba(47, 143, 78, 0.12);
 }
 
+.glossary-row__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
 .glossary-row__title {
   font-size: 1rem;
   font-weight: 700;
+  min-width: 0;
 }
 
 .glossary-row__translation {
@@ -785,6 +888,8 @@ button.primary:hover {
   display: flex;
   gap: 0.45rem;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 0 0 auto;
 }
 
 .glossary-sidepanel {
@@ -806,26 +911,9 @@ button.primary:hover {
   font-size: 1.35rem;
 }
 
-.glossary-info-card {
-  border: 1px solid rgba(21, 36, 43, 0.12);
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  background: rgba(21, 36, 43, 0.04);
-}
-
-.glossary-info-card h3 {
-  margin: 0 0 0.4rem;
-  font-size: 0.95rem;
-}
-
-.glossary-info-card__value {
-  margin: 0;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
-
 .glossary-panel-actions {
   margin-top: 0;
+  gap: 1rem;
 }
 
 @media (max-width: 1040px) {
@@ -853,6 +941,10 @@ button.primary:hover {
 
   .glossary-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .glossary-library-list {
+    max-height: 45vh;
   }
 }
 

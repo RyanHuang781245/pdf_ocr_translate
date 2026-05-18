@@ -12,7 +12,6 @@
       <header class="hero">
         <div class="hero-title-split">
           <div>
-            <p class="eyebrow">Glossary</p>
             <h1>詞彙庫管理</h1>
           </div>
           <div class="button-row--tight">
@@ -20,28 +19,27 @@
             <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
           </div>
         </div>
-        <p class="lede">系統詞庫唯讀，自訂詞庫可新增、修改、刪除。若 <code>cn</code> 相同，自訂詞會覆蓋系統詞。</p>
+        <!-- <p class="lede">系統詞庫唯讀，自訂詞庫可新增、修改、刪除若 <code>cn</code> 相同，自訂詞會覆蓋系統詞</p> -->
       </header>
 
       <section class="upload-card glossary-dashboard">
         <div class="glossary-import-card">
           <div class="jobs-header">
             <div>
-              <p class="eyebrow">System Import</p>
-              <h2>上傳 System 詞彙表</h2>
+              <h2>上傳系統詞彙表</h2>
             </div>
           </div>
           <div class="glossary-import-grid">
             <label class="file-input">
-              <span>選擇 Excel 檔（.xlsx，第一列需有 <code>cn</code>、<code>en</code>）</span>
+              <span>上傳 Excel</span>
               <input id="systemGlossaryFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             </label>
             <div class="glossary-toolbar-actions">
-              <button id="previewSystemGlossaryBtn" class="ghost" type="button">預覽匯入</button>
-              <button id="applySystemGlossaryBtn" class="primary" type="button" disabled>確認 merge 到 system</button>
+              <div id="systemImportStatus" class="hint">尚未上傳系統詞彙表</div>
+              <button id="previewSystemGlossaryBtn" class="ghost" type="button">檢查匯入內容</button>
+              <button id="applySystemGlossaryBtn" class="primary" type="button" hidden disabled>套用到系統詞彙</button>
             </div>
           </div>
-          <div id="systemImportStatus" class="hint">尚未上傳 system 詞彙表。</div>
           <div id="systemImportSummary" class="glossary-import-summary" hidden></div>
           <div id="systemImportPreview" class="glossary-import-preview" hidden></div>
         </div>
@@ -55,13 +53,13 @@
             <span>篩選</span>
             <select id="glossaryFilter">
               <option value="all">全部</option>
-              <option value="system">只看 system</option>
-              <option value="user">只看 user</option>
-              <option value="user_overrides">只看 user 覆蓋</option>
+              <option value="system">系統詞彙</option>
+              <option value="user">使用者加入詞彙</option>
+              <option value="user_overrides">使用者覆蓋詞彙</option>
             </select>
           </label>
           <div class="glossary-toolbar-actions">
-            <button id="glossaryNewBtn" class="primary" type="button">新增自訂詞</button>
+            <button id="glossaryNewBtn" class="primary" type="button">新增自訂詞彙</button>
             <button id="glossaryRefreshBtn" class="ghost" type="button">重新整理</button>
           </div>
         </div>
@@ -77,33 +75,32 @@
               </div>
               <div class="glossary-summary-card">
                 <strong id="systemCount">0</strong>
-                <span>system</span>
+                <span>系統詞彙</span>
               </div>
               <div class="glossary-summary-card">
                 <strong id="userCount">0</strong>
-                <span>user</span>
+                <span>使用者自訂詞彙</span>
               </div>
               <div class="glossary-summary-card">
                 <strong id="overrideCount">0</strong>
-                <span>覆蓋中</span>
+                <span>使用者覆蓋詞彙</span>
               </div>
             </div>
-            <div id="glossaryEmpty" class="hint">目前沒有符合條件的詞彙。</div>
+            <div id="glossaryEmpty" class="hint">目前沒有符合條件的詞彙</div>
             <div id="glossaryList" class="jobs-list glossary-library-list"></div>
           </section>
 
           <aside class="upload-card glossary-sidepanel">
             <div class="glossary-panel-header">
               <div>
-                <p class="eyebrow">Detail</p>
-                <h2 id="detailTitle">新增自訂詞</h2>
+                <h2 id="detailTitle">新增自訂詞彙</h2>
               </div>
               <span id="detailBadge" class="job-badge">user</span>
             </div>
 
-            <div id="detailMeta" class="hint">建立新的自訂詞，或從左側選擇既有詞彙。</div>
+            <div id="detailMeta" class="hint">建立新的自訂詞，或從左側選擇既有詞彙</div>
 
-            <div class="form-grid">
+            <div class="glossary-form-grid">
               <label>
                 <span>中文詞彙</span>
                 <input id="detailCn" type="text" placeholder="例如：批號" />
@@ -113,16 +110,10 @@
                 <input id="detailEn" type="text" placeholder="例如：Batch No." />
               </label>
             </div>
-
-            <div id="systemInfoCard" class="glossary-info-card" hidden>
-              <h3>System 詞彙</h3>
-              <p id="systemInfoText" class="glossary-info-card__value"></p>
-            </div>
-
             <div class="button-row glossary-panel-actions">
               <button id="saveGlossaryBtn" class="primary" type="button">儲存</button>
-              <button id="deleteGlossaryBtn" class="danger" type="button">刪除自訂詞</button>
-              <button id="overrideGlossaryBtn" class="ghost" type="button">新增自訂覆蓋</button>
+              <button id="deleteGlossaryBtn" class="danger" type="button">刪除自訂詞彙</button>
+              <button id="overrideGlossaryBtn" class="ghost" type="button">建立自訂詞彙覆蓋</button>
             </div>
           </aside>
         </div>

@@ -335,7 +335,7 @@ def parse_system_glossary_excel(file_bytes: bytes) -> dict[str, object]:
         if not cn and not en:
             continue
         if not cn or not en:
-            invalid_rows.append({"row": row_number, "cn": cn, "en": en, "reason": "缺少 cn 或 en"})
+            invalid_rows.append({"row": row_number, "cn": cn, "en": en, "reason": "cn 欄位缺少中文詞彙或 en 欄位缺少英文詞彙"})
             continue
         if cn in seen:
             duplicates.append({"row": row_number, "cn": cn, "previous_en": seen[cn], "en": en})
