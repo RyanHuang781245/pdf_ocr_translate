@@ -50,6 +50,10 @@ GLOBAL_GLOSSARY_PATH = os.getenv(
     "GLOBAL_GLOSSARY_PATH",
     str((BASE_DIR / "glossary" / "global_glossary.json")),
 )
+SYSTEM_GLOSSARY_PATH = os.getenv(
+    "SYSTEM_GLOSSARY_PATH",
+    str((BASE_DIR / "glossary" / "system_glossary.json")),
+)
 DOCUMENT_TEMPLATES_PATH = Path(
     os.getenv("DOCUMENT_TEMPLATES_PATH", str(TEMPLATE_ROOT / "document_templates.json"))
 )

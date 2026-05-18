@@ -255,6 +255,44 @@ def global_glossary():
     return jsonify({"ok": True, "glossary": glossary.load_global_glossary()})
 
 
+@api_bp.route("/glossary/library", methods=["GET"], endpoint="glossary_library")
+def glossary_library():
+    return jsonify({"ok": True, **glossary.build_glossary_management_payload()})
+
+
+@api_bp.route("/glossary/system-import-preview", methods=["POST"], endpoint="glossary_system_import_preview")
+def glossary_system_import_preview():
+    upload = request.files.get("file")
+    if upload is None or not str(upload.filename or "").strip():
+        return jsonify({"ok": False, "error": "Missing Excel file."}), 400
+    filename = str(upload.filename or "").strip().lower()
+    if not filename.endswith(".xlsx"):
+        return jsonify({"ok": False, "error": "Only .xlsx files are supported."}), 400
+    try:
+        parsed = glossary.parse_system_glossary_excel(upload.read())
+        preview = glossary.build_system_glossary_import_preview(parsed["items"])
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, **parsed, **preview})
+
+
+@api_bp.route("/glossary/system-import-apply", methods=["POST"], endpoint="glossary_system_import_apply")
+def glossary_system_import_apply():
+    payload = request.get_json(force=True) or {}
+    items = payload.get("items", [])
+    if not isinstance(items, list):
+        return jsonify({"ok": False, "error": "Invalid glossary payload."}), 400
+    merged_items = glossary.apply_system_glossary_import(items)
+    jobs.notify_jobs_update()
+    return jsonify(
+        {
+            "ok": True,
+            "system_glossary": merged_items,
+            **glossary.build_glossary_management_payload(),
+        }
+    )
+
+
 @api_bp.route("/document-templates", methods=["GET", "POST"], endpoint="document_templates")
 def manage_document_templates():
     if request.method == "GET":
