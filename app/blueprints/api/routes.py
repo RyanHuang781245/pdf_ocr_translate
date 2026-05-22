@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import logging
 import re
@@ -156,6 +157,50 @@ def batch_translate(job_id: str):
     return jsonify({"ok": True, "status": {"status": "queued"}})
 
 
+@api_bp.route(
+    "/job/<job_id>/retranslate-document",
+    methods=["POST"],
+    endpoint="retranslate_document",
+)
+def retranslate_document(job_id: str):
+    if not jobs.safe_job_id(job_id):
+        abort(404)
+    job_dir = jobs.job_dir(job_id)
+    if not job_dir.exists():
+        abort(404)
+
+    edits_map = jobs.load_edits_map(job_dir)
+    targets: list[dict[str, object]] = []
+    for page_idx, page_boxes in sorted(edits_map.items()):
+        for box in page_boxes:
+            if not isinstance(box, dict) or box.get("deleted"):
+                continue
+            source_text = batch.normalize_text(str(box.get("tm_source_text") or "")).strip()
+            if not source_text:
+                continue
+            try:
+                box_id = int(box.get("id"))
+            except (TypeError, ValueError):
+                continue
+            targets.append(
+                {
+                    "page_index_0based": int(page_idx),
+                    "box_id": box_id,
+                    "source_text": source_text,
+                }
+            )
+
+    if not targets:
+        return jsonify({"ok": False, "error": "No translatable boxes found in this document."}), 400
+
+    body, status_code = _retranslate_boxes(
+        job_id=job_id,
+        job_dir=job_dir,
+        targets=targets,
+    )
+    return jsonify(body), status_code
+
+
 @api_bp.route("/job/<job_id>/batch-status", methods=["GET"], endpoint="batch_status")
 def batch_status(job_id: str):
     if not jobs.safe_job_id(job_id):
@@ -253,6 +298,61 @@ def global_glossary():
     glossary.write_global_glossary(items)
     jobs.notify_jobs_update()
     return jsonify({"ok": True, "glossary": glossary.load_global_glossary()})
+
+
+@api_bp.route("/glossary/library", methods=["GET"], endpoint="glossary_library")
+def glossary_library():
+    return jsonify({"ok": True, **glossary.build_glossary_management_payload()})
+
+
+@api_bp.route("/glossary/system-export", methods=["GET"], endpoint="glossary_system_export")
+def glossary_system_export():
+    workbook = glossary.export_system_glossary_excel()
+    return send_file(
+        io.BytesIO(workbook),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="system_glossary.xlsx",
+    )
+
+
+@api_bp.route("/glossary/system-import-preview", methods=["POST"], endpoint="glossary_system_import_preview")
+def glossary_system_import_preview():
+    upload = request.files.get("file")
+    if upload is None or not str(upload.filename or "").strip():
+        return jsonify({"ok": False, "error": "Missing Excel file."}), 400
+    filename = str(upload.filename or "").strip().lower()
+    if not filename.endswith(".xlsx"):
+        return jsonify({"ok": False, "error": "Only .xlsx files are supported."}), 400
+    try:
+        parsed = glossary.parse_system_glossary_excel(upload.read())
+        preview = glossary.build_system_glossary_import_preview(parsed["items"])
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    return jsonify({"ok": True, **parsed, **preview})
+
+
+@api_bp.route("/glossary/system-import-apply", methods=["POST"], endpoint="glossary_system_import_apply")
+def glossary_system_import_apply():
+    payload = request.get_json(force=True) or {}
+    items = payload.get("items", [])
+    duplicates = payload.get("duplicates", [])
+    invalid_rows = payload.get("invalid_rows", [])
+    if not isinstance(items, list):
+        return jsonify({"ok": False, "error": "Invalid glossary payload."}), 400
+    if isinstance(duplicates, list) and duplicates:
+        return jsonify({"ok": False, "error": "請先排除重複詞彙列，再確認合併。"}), 400
+    if isinstance(invalid_rows, list) and invalid_rows:
+        return jsonify({"ok": False, "error": "請先排除無效列，再確認合併。"}), 400
+    merged_items = glossary.apply_system_glossary_import(items)
+    jobs.notify_jobs_update()
+    return jsonify(
+        {
+            "ok": True,
+            "system_glossary": merged_items,
+            **glossary.build_glossary_management_payload(),
+        }
+    )
 
 
 @api_bp.route("/document-templates", methods=["GET", "POST"], endpoint="document_templates")
@@ -579,6 +679,27 @@ def jobs_stream():
         last_payload = None
         while True:
             payload = {"jobs": jobs.build_jobs_list(job_type="ocr_overlay")}
+            data = json.dumps(payload, ensure_ascii=False)
+            if data != last_payload:
+                last_payload = data
+                yield f"event: jobs\ndata: {data}\n\n"
+            else:
+                yield ": ping\n\n"
+            time.sleep(3)
+
+    resp = Response(generate(), mimetype="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    return resp
+
+
+@api_bp.route("/template-jobs/stream", methods=["GET"], endpoint="template_jobs_stream")
+def template_jobs_stream():
+    @stream_with_context
+    def generate():
+        last_payload = None
+        while True:
+            payload = {"jobs": jobs.build_jobs_list(job_type="template_source")}
             data = json.dumps(payload, ensure_ascii=False)
             if data != last_payload:
                 last_payload = data

@@ -63,6 +63,11 @@ def overlay_templates_page() -> str:
     return render_template("main/overlay_templates.html")
 
 
+@main_bp.route("/workspace/glossary", methods=["GET"], endpoint="glossary_page")
+def glossary_page() -> str:
+    return render_template("main/glossary_manager.html")
+
+
 @main_bp.route(
     "/workspace/pdf-overlay/templates/<job_id>",
     methods=["GET"],
