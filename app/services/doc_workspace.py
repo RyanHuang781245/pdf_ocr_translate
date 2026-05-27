@@ -151,6 +151,7 @@ def enqueue_doc_job_from_upload(
     source_lang: str,
     target_lang: str,
     creator_name: str = "",
+    owner_work_id: str = "",
 ) -> str:
     job_id = uuid.uuid4().hex
     job_dir = jobs.job_dir(job_id)
@@ -166,6 +167,7 @@ def enqueue_doc_job_from_upload(
             "source_lang": source_lang,
             "target_lang": target_lang,
             "creator_name": creator_name,
+            "owner_work_id": str(owner_work_id or "").strip(),
         },
     )
     jobs.job_store.create_job(
@@ -173,6 +175,7 @@ def enqueue_doc_job_from_upload(
         job_type="doc_workspace",
         stage="queued",
         job_name=display_name,
+        owner_work_id=str(owner_work_id or "").strip() or None,
         target_lang=target_lang,
         payload={"source_lang": source_lang, "target_lang": target_lang},
     )

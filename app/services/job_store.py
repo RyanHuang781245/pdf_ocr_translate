@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, create_engine, func, select, text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, create_engine, func, inspect, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ class JobRecord(Base):
     stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     job_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    owner_work_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     target_lang: Mapped[str | None] = mapped_column(String(20), nullable=True)
     document_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -68,6 +69,7 @@ class DocumentTemplateRecord(Base):
     template_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    owner_work_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     source_job_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="saved")
     payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -98,7 +100,24 @@ def init_app(app) -> None:
         raise RuntimeError("Only SQL Server DATABASE_URL values are supported.")
     _engine = create_engine(database_url, future=True, pool_pre_ping=True)
     _session_factory = sessionmaker(bind=_engine, future=True, expire_on_commit=False)
+    _ensure_compatible_columns()
     _assert_required_tables()
+
+
+def _ensure_compatible_columns() -> None:
+    if _engine is None:
+        raise RuntimeError("Database engine not initialized.")
+    inspector = inspect(_engine)
+    table_names = {name.lower() for name in inspector.get_table_names()}
+    with _engine.begin() as conn:
+        if "jobs" in table_names:
+            job_columns = {col["name"].lower() for col in inspector.get_columns("jobs")}
+            if "owner_work_id" not in job_columns:
+                conn.execute(text("ALTER TABLE jobs ADD owner_work_id NVARCHAR(100) NULL;"))
+        if "document_templates" in table_names:
+            template_columns = {col["name"].lower() for col in inspector.get_columns("document_templates")}
+            if "owner_work_id" not in template_columns:
+                conn.execute(text("ALTER TABLE document_templates ADD owner_work_id NVARCHAR(100) NULL;"))
 
 
 def _assert_required_tables() -> None:
@@ -181,6 +200,7 @@ def create_job(
     status: str = "queued",
     progress: float = 0.0,
     job_name: str | None = None,
+    owner_work_id: str | None = None,
     target_lang: str | None = None,
     document_mode: str | None = None,
     payload: dict[str, Any] | None = None,
@@ -197,6 +217,7 @@ def create_job(
                 stage=stage,
                 progress=progress,
                 job_name=job_name,
+                owner_work_id=owner_work_id,
                 target_lang=target_lang,
                 document_mode=document_mode,
                 payload_json=_serialize_payload(payload),

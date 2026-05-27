@@ -4,12 +4,14 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from flask import current_app, has_app_context
 from flask_login import UserMixin
 from ldap3 import ALL, BASE, LEVEL, SUBTREE, Connection, Server
 from ldap3.core.exceptions import LDAPBindError, LDAPException
 from ldap3.utils.conv import escape_filter_chars
 
 from ..extensions import login_manager
+from . import auth_policy, auth_store
 from .auth_hooks_service import register_auth_context
 
 
@@ -19,6 +21,7 @@ class AuthUser(UserMixin):
     display_name: str
     role_names: tuple[str, ...] = ("editor",)
     email: str | None = None
+    dn: str | None = None
 
     def get_id(self) -> str:
         return json.dumps(
@@ -27,6 +30,7 @@ class AuthUser(UserMixin):
                 "display_name": self.display_name,
                 "role_names": list(self.role_names),
                 "email": self.email,
+                "dn": self.dn,
             },
             ensure_ascii=False,
         )
@@ -69,13 +73,64 @@ def _normalize_value(value: object, fallback: str = "") -> str:
     return cleaned or fallback
 
 
+def _build_auth_user(
+    *,
+    work_id: str,
+    display_name: str,
+    role_names: tuple[str, ...],
+    email: str | None = None,
+    dn: str | None = None,
+) -> AuthUser:
+    return AuthUser(
+        work_id=work_id,
+        display_name=display_name,
+        role_names=role_names or (auth_store.ROLE_EDITOR,),
+        email=email,
+        dn=dn,
+    )
+
+
 def build_stub_user(*, username: str, display_name: str | None = None) -> AuthUser:
     normalized_work_id = _normalize_value(username)
     normalized_display_name = _normalize_value(display_name, fallback=normalized_work_id)
-    return AuthUser(
+    return _build_auth_user(
         work_id=normalized_work_id,
         display_name=normalized_display_name,
+        role_names=(auth_store.ROLE_EDITOR,),
     )
+
+
+def authenticate_identity(
+    config: Any,
+    *,
+    username: str,
+    password: str = "",
+    display_name: str | None = None,
+) -> AuthUser:
+    if config.get("AUTH_STUB_ENABLED", True):
+        if not _normalize_value(username):
+            raise AuthenticationError("請輸入工號或使用者名稱。")
+        return build_stub_user(username=username, display_name=display_name)
+    return authenticate_ldap_user(config, username=username, password=password)
+
+
+def authorize_login(config: Any, auth_user: AuthUser) -> None:
+    auth_policy.authorize_login(
+        config,
+        auth_user,
+        group_gate_checker=lambda user: is_allowed_group_member(config, user),
+    )
+
+
+def sync_local_user(config: Any, auth_user: AuthUser) -> auth_store.LocalUserSnapshot | None:
+    mode = auth_policy.get_authz_mode(config)
+    if mode == auth_policy.AUTHZ_MODE_LOCAL_ALLOWLIST and not auth_store.user_exists(auth_user.work_id):
+        return None
+    return auth_store.sync_authenticated_user(auth_user)
+
+
+def resolve_effective_roles(config: Any, auth_user: AuthUser) -> tuple[str, ...]:
+    return auth_policy.resolve_effective_roles(config, auth_user)
 
 
 def _build_ldap_settings(config: Any) -> LDAPSettings:
@@ -111,11 +166,27 @@ def authenticate_login(
     password: str = "",
     display_name: str | None = None,
 ) -> AuthUser:
-    if config.get("AUTH_STUB_ENABLED", True):
-        if not _normalize_value(username):
-            raise AuthenticationError("請輸入工號或使用者名稱。")
-        return build_stub_user(username=username, display_name=display_name)
-    return authenticate_ldap_user(config, username=username, password=password)
+    auth_user = authenticate_identity(
+        config,
+        username=username,
+        password=password,
+        display_name=display_name,
+    )
+
+    try:
+        authorize_login(config, auth_user)
+        snapshot = sync_local_user(config, auth_user)
+        role_names = resolve_effective_roles(config, auth_user)
+    except auth_store.LocalAuthorizationError as exc:
+        raise AuthenticationError(str(exc)) from exc
+
+    return _build_auth_user(
+        work_id=auth_user.work_id,
+        display_name=snapshot.display_name if snapshot is not None else auth_user.display_name,
+        role_names=role_names,
+        email=(snapshot.email if snapshot is not None else auth_user.email),
+        dn=auth_user.dn,
+    )
 
 
 def authenticate_ldap_user(config: Any, *, username: str, password: str) -> AuthUser:
@@ -166,10 +237,12 @@ def authenticate_ldap_user(config: Any, *, username: str, password: str) -> Auth
             fallback=work_id,
         )
         email = _normalize_value(entry_data.get(settings.email_attr)) or None
-        return AuthUser(
+        return _build_auth_user(
             work_id=work_id,
             display_name=display_name,
+            role_names=(auth_store.ROLE_EDITOR,),
             email=email,
+            dn=user_dn,
         )
     except LDAPBindError as exc:
         raise AuthenticationError("帳號或密碼錯誤。") from exc
@@ -199,17 +272,43 @@ def register_auth_handlers() -> None:
             return None
         if not isinstance(payload, dict):
             return None
+
         work_id = _normalize_value(payload.get("work_id"))
         display_name = _normalize_value(payload.get("display_name"), fallback=work_id)
-        role_names = payload.get("role_names") or ["editor"]
         email = _normalize_value(payload.get("email")) or None
+        dn = _normalize_value(payload.get("dn")) or None
         if not work_id:
             return None
-        return AuthUser(
+
+        try:
+            snapshot = auth_store.get_local_user_snapshot(work_id)
+        except Exception:
+            snapshot = None
+
+        authz_mode = auth_policy.AUTHZ_MODE_AD_ALL_USERS
+        if has_app_context():
+            authz_mode = auth_policy.get_authz_mode(current_app.config)
+
+        if snapshot is not None:
+            if not snapshot.is_active:
+                return None
+            return _build_auth_user(
+                work_id=snapshot.work_id,
+                display_name=snapshot.display_name,
+                role_names=snapshot.role_names or (auth_store.ROLE_EDITOR,),
+                email=snapshot.email,
+                dn=dn,
+            )
+
+        if authz_mode == auth_policy.AUTHZ_MODE_LOCAL_ALLOWLIST:
+            return None
+
+        return _build_auth_user(
             work_id=work_id,
             display_name=display_name,
-            role_names=tuple(str(role).strip() for role in role_names if str(role).strip()) or ("editor",),
+            role_names=(auth_store.ROLE_EDITOR,),
             email=email,
+            dn=dn,
         )
 
 
@@ -217,3 +316,11 @@ def init_auth(app) -> None:
     login_manager.login_view = "auth.login"
     register_auth_handlers()
     register_auth_context(app)
+    if not app.config.get("TESTING"):
+        auth_store.bootstrap_auth_store(app.config)
+
+
+def is_allowed_group_member(config: Any, auth_user: AuthUser) -> bool:
+    if not config.get("LDAP_GROUP_GATE_ENABLED", False):
+        return True
+    raise auth_store.LocalAuthorizationError("尚未實作 AD 群組授權檢查。")

@@ -4,8 +4,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask_login import current_user
 
-from ...services import doc_workspace, document_templates, jobs, pipeline, state, submit_quota, word_translate
+from ...services import authz_service, doc_workspace, document_templates, jobs, pipeline, state, submit_quota, word_translate
 
 main_bp = Blueprint(
     "main",
@@ -29,6 +30,12 @@ def _display_name_from_filename(filename: str, fallback: str) -> str:
 def _display_creator_name(value: str, fallback: str = "") -> str:
     cleaned = " ".join(str(value or "").split()).strip()
     return jobs.sanitize_unicode_filename(cleaned, fallback=fallback) if cleaned else fallback
+
+
+def _current_owner_work_id() -> str:
+    if getattr(current_user, "is_authenticated", False):
+        return " ".join(str(getattr(current_user, "work_id", "") or "").split()).strip()
+    return ""
 
 
 def _enforce_submit_quota(creator_name: str = "") -> None:
@@ -79,7 +86,13 @@ def template_editor_page(job_id: str) -> str:
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
-    template_record = document_templates.get_document_template_by_job(job_id)
+    if not authz_service.can_access_job(current_user, job_id):
+        abort(403)
+    template_record = document_templates.get_document_template_by_job(
+        job_id,
+        owner_work_id=_current_owner_work_id(),
+        include_all=authz_service.user_is_admin(current_user),
+    )
     return render_template(
         "main/template_editor.html",
         job_id=job_id,
@@ -127,6 +140,7 @@ def upload() -> str:
     if document_mode != "other":
         translate_source_lang = "auto"
     creator_name = _display_creator_name(request.form.get("creator_name", ""))
+    owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
     if keep_lang not in {"all", "zh", "en"}:
         keep_lang = "all"
@@ -154,6 +168,7 @@ def upload() -> str:
             enable_translate,
             document_mode,
             creator_name,
+            owner_work_id,
         )
         try:
             tmp_path.unlink(missing_ok=True)
@@ -184,6 +199,7 @@ def upload_template_source() -> str:
     enable_translate = False
     document_mode = "scanned"
     creator_name = ""
+    owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
     created_job_id = ""
 
@@ -210,12 +226,14 @@ def upload_template_source() -> str:
             enable_translate,
             document_mode,
             creator_name,
+            owner_work_id,
             job_root=state.TEMPLATE_JOB_ROOT,
             job_type="template_source",
         )
         document_templates.create_template_draft(
             source_job_id=created_job_id,
             display_name=display_name,
+            owner_work_id=owner_work_id,
         )
         try:
             tmp_path.unlink(missing_ok=True)
@@ -238,6 +256,7 @@ def upload_doc_workspace() -> str:
     source_lang = request.form.get("source_lang", "auto").strip() or "auto"
     target_lang = request.form.get("target_lang", "en").strip() or "en"
     creator_name = _display_creator_name(request.form.get("creator_name", ""))
+    owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
 
     for file in files:
@@ -255,6 +274,7 @@ def upload_doc_workspace() -> str:
             source_lang,
             target_lang,
             creator_name,
+            owner_work_id,
         )
         try:
             tmp_path.unlink(missing_ok=True)
@@ -278,6 +298,7 @@ def upload_word_workspace() -> str:
     target_lang = request.form.get("target_lang", "en").strip() or "en"
     retain_terms = request.form.get("retain_terms", "")
     creator_name = _display_creator_name(request.form.get("creator_name", ""))
+    owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
 
     for file in files:
@@ -295,6 +316,7 @@ def upload_word_workspace() -> str:
             source_lang,
             target_lang,
             creator_name=creator_name,
+            owner_work_id=owner_work_id,
             retain_terms_raw=retain_terms,
         )
         try:

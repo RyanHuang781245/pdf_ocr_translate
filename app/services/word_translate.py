@@ -852,6 +852,7 @@ def enqueue_word_job_from_upload(
     source_lang: str,
     target_lang: str,
     creator_name: str = "",
+    owner_work_id: str = "",
     retain_terms_raw: str | None = None,
 ) -> str:
     job_id = uuid.uuid4().hex
@@ -880,6 +881,7 @@ def enqueue_word_job_from_upload(
             "source_lang": source_lang,
             "target_lang": target_lang,
             "creator_name": creator_name,
+            "owner_work_id": str(owner_work_id or "").strip(),
             "retain_terms": retain_terms,
             "source_filename": safe_name,
             "progress": 0.0,
@@ -891,6 +893,7 @@ def enqueue_word_job_from_upload(
         job_type="word_translate",
         stage="queued",
         job_name=display_name,
+        owner_work_id=str(owner_work_id or "").strip() or None,
         target_lang=target_lang,
         payload={
             "source_lang": source_lang,

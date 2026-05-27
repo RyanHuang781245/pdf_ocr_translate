@@ -4,6 +4,7 @@ from flask import current_app, flash, redirect, render_template, request, url_fo
 from flask_login import current_user, login_user, logout_user
 
 from ...services import auth_service
+from ...services import auth_policy
 from ...services.authz_service import sanitize_next_url
 from .blueprint import auth_bp
 
@@ -22,6 +23,7 @@ def login():
     display_name = ""
     next_url = sanitize_next_url(request.args.get("next"))
     stub_enabled = bool(current_app.config.get("AUTH_STUB_ENABLED", True))
+    authz_mode = auth_policy.get_authz_mode(current_app.config)
 
     if request.method == "POST":
         username = " ".join(str(request.form.get("username") or "").split()).strip()
@@ -50,6 +52,7 @@ def login():
         display_name=display_name,
         next_url=next_url or "",
         stub_enabled=stub_enabled,
+        authz_mode=authz_mode,
     )
 
 

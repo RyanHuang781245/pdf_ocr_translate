@@ -304,10 +304,15 @@ def infer_job_store_status(job_dir_path: Path, meta: dict[str, Any]) -> tuple[st
 
 def build_jobs_list(
     job_type: str | None = None,
+    owner_work_id: str | None = None,
+    include_all: bool = False,
 ) -> list[dict[str, Any]]:
     state.JOB_ROOT.mkdir(parents=True, exist_ok=True)
     state.TEMPLATE_JOB_ROOT.mkdir(parents=True, exist_ok=True)
     jobs = []
+    normalized_owner = " ".join(str(owner_work_id or "").split()).strip()
+    if not include_all and not normalized_owner:
+        return jobs
     records = job_store.list_jobs(job_type)
 
     for record in records:
@@ -315,6 +320,9 @@ def build_jobs_list(
         current_job_type = record.job_type
         job_id = record.job_id
         job_meta = load_job_meta(job_dir_path) or {}
+        record_owner_work_id = str(record.owner_work_id or job_meta.get("owner_work_id") or "").strip()
+        if not include_all and record_owner_work_id != normalized_owner:
+            continue
         is_template_source = current_job_type == "template_source"
 
         pdf_path = job_dir_path / f"{job_id}.pdf"
@@ -393,6 +401,7 @@ def build_jobs_list(
                     "status": status_label,
                     "job_name": job_name,
                     "creator_name": str(job_meta.get("creator_name") or "").strip() or None,
+                    "owner_work_id": str(record.owner_work_id or job_meta.get("owner_work_id") or "").strip() or None,
                     "download_name": build_docx_name(job_id, job_name),
                     "source_pdf_url": url_for(
                         "jobs.job_file", job_id=job_id, filename="source.pdf"
@@ -443,6 +452,7 @@ def build_jobs_list(
                     "status": status_label,
                     "job_name": job_name,
                     "creator_name": str(job_meta.get("creator_name") or "").strip() or None,
+                    "owner_work_id": str(record.owner_work_id or job_meta.get("owner_work_id") or "").strip() or None,
                     "progress": float(job_meta.get("progress") or record.progress or 0.0),
                     "avg_quality": float(job_meta.get("avg_quality") or 0.0),
                     "target_lang": record.target_lang or job_meta.get("target_lang"),
@@ -497,6 +507,7 @@ def build_jobs_list(
                 "job_name": job_name,
                 "template_source": is_template_source,
                 "creator_name": str(job_meta.get("creator_name") or "").strip() or None,
+                "owner_work_id": str(record.owner_work_id or job_meta.get("owner_work_id") or "").strip() or None,
                 "document_mode": normalize_document_mode(
                     record.document_mode or job_meta.get("document_mode")
                 ),
@@ -520,6 +531,41 @@ def build_jobs_list(
             )
     jobs.sort(key=lambda item: item["updated_at"], reverse=True)
     return jobs
+
+
+def get_job_owner_work_id(job_id: str) -> str:
+    if not safe_job_id(job_id):
+        return ""
+    record = job_store.get_job(job_id)
+    if record is not None:
+        owner = str(record.owner_work_id or "").strip()
+        if owner:
+            return owner
+    meta = load_job_meta(job_dir(job_id)) or {}
+    return str(meta.get("owner_work_id") or "").strip()
+
+
+def list_accessible_job_ids(
+    *,
+    job_type: str | None = None,
+    owner_work_id: str | None = None,
+    include_all: bool = False,
+) -> set[str]:
+    normalized_owner = " ".join(str(owner_work_id or "").split()).strip()
+    if not include_all and not normalized_owner:
+        return set()
+    accessible: set[str] = set()
+    for record in job_store.list_jobs(job_type):
+        job_id = str(record.job_id or "").strip()
+        if not safe_job_id(job_id):
+            continue
+        if include_all:
+            accessible.add(job_id)
+            continue
+        owner = str(record.owner_work_id or "").strip() or get_job_owner_work_id(job_id)
+        if owner == normalized_owner:
+            accessible.add(job_id)
+    return accessible
 
 
 def batch_status_path(job_dir_path: Path) -> Path:
@@ -562,6 +608,7 @@ def write_job_meta(job_dir_path: Path, meta: dict[str, Any]) -> None:
         job_name=normalize_job_name(meta.get("job_name")),
         target_lang=str(meta.get("target_lang") or "") or None,
         document_mode=str(meta.get("document_mode") or "") or None,
+        owner_work_id=str(meta.get("owner_work_id") or "") or None,
         started_at=datetime_from_timestamp(meta.get("processing_started_at")),
         completed_at=datetime_from_timestamp(meta.get("processing_completed_at")),
     )

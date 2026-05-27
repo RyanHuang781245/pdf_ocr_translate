@@ -73,6 +73,7 @@ def _normalize_template(template: Any) -> dict[str, Any] | None:
         return None
     template_id = str(template.get("id") or "").strip() or uuid.uuid4().hex
     source_job_id = str(template.get("source_job_id") or "").strip()
+    owner_work_id = str(template.get("owner_work_id") or "").strip()
     template_name = str(template.get("name") or "").strip()
     display_name = str(template.get("display_name") or template_name or source_job_id or template_id).strip()
     status = str(template.get("status") or "draft").strip().lower()
@@ -102,6 +103,7 @@ def _normalize_template(template: Any) -> dict[str, Any] | None:
         "display_name": display_name or saved_name or template_id,
         "status": status,
         "source_job_id": source_job_id,
+        "owner_work_id": owner_work_id,
         "created_at": created_at,
         "updated_at": updated_at,
         "pages": pages,
@@ -138,6 +140,7 @@ def _deserialize_template_payload(record: job_store.DocumentTemplateRecord) -> d
         "display_name": str(record.display_name or record.name or record.template_id),
         "status": str(record.status or "draft"),
         "source_job_id": str(record.source_job_id or ""),
+        "owner_work_id": str(record.owner_work_id or ""),
         "created_at": _to_timestamp(record.created_at),
         "updated_at": _to_timestamp(record.updated_at),
         "pages": pages if isinstance(pages, list) else [],
@@ -154,10 +157,21 @@ def _record_to_template(record: job_store.DocumentTemplateRecord) -> dict[str, A
         "display_name": str(record.display_name or record.name or record.template_id),
         "status": str(record.status or "draft"),
         "source_job_id": str(record.source_job_id or ""),
+        "owner_work_id": str(record.owner_work_id or ""),
         "created_at": _to_timestamp(record.created_at),
         "updated_at": _to_timestamp(record.updated_at),
         "pages": [],
     }
+
+
+def _resolve_template_owner_work_id(record: job_store.DocumentTemplateRecord) -> str:
+    direct_owner = str(record.owner_work_id or "").strip()
+    if direct_owner:
+        return direct_owner
+    source_job_id = str(record.source_job_id or "").strip()
+    if source_job_id:
+        return jobs.get_job_owner_work_id(source_job_id)
+    return ""
 
 
 def _load_legacy_templates() -> list[dict[str, Any]]:
@@ -210,6 +224,7 @@ def _upsert_template(normalized: dict[str, Any]) -> dict[str, Any]:
                 template_id=normalized["id"],
                 name="",
                 display_name="",
+                owner_work_id=None,
                 source_job_id=None,
                 status=str(normalized.get("status") or "draft"),
                 payload_json=payload_json,
@@ -222,6 +237,7 @@ def _upsert_template(normalized: dict[str, Any]) -> dict[str, Any]:
             record.payload_json = payload_json
         record.name = str(normalized.get("name") or "")
         record.display_name = str(normalized.get("display_name") or record.name or record.template_id)
+        record.owner_work_id = str(normalized.get("owner_work_id") or "") or None
         record.source_job_id = str(normalized.get("source_job_id") or "") or None
         record.status = str(normalized.get("status") or "draft")
         record.created_at = created_at
@@ -229,8 +245,11 @@ def _upsert_template(normalized: dict[str, Any]) -> dict[str, Any]:
         return _record_to_template(record)
 
 
-def load_document_templates() -> list[dict[str, Any]]:
+def load_document_templates(*, owner_work_id: str | None = None, include_all: bool = False) -> list[dict[str, Any]]:
     _seed_from_legacy_if_needed()
+    normalized_owner = str(owner_work_id or "").strip()
+    if not include_all and not normalized_owner:
+        return []
     with job_store.session_scope() as session:
         records = list(
             session.scalars(
@@ -240,10 +259,23 @@ def load_document_templates() -> list[dict[str, Any]]:
                 )
             ).all()
         )
-        return [_record_to_template(record) for record in records]
+        templates: list[dict[str, Any]] = []
+        for record in records:
+            resolved_owner = _resolve_template_owner_work_id(record)
+            if not include_all and resolved_owner != normalized_owner:
+                continue
+            template = _record_to_template(record)
+            template["owner_work_id"] = resolved_owner
+            templates.append(template)
+        return templates
 
 
-def get_document_template(template_id: str) -> dict[str, Any] | None:
+def get_document_template(
+    template_id: str,
+    *,
+    owner_work_id: str | None = None,
+    include_all: bool = False,
+) -> dict[str, Any] | None:
     cleaned_id = str(template_id or "").strip()
     if not cleaned_id:
         return None
@@ -252,10 +284,20 @@ def get_document_template(template_id: str) -> dict[str, Any] | None:
         record = session.get(job_store.DocumentTemplateRecord, cleaned_id)
         if record is None:
             return None
-        return _record_to_template(record)
+        resolved_owner = _resolve_template_owner_work_id(record)
+        if not include_all and resolved_owner != str(owner_work_id or "").strip():
+            return None
+        template = _record_to_template(record)
+        template["owner_work_id"] = resolved_owner
+        return template
 
 
-def get_document_template_by_job(job_id: str) -> dict[str, Any] | None:
+def get_document_template_by_job(
+    job_id: str,
+    *,
+    owner_work_id: str | None = None,
+    include_all: bool = False,
+) -> dict[str, Any] | None:
     cleaned_job_id = str(job_id or "").strip()
     if not cleaned_job_id:
         return None
@@ -268,11 +310,16 @@ def get_document_template_by_job(job_id: str) -> dict[str, Any] | None:
         )
         if record is None:
             return None
-        return _record_to_template(record)
+        resolved_owner = _resolve_template_owner_work_id(record)
+        if not include_all and resolved_owner != str(owner_work_id or "").strip():
+            return None
+        template = _record_to_template(record)
+        template["owner_work_id"] = resolved_owner
+        return template
 
 
-def create_template_draft(*, source_job_id: str, display_name: str) -> dict[str, Any]:
-    existing = get_document_template_by_job(source_job_id)
+def create_template_draft(*, source_job_id: str, display_name: str, owner_work_id: str = "") -> dict[str, Any]:
+    existing = get_document_template_by_job(source_job_id, include_all=True)
     if existing:
         return existing
     now_ts = float(time.time())
@@ -282,6 +329,7 @@ def create_template_draft(*, source_job_id: str, display_name: str) -> dict[str,
         "display_name": str(display_name or source_job_id).strip() or source_job_id,
         "status": "draft",
         "source_job_id": str(source_job_id or "").strip(),
+        "owner_work_id": str(owner_work_id or "").strip(),
         "created_at": now_ts,
         "updated_at": now_ts,
         "pages": [],
@@ -289,14 +337,14 @@ def create_template_draft(*, source_job_id: str, display_name: str) -> dict[str,
     return _upsert_template(draft)
 
 
-def save_document_template(payload: dict[str, Any]) -> dict[str, Any]:
+def save_document_template(payload: dict[str, Any], *, owner_work_id: str = "") -> dict[str, Any]:
     template_id = str(payload.get("id") or "").strip()
     source_job_id = str(payload.get("source_job_id") or "").strip()
     existing = None
     if template_id:
-        existing = get_document_template(template_id)
+        existing = get_document_template(template_id, include_all=True)
     if existing is None and source_job_id:
-        existing = get_document_template_by_job(source_job_id)
+        existing = get_document_template_by_job(source_job_id, include_all=True)
 
     normalized = _normalize_template(
         {
@@ -308,6 +356,7 @@ def save_document_template(payload: dict[str, Any]) -> dict[str, Any]:
             or "",
             "status": "saved",
             "source_job_id": source_job_id or (existing or {}).get("source_job_id") or "",
+            "owner_work_id": str(owner_work_id or (existing or {}).get("owner_work_id") or "").strip(),
             "created_at": (existing or {}).get("created_at"),
             "updated_at": time.time(),
             "pages": payload.get("pages", []),

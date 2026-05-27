@@ -15,6 +15,7 @@ CREATE TABLE dbo.jobs (
     stage varchar(50) NULL,
     progress float NOT NULL CONSTRAINT DF_jobs_progress DEFAULT (0),
     job_name nvarchar(255) NULL,
+    owner_work_id nvarchar(100) NULL,
     target_lang varchar(20) NULL,
     document_mode varchar(20) NULL,
     payload_json nvarchar(max) NULL,
@@ -57,6 +58,7 @@ CREATE TABLE dbo.document_templates (
     template_id char(32) NOT NULL,
     name nvarchar(255) NOT NULL CONSTRAINT DF_document_templates_name DEFAULT (N''),
     display_name nvarchar(255) NULL,
+    owner_work_id nvarchar(100) NULL,
     source_job_id char(32) NULL,
     status varchar(20) NOT NULL CONSTRAINT DF_document_templates_status DEFAULT ('saved'),
     payload_json nvarchar(max) NULL,
@@ -74,6 +76,10 @@ CREATE INDEX IX_jobs_job_type_updated_at
 ON dbo.jobs (job_type, updated_at DESC);
 GO
 
+CREATE INDEX IX_jobs_owner_work_id
+ON dbo.jobs (owner_work_id);
+GO
+
 CREATE INDEX IX_jobs_cancel_requested_status
 ON dbo.jobs (cancel_requested, status);
 GO
@@ -88,6 +94,10 @@ GO
 
 CREATE INDEX IX_document_templates_source_job_id
 ON dbo.document_templates (source_job_id);
+GO
+
+CREATE INDEX IX_document_templates_owner_work_id
+ON dbo.document_templates (owner_work_id);
 GO
 
 CREATE INDEX IX_document_templates_updated_at

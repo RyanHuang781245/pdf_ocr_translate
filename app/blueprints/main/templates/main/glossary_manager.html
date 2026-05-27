@@ -10,6 +10,11 @@
   <body class="home">
     <main class="shell shell--wide">
       <header class="hero">
+        {% if auth_enabled and current_user %}
+        <div class="hero-toolbar hero-toolbar--right">
+          <a class="ghost back-link" href="{{ url_for('auth.logout') }}">登出</a>
+        </div>
+        {% endif %}
         <div class="hero-title-split">
           <div>
             <h1>詞彙庫管理</h1>

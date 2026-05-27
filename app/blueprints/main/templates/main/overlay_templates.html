@@ -10,9 +10,16 @@
   <body class="home">
     <main class="shell">
       <header class="hero">
+        {% if auth_enabled and current_user %}
+        <div class="hero-toolbar hero-toolbar--right">
+          <a class="ghost back-link" href="{{ url_for('auth.logout') }}">登出</a>
+        </div>
+        {% endif %}
         <div class="hero-title-split">
           <h1>欄位翻譯模板</h1>
-          <a class="ghost back-link" href="{{ url_for('.overlay_workspace') }}">返回 PDF 原版面翻譯</a>
+          <div class="button-row--tight">
+            <a class="ghost back-link" href="{{ url_for('.overlay_workspace') }}">返回 PDF 原版面翻譯</a>
+          </div>
         </div>
       </header>
 

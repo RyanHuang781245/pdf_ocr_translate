@@ -161,6 +161,9 @@ def _env_bool(name: str, default: bool) -> bool:
 
 AUTH_ENABLED = _env_bool("AUTH_ENABLED", False)
 AUTH_STUB_ENABLED = _env_bool("AUTH_STUB_ENABLED", True)
+AUTH_REQUIRE_LOCAL_USER = _env_bool("AUTH_REQUIRE_LOCAL_USER", True)
+AUTHZ_MODE = os.getenv("AUTHZ_MODE", "").strip().lower()
+BOOTSTRAP_ADMIN = os.getenv("BOOTSTRAP_ADMIN", "").strip()
 SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", False)
 LDAP_HOST = os.getenv("LDAP_HOST", "").strip()
 LDAP_PORT = int(os.getenv("LDAP_PORT", "636" if _env_bool("LDAP_USE_SSL", False) else "389"))
@@ -173,6 +176,8 @@ LDAP_USER_OBJECT_FILTER = os.getenv("LDAP_USER_OBJECT_FILTER", "(&(objectClass=u
 LDAP_USER_DISPLAY_ATTR = os.getenv("LDAP_USER_DISPLAY_ATTR", "displayName").strip() or "displayName"
 LDAP_USER_EMAIL_ATTR = os.getenv("LDAP_USER_EMAIL_ATTR", "mail").strip() or "mail"
 LDAP_USER_SEARCH_SCOPE = os.getenv("LDAP_USER_SEARCH_SCOPE", "SUBTREE").strip() or "SUBTREE"
+LDAP_GROUP_GATE_ENABLED = _env_bool("LDAP_GROUP_GATE_ENABLED", False)
+ALLOWED_GROUP_DN = os.getenv("ALLOWED_GROUP_DN", "").strip()
 
 PDF_OVERLAY_ENABLE_TRANSLATION_MEMORY = _env_bool(
     "PDF_OVERLAY_ENABLE_TRANSLATION_MEMORY",
