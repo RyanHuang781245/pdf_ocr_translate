@@ -550,6 +550,32 @@ def test_word_jobs_download_docx_requires_selected_jobs(client):
     assert resp.get_json()["error"] == "No valid job IDs selected."
 
 
+def test_doc_jobs_stream_returns_sse(client, monkeypatch):
+    monkeypatch.setattr(jobs, "build_jobs_list", lambda job_type=None: [{"job_id": "a" * 32, "job_type": job_type}])
+
+    resp = client.get("/api/doc-jobs/stream", buffered=False)
+
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/event-stream"
+    first_chunk = next(resp.response).decode("utf-8")
+    assert "event: jobs" in first_chunk
+    assert '"job_type": "doc_workspace"' in first_chunk
+    resp.close()
+
+
+def test_word_jobs_stream_returns_sse(client, monkeypatch):
+    monkeypatch.setattr(jobs, "build_jobs_list", lambda job_type=None: [{"job_id": "b" * 32, "job_type": job_type}])
+
+    resp = client.get("/api/word-jobs/stream", buffered=False)
+
+    assert resp.status_code == 200
+    assert resp.mimetype == "text/event-stream"
+    first_chunk = next(resp.response).decode("utf-8")
+    assert "event: jobs" in first_chunk
+    assert '"job_type": "word_translate"' in first_chunk
+    resp.close()
+
+
 def test_run_ocr_pipeline_job_skips_paragraph_align_for_general_force(tmp_path, monkeypatch):
     job_id = "d" * 32
     job_dir = tmp_path / "jobs" / job_id

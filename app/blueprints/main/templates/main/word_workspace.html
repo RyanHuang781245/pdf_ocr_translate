@@ -95,6 +95,7 @@
       const wordJobsDownload = document.getElementById("wordJobsDownload");
       const selectedWordJobs = new Set();
       let wordJobsLoading = false;
+      let wordJobsSource = null;
 
       function formatDate(ts) {
         if (!ts) return "Unknown";
@@ -377,6 +378,24 @@
         }
       }
 
+      function connectWordJobsStream() {
+        if (!window.EventSource) return;
+        if (wordJobsSource) wordJobsSource.close();
+        wordJobsSource = new EventSource("/api/word-jobs/stream");
+        wordJobsSource.addEventListener("jobs", (event) => {
+          try {
+            renderWordJobs((JSON.parse(event.data) || {}).jobs || []);
+          } catch (error) {}
+        });
+        wordJobsSource.onerror = () => {
+          if (wordJobsSource) {
+            wordJobsSource.close();
+            wordJobsSource = null;
+          }
+          setTimeout(connectWordJobsStream, 5000);
+        };
+      }
+
       wordJobsRefresh.addEventListener("click", loadWordJobs);
       wordJobsSelectAll.addEventListener("click", () => setAllWordSelections(true));
       wordJobsSelectNone.addEventListener("click", () => setAllWordSelections(false));
@@ -389,7 +408,7 @@
         listId: "wordUploadFilesList",
       });
       loadWordJobs();
-      setInterval(loadWordJobs, 10000);
+      connectWordJobsStream();
     </script>
   </body>
 </html>

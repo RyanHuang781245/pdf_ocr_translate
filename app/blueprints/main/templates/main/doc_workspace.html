@@ -91,6 +91,7 @@
       const docJobsDownload = document.getElementById("docJobsDownload");
       const selectedDocJobs = new Set();
       let docJobsLoading = false;
+      let docJobsSource = null;
 
       function formatDate(ts) {
         if (!ts) return "Unknown";
@@ -391,6 +392,24 @@
         }
       }
 
+      function connectDocJobsStream() {
+        if (!window.EventSource) return;
+        if (docJobsSource) docJobsSource.close();
+        docJobsSource = new EventSource("/api/doc-jobs/stream");
+        docJobsSource.addEventListener("jobs", (event) => {
+          try {
+            renderDocJobs((JSON.parse(event.data) || {}).jobs || []);
+          } catch (error) {}
+        });
+        docJobsSource.onerror = () => {
+          if (docJobsSource) {
+            docJobsSource.close();
+            docJobsSource = null;
+          }
+          setTimeout(connectDocJobsStream, 5000);
+        };
+      }
+
       docJobsRefresh.addEventListener("click", loadDocJobs);
       docJobsSelectAll.addEventListener("click", () => setAllDocSelections(true));
       docJobsSelectNone.addEventListener("click", () => setAllDocSelections(false));
@@ -403,7 +422,7 @@
         listId: "docUploadFilesList",
       });
       loadDocJobs();
-      setInterval(loadDocJobs, 10000);
+      connectDocJobsStream();
     </script>
   </body>
 </html>
