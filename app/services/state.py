@@ -23,6 +23,7 @@ TEMPLATE_JOB_ROOT = TEMPLATE_ROOT / "jobs"
 UPLOAD_ROOT = OUT_ROOT / "uploads"
 DOC_WORKSPACE_ROOT = OUT_ROOT / "doc_workspace"
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret").strip() or "dev-secret"
+SESSION_COOKIE_NAME = os.getenv("SESSION_COOKIE_NAME", "pdf_ocr_translate_session").strip() or "pdf_ocr_translate_session"
 
 TRITON_URL = os.getenv("TRITON_URL", "https://racks-editing-norm-timber.trycloudflare.com/table-recognition")
 PP_STRUCTURE_URL = os.getenv(
@@ -161,8 +162,9 @@ def _env_bool(name: str, default: bool) -> bool:
 
 AUTH_ENABLED = _env_bool("AUTH_ENABLED", False)
 AUTH_STUB_ENABLED = _env_bool("AUTH_STUB_ENABLED", True)
-AUTH_REQUIRE_LOCAL_USER = _env_bool("AUTH_REQUIRE_LOCAL_USER", True)
+AUTH_REQUIRE_LOCAL_USER = _env_bool("AUTH_REQUIRE_LOCAL_USER", False)
 AUTHZ_MODE = os.getenv("AUTHZ_MODE", "").strip().lower()
+OWNER_ACCESS_ENABLED = _env_bool("OWNER_ACCESS_ENABLED", True)
 BOOTSTRAP_ADMIN = os.getenv("BOOTSTRAP_ADMIN", "").strip()
 SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", False)
 LDAP_HOST = os.getenv("LDAP_HOST", "").strip()

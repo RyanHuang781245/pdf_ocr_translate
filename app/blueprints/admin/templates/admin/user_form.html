@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}新增或更新使用者{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+{% endblock %}
+
+{% block content %}
+<main class="shell">
+  <section class="upload-card" style="display: grid; gap: 1.5rem;">
+    <div class="hero-toolbar hero-toolbar--right" style="margin-bottom: 0;">
+      <a class="ghost back-link" href="{{ url_for('admin.users') }}">返回列表</a>
+      <a class="ghost back-link" href="{{ url_for('auth.logout') }}">登出</a>
+    </div>
+
+    <div class="hero-title-split">
+      <h1 style="margin: 0;">新增或更新使用者</h1>
+      <a class="ghost back-link" href="{{ url_for('main.index') }}" style="margin-bottom: 0;">返回入口</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="display: grid; gap: 0.75rem;">
+          {% for category, message in messages %}
+            <div style="padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid {% if category == 'error' %}#fecaca{% else %}#bbf7d0{% endif %}; background: {% if category == 'error' %}#fef2f2{% else %}#f0fdf4{% endif %}; color: {% if category == 'error' %}#b91c1c{% else %}#166534{% endif %};">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" style="display: grid; gap: 1rem;">
+      <label style="display: grid; gap: 0.45rem;">
+        <span>工號</span>
+        <input
+          type="text"
+          name="work_id"
+          value="{{ form.work_id }}"
+          required
+          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
+        />
+      </label>
+
+      <label style="display: grid; gap: 0.45rem;">
+        <span>顯示名稱</span>
+        <input
+          type="text"
+          name="display_name"
+          value="{{ form.display_name }}"
+          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
+        />
+      </label>
+
+      <label style="display: grid; gap: 0.45rem;">
+        <span>Email</span>
+        <input
+          type="email"
+          name="email"
+          value="{{ form.email }}"
+          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
+        />
+      </label>
+
+      <label style="display: grid; gap: 0.45rem;">
+        <span>角色</span>
+        <select
+          name="role_name"
+          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
+        >
+          {% for role_name in role_choices %}
+          <option value="{{ role_name }}" {% if form.role_name == role_name %}selected{% endif %}>{{ role_name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label style="display: inline-flex; gap: 0.55rem; align-items: center;">
+        <input type="checkbox" name="is_active" value="1" {% if form.is_active %}checked{% endif %} />
+        <span>啟用帳號</span>
+      </label>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap;">
+        <a class="ghost back-link" href="{{ url_for('admin.users') }}" style="margin-bottom: 0;">取消</a>
+        <button type="submit" class="ghost" style="min-height: 44px; padding: 0 1rem;">儲存</button>
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}

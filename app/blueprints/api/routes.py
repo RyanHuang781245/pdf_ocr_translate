@@ -31,7 +31,10 @@ def _current_owner_work_id() -> str:
 
 
 def _current_access_scope() -> tuple[str, bool]:
-    return _current_owner_work_id(), authz_service.user_is_admin(current_user)
+    return _current_owner_work_id(), (
+        authz_service.user_is_admin(current_user)
+        or not authz_service.owner_access_enabled()
+    )
 
 
 def _forbidden_json():

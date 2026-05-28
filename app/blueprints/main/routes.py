@@ -32,6 +32,19 @@ def _display_creator_name(value: str, fallback: str = "") -> str:
     return jobs.sanitize_unicode_filename(cleaned, fallback=fallback) if cleaned else fallback
 
 
+def _current_creator_name() -> str:
+    if not getattr(current_user, "is_authenticated", False):
+        return ""
+    display_name = _display_creator_name(getattr(current_user, "display_name", ""))
+    work_id = " ".join(str(getattr(current_user, "work_id", "") or "").split()).strip()
+    if display_name and work_id and display_name != work_id:
+        # return f"{display_name} / {work_id}"
+        return f"{work_id} / {display_name}"
+    if display_name:
+        return display_name
+    return work_id
+
+
 def _current_owner_work_id() -> str:
     if getattr(current_user, "is_authenticated", False):
         return " ".join(str(getattr(current_user, "work_id", "") or "").split()).strip()
@@ -91,7 +104,7 @@ def template_editor_page(job_id: str) -> str:
     template_record = document_templates.get_document_template_by_job(
         job_id,
         owner_work_id=_current_owner_work_id(),
-        include_all=authz_service.user_is_admin(current_user),
+        include_all=authz_service.user_is_admin(current_user) or not authz_service.owner_access_enabled(),
     )
     return render_template(
         "main/template_editor.html",
@@ -139,7 +152,7 @@ def upload() -> str:
     document_mode = jobs.normalize_document_mode(request.form.get("document_mode"))
     if document_mode != "other":
         translate_source_lang = "auto"
-    creator_name = _display_creator_name(request.form.get("creator_name", ""))
+    creator_name = _current_creator_name()
     owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
     if keep_lang not in {"all", "zh", "en"}:
@@ -198,7 +211,7 @@ def upload_template_source() -> str:
     keep_lang = "all"
     enable_translate = False
     document_mode = "scanned"
-    creator_name = ""
+    creator_name = _current_creator_name()
     owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
     created_job_id = ""
@@ -255,7 +268,7 @@ def upload_doc_workspace() -> str:
 
     source_lang = request.form.get("source_lang", "auto").strip() or "auto"
     target_lang = request.form.get("target_lang", "en").strip() or "en"
-    creator_name = _display_creator_name(request.form.get("creator_name", ""))
+    creator_name = _current_creator_name()
     owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
 
@@ -297,7 +310,7 @@ def upload_word_workspace() -> str:
     source_lang = request.form.get("source_lang", "auto").strip() or "auto"
     target_lang = request.form.get("target_lang", "en").strip() or "en"
     retain_terms = request.form.get("retain_terms", "")
-    creator_name = _display_creator_name(request.form.get("creator_name", ""))
+    creator_name = _current_creator_name()
     owner_work_id = _current_owner_work_id()
     _enforce_submit_quota(creator_name)
 

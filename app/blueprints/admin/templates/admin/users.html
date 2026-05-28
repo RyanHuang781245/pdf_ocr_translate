@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}使用者管理{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
+{% endblock %}
+
+{% block content %}
+<main class="shell shell--wide">
+  <section class="upload-card" style="display: grid; gap: 1.5rem;">
+    <div class="hero-toolbar hero-toolbar--right" style="margin-bottom: 0;">
+      <a class="ghost back-link" href="{{ url_for('main.index') }}">返回入口</a>
+      <a class="ghost back-link" href="{{ url_for('auth.logout') }}">登出</a>
+    </div>
+
+    <div class="hero-title-split">
+      <h1 style="margin: 0;">使用者管理</h1>
+    </div>
+
+    <div style="padding: 0.95rem 1rem; border-radius: 12px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8;">
+      目前以 <code>ad_all_users</code> 為主：AD 使用者第一次成功登入後，系統會自動建立本機使用者資料。這個頁面只負責管理 <code>admin/editor</code> 角色與帳號停用狀態。
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="display: grid; gap: 0.75rem;">
+          {% for category, message in messages %}
+            <div style="padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid {% if category == 'error' %}#fecaca{% else %}#bbf7d0{% endif %}; background: {% if category == 'error' %}#fef2f2{% else %}#f0fdf4{% endif %}; color: {% if category == 'error' %}#b91c1c{% else %}#166534{% endif %};">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="get" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+      <input
+        type="search"
+        name="q"
+        value="{{ query }}"
+        placeholder="搜尋工號、姓名或 Email"
+        style="flex: 1 1 320px; min-height: 42px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
+      />
+      <button type="submit" class="ghost" style="min-height: 42px; padding: 0 1rem;">搜尋</button>
+      {% if query %}
+      <a class="ghost back-link" href="{{ url_for('admin.users') }}" style="margin-bottom: 0;">清除</a>
+      {% endif %}
+    </form>
+
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse; min-width: 980px;">
+        <thead>
+          <tr style="text-align: left; border-bottom: 1px solid rgba(21, 36, 43, 0.12);">
+            <th style="padding: 0.8rem 0.6rem;">工號</th>
+            <th style="padding: 0.8rem 0.6rem;">顯示名稱</th>
+            <th style="padding: 0.8rem 0.6rem;">Email</th>
+            <th style="padding: 0.8rem 0.6rem;">狀態</th>
+            <th style="padding: 0.8rem 0.6rem;">角色</th>
+            <th style="padding: 0.8rem 0.6rem;">建立時間</th>
+            <th style="padding: 0.8rem 0.6rem;">最後登入</th>
+            <th style="padding: 0.8rem 0.6rem;">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr style="border-bottom: 1px solid rgba(21, 36, 43, 0.08); vertical-align: top;">
+            <td style="padding: 0.9rem 0.6rem; font-weight: 700;">{{ user.work_id }}</td>
+            <td style="padding: 0.9rem 0.6rem;">{{ user.display_name }}</td>
+            <td style="padding: 0.9rem 0.6rem;">{{ user.email or '-' }}</td>
+            <td style="padding: 0.9rem 0.6rem;">
+              <span style="display: inline-flex; padding: 0.2rem 0.6rem; border-radius: 999px; background: {% if user.is_active %}#dcfce7{% else %}#e2e8f0{% endif %}; color: {% if user.is_active %}#166534{% else %}#475569{% endif %};">
+                {{ '啟用' if user.is_active else '停用' }}
+              </span>
+            </td>
+            <td style="padding: 0.9rem 0.6rem;">
+              <form method="post" action="{{ url_for('admin.update_user_role', work_id=user.work_id) }}" style="display: flex; gap: 0.5rem;">
+                <select name="role_name" style="min-height: 38px; border-radius: 10px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.6rem; font: inherit;">
+                  {% for role_name in role_choices %}
+                  <option value="{{ role_name }}" {% if user.role_name == role_name %}selected{% endif %}>{{ role_name }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="ghost" style="min-height: 38px; padding: 0 0.75rem;">更新</button>
+              </form>
+            </td>
+            <td style="padding: 0.9rem 0.6rem;">{{ format_dt(user.created_at) }}</td>
+            <td style="padding: 0.9rem 0.6rem;">{{ format_dt(user.last_login_at) }}</td>
+            <td style="padding: 0.9rem 0.6rem;">
+              <form method="post" action="{{ url_for('admin.update_user_active', work_id=user.work_id) }}">
+                <input type="hidden" name="active" value="{{ 0 if user.is_active else 1 }}" />
+                <button type="submit" class="ghost" style="min-height: 38px; padding: 0 0.75rem;">
+                  {{ '停用' if user.is_active else '啟用' }}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" style="padding: 1.2rem 0.6rem; color: var(--muted);">目前沒有符合條件的使用者。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+{% endblock %}

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, inspect, select, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, inspect, or_, select, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from . import job_store
@@ -49,6 +49,18 @@ class LocalUserSnapshot:
     email: str | None
     role_names: tuple[str, ...]
     is_active: bool
+
+
+@dataclass(frozen=True)
+class LocalUserAdminEntry:
+    user_id: int
+    work_id: str
+    display_name: str
+    email: str | None
+    role_name: str
+    is_active: bool
+    created_at: datetime
+    last_login_at: datetime | None
 
 
 class LocalAuthorizationError(RuntimeError):
@@ -268,6 +280,99 @@ def get_local_user_snapshot(work_id: str) -> LocalUserSnapshot | None:
             role_names=role_names,
             is_active=bool(user.is_active),
         )
+
+
+def _build_admin_entry(user: UserRecord, role_name: str | None) -> LocalUserAdminEntry:
+    created_at = user.created_at
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    last_login_at = user.last_login_at
+    if last_login_at is not None and last_login_at.tzinfo is None:
+        last_login_at = last_login_at.replace(tzinfo=timezone.utc)
+    return LocalUserAdminEntry(
+        user_id=int(user.id),
+        work_id=str(user.work_id),
+        display_name=str(user.display_name or user.work_id),
+        email=str(user.email).strip() if user.email else None,
+        role_name=_normalize_work_id(role_name) or ROLE_EDITOR,
+        is_active=bool(user.is_active),
+        created_at=created_at,
+        last_login_at=last_login_at,
+    )
+
+
+def get_local_user_admin_entry(work_id: str) -> LocalUserAdminEntry | None:
+    cleaned = _normalize_work_id(work_id)
+    if not cleaned:
+        return None
+    with job_store.session_scope() as session:
+        row = session.execute(
+            select(UserRecord, RoleRecord.name)
+            .outerjoin(UserRoleRecord, UserRoleRecord.user_id == UserRecord.id)
+            .outerjoin(RoleRecord, RoleRecord.id == UserRoleRecord.role_id)
+            .where(UserRecord.work_id == cleaned)
+        ).first()
+        if row is None:
+            return None
+        user, role_name = row
+        return _build_admin_entry(user, role_name)
+
+
+def list_local_users(search: str | None = None) -> list[LocalUserAdminEntry]:
+    cleaned_search = _normalize_work_id(search)
+    with job_store.session_scope() as session:
+        stmt = (
+            select(UserRecord, RoleRecord.name)
+            .outerjoin(UserRoleRecord, UserRoleRecord.user_id == UserRecord.id)
+            .outerjoin(RoleRecord, RoleRecord.id == UserRoleRecord.role_id)
+        )
+        if cleaned_search:
+            pattern = f"%{cleaned_search}%"
+            stmt = stmt.where(
+                or_(
+                    UserRecord.work_id.ilike(pattern),
+                    UserRecord.display_name.ilike(pattern),
+                    UserRecord.email.ilike(pattern),
+                )
+            )
+        stmt = stmt.order_by(UserRecord.created_at.desc(), UserRecord.id.desc())
+        rows = session.execute(stmt).all()
+        return [_build_admin_entry(user, role_name) for user, role_name in rows]
+
+
+def count_users_with_role(role_name: str) -> int:
+    cleaned = _normalize_work_id(role_name)
+    if not cleaned:
+        return 0
+    with job_store.session_scope() as session:
+        rows = session.execute(
+            select(UserRecord.id)
+            .join(UserRoleRecord, UserRoleRecord.user_id == UserRecord.id)
+            .join(RoleRecord, RoleRecord.id == UserRoleRecord.role_id)
+            .where(RoleRecord.name == cleaned, UserRecord.is_active.is_(True))
+        ).all()
+        return len(rows)
+
+
+def update_user_active(work_id: str, active: bool) -> LocalUserAdminEntry | None:
+    cleaned = _normalize_work_id(work_id)
+    if not cleaned:
+        return None
+    with job_store.session_scope() as session:
+        user = session.scalar(select(UserRecord).where(UserRecord.work_id == cleaned))
+        if user is None:
+            return None
+        user.is_active = bool(active)
+    return get_local_user_admin_entry(cleaned)
+
+
+def update_user_role(work_id: str, role_name: str) -> LocalUserAdminEntry | None:
+    cleaned_work_id = _normalize_work_id(work_id)
+    cleaned_role = _normalize_work_id(role_name)
+    if not cleaned_work_id or not cleaned_role:
+        return None
+    upsert_user_role_for_work_id(work_id=cleaned_work_id, role_name=cleaned_role)
+    return get_local_user_admin_entry(cleaned_work_id)
 
 
 def touch_last_login(work_id: str) -> None:

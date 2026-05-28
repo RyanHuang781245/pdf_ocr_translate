@@ -2,6 +2,8 @@
 
 這份文件整理目前 `pdf_ocr_translate` 的登入與授權設定方式。
 
+目前建議正式環境優先採用 `ad_all_users`。其他模式保留作為相容或後續擴充，不建議作為目前部署的主路徑。
+
 程式入口可對照：
 - [app/services/state.py](/home/NE025/pdf_ocr_translate/app/services/state.py:162)
 - [app/config.py](/home/NE025/pdf_ocr_translate/app/config.py:50)
@@ -26,6 +28,33 @@ SECRET_KEY=your-secret
 - `AUTH_ENABLED=1`：啟用登入保護
 - `AUTH_ENABLED=0`：關閉登入保護，沿用匿名模式
 - `SECRET_KEY`：Flask session 必填
+- `SESSION_COOKIE_NAME`：同一 host 上若還有其他 Flask 站台，建議使用專屬 cookie 名稱，避免互相覆蓋
+
+建議同 host 多站台時一併設定：
+
+```env
+SESSION_COOKIE_NAME=pdf_ocr_translate_session
+```
+
+## Owner 權限開關
+
+這個設定用來控制 job / template 是否要依 `owner_work_id` 限制存取。
+
+```env
+OWNER_ACCESS_ENABLED=1
+```
+
+說明：
+- `OWNER_ACCESS_ENABLED=1`：啟用 owner 權限封鎖
+  - 一般使用者只能看到自己的 job / template
+  - 一般使用者不能打開、下載、修改別人的 job
+- `OWNER_ACCESS_ENABLED=0`：暫時關閉 owner 權限封鎖
+  - 列表、下載、編輯、API 會先不做 owner 限制
+  - 適合舊資料還沒補 `owner_work_id` 的過渡期
+
+建議：
+- 這是相容舊資料用的過渡開關
+- 舊資料補完 `owner_work_id` 後，應改回 `OWNER_ACCESS_ENABLED=1`
 
 ## Stub 與 LDAP
 
@@ -121,6 +150,7 @@ LDAP_BIND_PASSWORD=...
 適用情境：
 - 內部 AD 使用者都可使用系統
 - 只想另外控管少數管理員權限
+- 目前建議的預設模式
 
 ---
 
@@ -234,7 +264,7 @@ BOOTSTRAP_ADMIN=u123456,u234567
 目前仍保留：
 
 ```env
-AUTH_REQUIRE_LOCAL_USER=1
+AUTH_REQUIRE_LOCAL_USER=0
 ```
 
 用途：
@@ -246,6 +276,7 @@ AUTH_REQUIRE_LOCAL_USER=1
 建議：
 - 新設定請優先使用 `AUTHZ_MODE`
 - 不要再把 `AUTH_REQUIRE_LOCAL_USER` 當主要控制開關
+- 若未特別需求，請讓它維持 `0`
 
 ## 推薦配置
 

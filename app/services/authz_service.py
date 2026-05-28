@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, Optional
 from urllib.parse import urlparse
 
+from flask import current_app, has_app_context
+
 from . import jobs, job_store
 
 
@@ -32,7 +34,15 @@ def user_is_admin(user: Any) -> bool:
     return bool(getattr(user, "is_admin", False))
 
 
+def owner_access_enabled() -> bool:
+    if has_app_context():
+        return bool(current_app.config.get("OWNER_ACCESS_ENABLED", True))
+    return True
+
+
 def can_access_owner(user: Any, owner_work_id: object) -> bool:
+    if not owner_access_enabled():
+        return True
     if user_is_admin(user):
         return True
     owner = normalize_work_id(owner_work_id)
