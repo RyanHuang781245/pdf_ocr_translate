@@ -20,7 +20,7 @@ body {
   margin: 0;
   font-family: var(--font-main);
   color: var(--ink);
-  background: radial-gradient(circle at top left, #caf8c6 0%, #f7f2ea 45%, #eef2f8 100%);
+  background: #ffffff;
   min-height: 100vh;
 }
 
@@ -29,7 +29,7 @@ body {
   top: 0;
   z-index: 1100;
   backdrop-filter: blur(14px);
-  background: rgba(247, 242, 234, 0.9);
+  background: rgba(255, 255, 255, 0.96);
   border-bottom: 1px solid rgba(21, 36, 43, 0.12);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
@@ -74,25 +74,57 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 1rem;
   flex: 1 1 auto;
   min-width: 0;
-  flex-wrap: wrap;
 }
 
 .app-navbar__user {
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--muted);
   font-weight: 700;
   white-space: nowrap;
 }
 
-.app-navbar__link {
-  min-height: 30px;
+.app-navbar-menu {
+  position: relative;
 }
 
-.app-navbar__logout {
-  min-height: 30px;
+.app-navbar-menu__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0 14px;
+  font-size: 0.9375rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.app-navbar-menu .app-navbar-menu__toggle {
+  border-radius: 12px;
+}
+
+.app-navbar-menu .app-navbar-menu__toggle:focus-visible,
+.app-navbar-menu .app-navbar-menu__toggle:hover {
+  border-color: rgba(21, 36, 43, 0.28);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.app-navbar-menu__toggle i {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.app-navbar-menu__panel {
+  min-width: 50px;
+}
+
+.app-navbar-menu__panel .dropdown-item.is-active {
+  background: rgba(47, 143, 78, 0.12);
+  color: var(--accent-deep);
 }
 
 body.is-loading {
@@ -115,6 +147,10 @@ code {
   animation: rise 0.7s ease;
 }
 
+body.has-global-nav:not(.home-hub) .shell {
+  padding-top: 2rem;
+}
+
 .shell--wide {
   max-width: 1320px;
 }
@@ -131,9 +167,24 @@ code {
   justify-content: center;
 }
 
+.home-hub .shell {
+  min-height: calc(100dvh - 72px);
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.home-hub .launcher-shell {
+  min-height: auto;
+  flex: 1 1 auto;
+}
+
 .launcher-intro {
   text-align: center;
   margin-bottom: 2.5rem;
+}
+
+.home-hub .hero-title-split {
+  justify-content: center;
 }
 
 .launcher-intro h1 {
@@ -164,6 +215,10 @@ code {
 }
 
 @media (max-width: 960px) {
+  .home-hub .shell {
+    min-height: calc(100dvh - 84px);
+  }
+
   .app-navbar__inner {
     padding: 0.75rem 0;
     min-height: 84px;
@@ -179,7 +234,6 @@ code {
   .app-navbar__meta {
     display: flex;
     justify-content: flex-end;
-    flex-wrap: wrap;
   }
 }
 
@@ -275,6 +329,7 @@ code {
   flex: 0 0 auto;
 }
 
+
 .lede {
   max-width: 520px;
   color: var(--muted);
@@ -300,6 +355,234 @@ code {
 .upload-card-doc h2 {
   margin: 0.3rem 0 1rem;
   font-size: 1.4rem;
+}
+
+.admin-stack {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.admin-notice {
+  padding: 0.95rem 1rem;
+  border-radius: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.admin-flash-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.admin-flash {
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.admin-flash--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-search-form {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.admin-search-form .ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 0.85rem;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.admin-input,
+.admin-select {
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(21, 36, 43, 0.18);
+  padding: 0 0.9rem;
+  font: inherit;
+}
+
+.admin-input {
+  flex: 1 1 320px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 980px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.admin-table thead tr {
+  text-align: left;
+  border-bottom: 1px solid rgba(21, 36, 43, 0.12);
+}
+
+.admin-table th {
+  padding: 0.8rem 0.6rem;
+  font-size: 0.95rem;
+}
+
+.admin-table tbody tr {
+  border-bottom: 1px solid rgba(21, 36, 43, 0.08);
+}
+
+.admin-table td {
+  padding: 0.8rem 0.55rem;
+  word-break: break-word;
+  font-size: 0.95rem;
+  vertical-align: middle;
+}
+
+.admin-table__work-id {
+  font-weight: 700;
+  width: 110px;
+  white-space: nowrap;
+}
+
+.admin-status {
+  display: inline-flex;
+  padding: 0.2rem 0.6rem;
+  border-radius: 10px;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.admin-status--active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.admin-inline-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.admin-inline-form .admin-select,
+.admin-inline-form .ghost {
+  min-height: 38px;
+}
+
+.admin-inline-form .admin-select {
+  min-width: 104px;
+  flex: 0 0 104px;
+}
+
+.admin-inline-form .ghost {
+  min-width: 52px;
+  padding: 0 0.6rem;
+  white-space: nowrap;
+}
+
+.admin-action-form .ghost {
+  min-width: 64px;
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.admin-col--workid {
+  width: 80px;
+}
+
+.admin-col--name {
+  width: 148px;
+}
+
+.admin-col--email {
+  width: 240px;
+}
+
+.admin-col--status {
+  width: 72px;
+}
+
+.admin-col--role {
+  width: 168px;
+}
+
+.admin-col--created,
+.admin-col--login {
+  width: 112px;
+}
+
+.admin-col--action {
+  width: 76px;
+}
+
+.admin-col--center {
+  text-align: center;
+}
+
+.admin-cell--ellipsis {
+  max-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-time {
+  display: grid;
+  gap: 0.1rem;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.admin-time__date {
+  font-weight: 700;
+}
+
+.admin-time__clock {
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.admin-empty {
+  padding: 1.2rem 0.6rem;
+  color: var(--muted);
+}
+
+.admin-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-checkbox {
+  display: inline-flex;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.admin-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .upload-files {

@@ -11,7 +11,7 @@
     {% set nav_section = 'word' %}
     {% set nav_title = '法規文件轉換平台' %}
     {% include "_global_nav.html" %}
-    <main class="shell">
+    <main class="shell shell--wide">
       <header class="hero">
         <div class="hero-title-split">
           <h1>Word 原版面翻譯</h1>
@@ -20,7 +20,6 @@
             <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
           </div>
         </div>
-        <!-- <p class="eyebrow">DOCX -> Translate -> DOCX</p> -->
       </header>
       <section class="upload-card upload-card-doc">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload_word_workspace') }}">

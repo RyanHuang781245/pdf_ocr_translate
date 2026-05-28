@@ -3,32 +3,29 @@
 {% set nav_title = '法規文件轉換平台' %}
 
 {% block title %}使用者管理{% endblock %}
-
-{% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
-{% endblock %}
+{% block body_class %}home has-global-nav{% endblock %}
 
 {% block content %}
 <main class="shell shell--wide">
-  <section class="upload-card" style="display: grid; gap: 1.5rem;">
-    <div class="hero-toolbar hero-toolbar--right" style="margin-bottom: 0;">
-      <a class="ghost back-link" href="{{ url_for('main.index') }}">返回入口</a>
-      <a class="ghost back-link" href="{{ url_for('auth.logout') }}">登出</a>
-    </div>
-
+  <header class="hero">
     <div class="hero-title-split">
-      <h1 style="margin: 0;">使用者管理</h1>
+      <h1>使用者管理</h1>
+      <div class="button-row--tight">
+        <a class="ghost back-link" href="{{ url_for('main.index') }}">返回入口</a>
+      </div>
     </div>
+  </header>
 
-    <div style="padding: 0.95rem 1rem; border-radius: 12px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8;">
-      目前以 <code>ad_all_users</code> 為主：AD 使用者第一次成功登入後，系統會自動建立本機使用者資料。這個頁面只負責管理 <code>admin/editor</code> 角色與帳號停用狀態。
+  <section class="upload-card admin-stack">
+    <div class="admin-notice">
+      AD 使用者第一次成功登入後，系統會自動建立本機使用者資料。這個頁面只負責管理 <span>admin/editor</span> 角色與帳號停用狀態
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div style="display: grid; gap: 0.75rem;">
+        <div class="admin-flash-list">
           {% for category, message in messages %}
-            <div style="padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid {% if category == 'error' %}#fecaca{% else %}#bbf7d0{% endif %}; background: {% if category == 'error' %}#fef2f2{% else %}#f0fdf4{% endif %}; color: {% if category == 'error' %}#b91c1c{% else %}#166534{% endif %};">
+            <div class="admin-flash{% if category == 'error' %} admin-flash--error{% endif %}">
               {{ message }}
             </div>
           {% endfor %}
@@ -36,61 +33,88 @@
       {% endif %}
     {% endwith %}
 
-    <form method="get" style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+    <form method="get" class="admin-search-form">
       <input
+        class="admin-input"
         type="search"
         name="q"
         value="{{ query }}"
         placeholder="搜尋工號、姓名或 Email"
-        style="flex: 1 1 320px; min-height: 42px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
       />
-      <button type="submit" class="ghost" style="min-height: 42px; padding: 0 1rem;">搜尋</button>
+      <button type="submit" class="ghost">搜尋</button>
       {% if query %}
-      <a class="ghost back-link" href="{{ url_for('admin.users') }}" style="margin-bottom: 0;">清除</a>
+      <a class="ghost" href="{{ url_for('admin.users') }}">清除</a>
       {% endif %}
     </form>
 
-    <div style="overflow-x: auto;">
-      <table style="width: 100%; border-collapse: collapse; min-width: 980px;">
+    <div class="admin-table-wrap">
+      <table class="admin-table">
         <thead>
-          <tr style="text-align: left; border-bottom: 1px solid rgba(21, 36, 43, 0.12);">
-            <th style="padding: 0.8rem 0.6rem;">工號</th>
-            <th style="padding: 0.8rem 0.6rem;">顯示名稱</th>
-            <th style="padding: 0.8rem 0.6rem;">Email</th>
-            <th style="padding: 0.8rem 0.6rem;">狀態</th>
-            <th style="padding: 0.8rem 0.6rem;">角色</th>
-            <th style="padding: 0.8rem 0.6rem;">建立時間</th>
-            <th style="padding: 0.8rem 0.6rem;">最後登入</th>
-            <th style="padding: 0.8rem 0.6rem;">操作</th>
+          <tr>
+            <th class="admin-col--workid">工號</th>
+            <th class="admin-col--name">顯示名稱</th>
+            <th class="admin-col--email">Email</th>
+            <th class="admin-col--status admin-col--center">狀態</th>
+            <th class="admin-col--role admin-col--center">角色</th>
+            <th class="admin-col--created admin-col--center">建立時間</th>
+            <th class="admin-col--login admin-col--center">最後登入</th>
+            <th class="admin-col--action admin-col--center">操作</th>
           </tr>
         </thead>
         <tbody>
           {% for user in users %}
-          <tr style="border-bottom: 1px solid rgba(21, 36, 43, 0.08); vertical-align: top;">
-            <td style="padding: 0.9rem 0.6rem; font-weight: 700;">{{ user.work_id }}</td>
-            <td style="padding: 0.9rem 0.6rem;">{{ user.display_name }}</td>
-            <td style="padding: 0.9rem 0.6rem;">{{ user.email or '-' }}</td>
-            <td style="padding: 0.9rem 0.6rem;">
-              <span style="display: inline-flex; padding: 0.2rem 0.6rem; border-radius: 999px; background: {% if user.is_active %}#dcfce7{% else %}#e2e8f0{% endif %}; color: {% if user.is_active %}#166534{% else %}#475569{% endif %};">
+          <tr>
+            <td class="admin-cell--ellipsis">{{ user.work_id }}</td>
+            <td class="admin-cell--ellipsis">{{ user.display_name }}</td>
+            <td class="admin-cell--ellipsis">{{ user.email or '-' }}</td>
+            <td class="admin-col--center">
+              <span class="admin-status{% if user.is_active %} admin-status--active{% endif %}">
                 {{ '啟用' if user.is_active else '停用' }}
               </span>
             </td>
-            <td style="padding: 0.9rem 0.6rem;">
-              <form method="post" action="{{ url_for('admin.update_user_role', work_id=user.work_id) }}" style="display: flex; gap: 0.5rem;">
-                <select name="role_name" style="min-height: 38px; border-radius: 10px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.6rem; font: inherit;">
+            <td class="admin-col--center">
+              <form method="post" action="{{ url_for('admin.update_user_role', work_id=user.work_id) }}" class="admin-inline-form">
+                <select name="role_name" class="admin-select">
                   {% for role_name in role_choices %}
                   <option value="{{ role_name }}" {% if user.role_name == role_name %}selected{% endif %}>{{ role_name }}</option>
                   {% endfor %}
                 </select>
-                <button type="submit" class="ghost" style="min-height: 38px; padding: 0 0.75rem;">更新</button>
+                <button type="submit" class="ghost">更新</button>
               </form>
             </td>
-            <td style="padding: 0.9rem 0.6rem;">{{ format_dt(user.created_at) }}</td>
-            <td style="padding: 0.9rem 0.6rem;">{{ format_dt(user.last_login_at) }}</td>
-            <td style="padding: 0.9rem 0.6rem;">
-              <form method="post" action="{{ url_for('admin.update_user_active', work_id=user.work_id) }}">
+            <td class="admin-col--center">
+              {% set created_text = format_dt(user.created_at) %}
+              {% if created_text != '-' and ' ' in created_text %}
+              {% set created_parts = created_text.split(' ') %}
+              <div class="admin-time">
+                <span class="admin-time__date">{{ created_parts[0] }}</span>
+                <span class="admin-time__clock">{{ created_parts[1] }}</span>
+              </div>
+              {% else %}
+              {{ created_text }}
+              {% endif %}
+            </td>
+            <td class="admin-col--center">
+              {% set login_text = format_dt(user.last_login_at) %}
+              {% if login_text != '-' and ' ' in login_text %}
+              {% set login_parts = login_text.split(' ') %}
+              <div class="admin-time">
+                <span class="admin-time__date">{{ login_parts[0] }}</span>
+                <span class="admin-time__clock">{{ login_parts[1] }}</span>
+              </div>
+              {% else %}
+              {{ login_text }}
+              {% endif %}
+            </td>
+            <td class="admin-col--center">
+              <form
+                method="post"
+                action="{{ url_for('admin.update_user_active', work_id=user.work_id) }}"
+                class="admin-action-form"
+                {% if user.is_active %}onsubmit="return confirm('確定要停用 {{ user.work_id }} 嗎？');"{% endif %}
+              >
                 <input type="hidden" name="active" value="{{ 0 if user.is_active else 1 }}" />
-                <button type="submit" class="ghost" style="min-height: 38px; padding: 0 0.75rem;">
+                <button type="submit" class="ghost">
                   {{ '停用' if user.is_active else '啟用' }}
                 </button>
               </form>
@@ -98,7 +122,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="8" style="padding: 1.2rem 0.6rem; color: var(--muted);">目前沒有符合條件的使用者。</td>
+            <td colspan="8" class="admin-empty">目前沒有符合條件的使用者。</td>
           </tr>
           {% endfor %}
         </tbody>

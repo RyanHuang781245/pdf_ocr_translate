@@ -3,14 +3,11 @@
 {% set nav_title = '法規文件轉換平台' %}
 
 {% block title %}新增或更新使用者{% endblock %}
-
-{% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
-{% endblock %}
+{% block body_class %}home has-global-nav{% endblock %}
 
 {% block content %}
 <main class="shell">
-  <section class="upload-card" style="display: grid; gap: 1.5rem;">
+  <section class="upload-card admin-stack">
     <div class="hero-toolbar hero-toolbar--right" style="margin-bottom: 0;">
       <a class="ghost back-link" href="{{ url_for('admin.users') }}">返回列表</a>
       <a class="ghost back-link" href="{{ url_for('auth.logout') }}">登出</a>
@@ -23,9 +20,9 @@
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div style="display: grid; gap: 0.75rem;">
+        <div class="admin-flash-list">
           {% for category, message in messages %}
-            <div style="padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid {% if category == 'error' %}#fecaca{% else %}#bbf7d0{% endif %}; background: {% if category == 'error' %}#fef2f2{% else %}#f0fdf4{% endif %}; color: {% if category == 'error' %}#b91c1c{% else %}#166534{% endif %};">
+            <div class="admin-flash{% if category == 'error' %} admin-flash--error{% endif %}">
               {{ message }}
             </div>
           {% endfor %}
@@ -33,58 +30,39 @@
       {% endif %}
     {% endwith %}
 
-    <form method="post" style="display: grid; gap: 1rem;">
-      <label style="display: grid; gap: 0.45rem;">
+    <form method="post" class="admin-form">
+      <label class="admin-field">
         <span>工號</span>
-        <input
-          type="text"
-          name="work_id"
-          value="{{ form.work_id }}"
-          required
-          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
-        />
+        <input class="admin-input" type="text" name="work_id" value="{{ form.work_id }}" required />
       </label>
 
-      <label style="display: grid; gap: 0.45rem;">
+      <label class="admin-field">
         <span>顯示名稱</span>
-        <input
-          type="text"
-          name="display_name"
-          value="{{ form.display_name }}"
-          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
-        />
+        <input class="admin-input" type="text" name="display_name" value="{{ form.display_name }}" />
       </label>
 
-      <label style="display: grid; gap: 0.45rem;">
+      <label class="admin-field">
         <span>Email</span>
-        <input
-          type="email"
-          name="email"
-          value="{{ form.email }}"
-          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
-        />
+        <input class="admin-input" type="email" name="email" value="{{ form.email }}" />
       </label>
 
-      <label style="display: grid; gap: 0.45rem;">
+      <label class="admin-field">
         <span>角色</span>
-        <select
-          name="role_name"
-          style="min-height: 44px; border-radius: 12px; border: 1px solid rgba(21, 36, 43, 0.18); padding: 0 0.9rem; font: inherit;"
-        >
+        <select name="role_name" class="admin-select">
           {% for role_name in role_choices %}
           <option value="{{ role_name }}" {% if form.role_name == role_name %}selected{% endif %}>{{ role_name }}</option>
           {% endfor %}
         </select>
       </label>
 
-      <label style="display: inline-flex; gap: 0.55rem; align-items: center;">
+      <label class="admin-checkbox">
         <input type="checkbox" name="is_active" value="1" {% if form.is_active %}checked{% endif %} />
         <span>啟用帳號</span>
       </label>
 
-      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; flex-wrap: wrap;">
+      <div class="admin-actions">
         <a class="ghost back-link" href="{{ url_for('admin.users') }}" style="margin-bottom: 0;">取消</a>
-        <button type="submit" class="ghost" style="min-height: 44px; padding: 0 1rem;">儲存</button>
+        <button type="submit" class="ghost">儲存</button>
       </div>
     </form>
   </section>

@@ -11,7 +11,7 @@
     {% set nav_section = 'overlay' %}
     {% set nav_title = '法規文件轉換平台' %}
     {% include "_global_nav.html" %}
-    <main class="shell">
+    <main class="shell shell--wide">
       <header class="hero">
         <div class="hero-title-split">
           <h1>PDF 原版面翻譯</h1>
@@ -21,7 +21,6 @@
             <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
           </div>
         </div>
-        <!-- <p class="eyebrow">PDF -> OCR -> Translate -> Overlay</p> -->
       </header>
       <section class="upload-card">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload') }}">
@@ -95,7 +94,7 @@
           <div class="form-note">
             <h4><i class="bi bi-info-circle"></i> 注意事項</h4>
             <p>此模式翻譯時間較久，翻譯完成後請檢查輸出結果</p>
-            <p><code>表單文件</code><br>適用頁面以表格為主的文件<br>(Q-2001, Q-2010, Q-2014, Q-2013, Q-2011, Q-2156,<br>Q-2001, Q-2473, Q-2006, Q-2007, Q-2300, Q-2285, Q-2286,<br>Q-2027, Q-2039, Q-2088, Q-2404, Q-2531, Q-2530, Q-2439,<br>Q-2005, Q-2497, Q-2305)</p>
+            <p><code>表單文件</code><br>適用頁面以表格為主的文件<br>(Q-2001, Q-2010, Q-2014, Q-2013, Q-2011, Q-2156, Q-2001, Q-2473, Q-2006, Q-2007, Q-2300, Q-2285, Q-2286<br>Q-2027, Q-2039, Q-2088, Q-2404, Q-2531, Q-2530, Q-2439, Q-2005, Q-2497, Q-2305)</p>
             <p><code>一般文件</code><br>中英文翻譯對照檢查，如果已經有英文翻譯就不翻譯<br>適用 Q-2305, Q-2005 格式的文件</p>
             <p><code>一般文件（中文必翻）</code><br>不做中英文翻譯對照檢查，只要包含中文就翻譯</p>
             <p><code>掃描文件</code><br>適用頁面以掃描為主的文件<br>(Q-2024, Q-2031, Q-2112, Q-2034, Q-2255, Q-2350, Q-2060)</p>
