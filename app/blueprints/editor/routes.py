@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from flask import Blueprint, abort, render_template, url_for
+from flask_login import current_user
 
-from ...services import jobs
+from ...services import authz_service, jobs
 
 editor_bp = Blueprint(
     "editor",
@@ -19,6 +20,8 @@ def _render_editor(job_id: str, *, template_mode: bool = False) -> str:
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
+    if not authz_service.can_access_job(current_user, job_id):
+        abort(403)
     job_name = jobs.get_job_name(job_dir)
     return render_template(
         "editor/editor.html",

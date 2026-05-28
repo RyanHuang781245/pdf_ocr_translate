@@ -143,6 +143,7 @@ def enqueue_job_from_upload(
     enable_translate: bool,
     document_mode: str,
     creator_name: str = "",
+    owner_work_id: str = "",
     job_root: Path | None = None,
     job_type: str = "ocr_overlay",
 ) -> str:
@@ -157,6 +158,7 @@ def enqueue_job_from_upload(
         {
             "job_name": job_name,
             "creator_name": creator_name,
+            "owner_work_id": str(owner_work_id or "").strip(),
             "job_type": job_type,
             "document_mode": normalized_document_mode,
             "translate_mode": jobs.normalize_translate_mode(translate_mode),
@@ -169,6 +171,7 @@ def enqueue_job_from_upload(
         job_type=job_type,
         stage="queued",
         job_name=job_name,
+        owner_work_id=str(owner_work_id or "").strip() or None,
         target_lang=translate_target_lang if enable_translate else None,
         document_mode=normalized_document_mode,
         payload={

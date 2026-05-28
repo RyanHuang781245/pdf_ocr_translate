@@ -7,8 +7,11 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
-  <body class="home">
-    <main class="shell">
+  <body class="home has-global-nav">
+    {% set nav_section = 'word' %}
+    {% set nav_title = '法規文件轉換平台' %}
+    {% include "_global_nav.html" %}
+    <main class="shell shell--wide">
       <header class="hero">
         <div class="hero-title-split">
           <h1>Word 原版面翻譯</h1>
@@ -17,7 +20,6 @@
             <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
           </div>
         </div>
-        <!-- <p class="eyebrow">DOCX -> Translate -> DOCX</p> -->
       </header>
       <section class="upload-card upload-card-doc">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload_word_workspace') }}">
@@ -47,12 +49,6 @@
                 <option value="en" selected>English (en)</option>
                 <option value="zh">繁體中文 (zh)</option>
               </select>
-            </label>
-          </div>
-          <div class="form-grid">
-            <label>
-              <span>使用者名稱</span>
-              <input type="text" name="creator_name" maxlength="60" placeholder="請輸入姓名或工號" />
             </label>
           </div>
           <div class="form-note">
@@ -95,6 +91,7 @@
       const wordJobsDownload = document.getElementById("wordJobsDownload");
       const selectedWordJobs = new Set();
       let wordJobsLoading = false;
+      let wordJobsSource = null;
 
       function formatDate(ts) {
         if (!ts) return "Unknown";
@@ -201,7 +198,8 @@
           const qualityText = typeof job.avg_quality === "number" && job.avg_quality > 0
             ? ` · 品質: ${job.avg_quality.toFixed(1)}/40`
             : "";
-          meta.textContent = `上傳時間: ${formatDate(job.updated_at)} · 狀態: ${job.status_label || "Unknown"}${durationText}${progressText}${qualityText}`;
+          // meta.textContent = `上傳時間: ${formatDate(job.updated_at)} · 狀態: ${job.status_label || "Unknown"}${durationText}${progressText}${qualityText}`;
+          meta.textContent = `上傳時間: ${formatDate(job.updated_at)} · 狀態: ${job.status_label || "Unknown"}${durationText}${progressText}`;
 
           const actions = document.createElement("div");
           actions.className = "job-actions";
@@ -376,6 +374,24 @@
         }
       }
 
+      function connectWordJobsStream() {
+        if (!window.EventSource) return;
+        if (wordJobsSource) wordJobsSource.close();
+        wordJobsSource = new EventSource("/api/word-jobs/stream");
+        wordJobsSource.addEventListener("jobs", (event) => {
+          try {
+            renderWordJobs((JSON.parse(event.data) || {}).jobs || []);
+          } catch (error) {}
+        });
+        wordJobsSource.onerror = () => {
+          if (wordJobsSource) {
+            wordJobsSource.close();
+            wordJobsSource = null;
+          }
+          setTimeout(connectWordJobsStream, 5000);
+        };
+      }
+
       wordJobsRefresh.addEventListener("click", loadWordJobs);
       wordJobsSelectAll.addEventListener("click", () => setAllWordSelections(true));
       wordJobsSelectNone.addEventListener("click", () => setAllWordSelections(false));
@@ -388,7 +404,7 @@
         listId: "wordUploadFilesList",
       });
       loadWordJobs();
-      setInterval(loadWordJobs, 10000);
+      connectWordJobsStream();
     </script>
   </body>
 </html>

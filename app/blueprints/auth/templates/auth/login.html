@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In{% endblock %}
+
+{% block body_class %}auth-page{% endblock %}
+
+{% block global_nav %}
+<nav class="app-navbar app-navbar--brand-only" aria-label="Global navigation">
+  <div class="app-navbar__inner">
+    <div class="app-navbar__brand">
+      <a class="app-navbar__logo-link" href="{{ url_for('main.index') }}" aria-label="文件翻譯系統">
+        <img class="app-navbar__logo" src="{{ url_for('static', filename='logo.svg') }}" alt="文件翻譯系統" />
+      </a>
+      <span class="app-navbar__system-name">文件翻譯系統</span>
+    </div>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<main class="auth-shell">
+  <section class="auth-card">
+    <div class="auth-card__header">
+      <h1>登入系統</h1>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="auth-alert-list">
+          {% for category, message in messages %}
+            <div class="auth-alert{% if category == 'error' %} auth-alert--error{% else %} auth-alert--info{% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if error %}
+      <div class="auth-alert auth-alert--error auth-alert--standalone">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    <form method="post" class="auth-form">
+      <input type="hidden" name="next" value="{{ next_url }}">
+      <label class="auth-field">
+        <span>工號</span>
+        <input name="username" value="{{ username }}" autofocus required />
+      </label>
+      {% if stub_enabled %}
+      <label class="auth-field">
+        <span>顯示名稱</span>
+        <input name="display_name" value="{{ display_name }}" placeholder="可選，未填時沿用工號" />
+      </label>
+      {% else %}
+      <label class="auth-field">
+        <span>密碼</span>
+        <input name="password" type="password" required />
+      </label>
+      {% endif %}
+      <button type="submit" class="auth-submit">
+        登入
+      </button>
+    </form>
+  </section>
+</main>
+{% endblock %}

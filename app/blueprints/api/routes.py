@@ -8,8 +8,9 @@ import time
 from typing import Any
 
 from flask import Blueprint, Response, abort, jsonify, request, send_file, stream_with_context, url_for
+from flask_login import current_user
 
-from ...services import batch, doc_workspace, document_templates, glossary, jobs, ocr, state, translation_memory, word_translate
+from ...services import authz_service, batch, doc_workspace, document_templates, glossary, jobs, ocr, state, translation_memory, word_translate
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,36 @@ api_bp = Blueprint(
     static_url_path="/static/api",
     url_prefix="/api",
 )
+
+
+def _current_owner_work_id() -> str:
+    if getattr(current_user, "is_authenticated", False):
+        return " ".join(str(getattr(current_user, "work_id", "") or "").split()).strip()
+    return ""
+
+
+def _current_access_scope() -> tuple[str, bool]:
+    return _current_owner_work_id(), (
+        authz_service.user_is_admin(current_user)
+        or not authz_service.owner_access_enabled()
+    )
+
+
+def _forbidden_json():
+    return jsonify({"ok": False, "error": "Forbidden."}), 403
+
+
+def _get_accessible_template(template_id: str) -> dict[str, Any] | None:
+    owner_work_id, include_all = _current_access_scope()
+    return document_templates.get_document_template(
+        template_id,
+        owner_work_id=owner_work_id,
+        include_all=include_all,
+    )
+
+
+def _job_access_denied(job_id: str) -> bool:
+    return not authz_service.can_access_job(current_user, job_id)
 
 
 def _load_job_translation_context(job_dir, payload: dict[str, Any] | None = None) -> tuple[str, str]:
@@ -51,6 +82,8 @@ def _load_job_translation_context(job_dir, payload: dict[str, Any] | None = None
 def job_data(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     json_dir = job_dir / "ocr_json"
     if not json_dir.exists():
@@ -110,6 +143,8 @@ def job_data(job_id: str):
 def update_merge_notice(job_id: str, notice_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -125,6 +160,8 @@ def update_merge_notice(job_id: str, notice_id: str):
 def batch_translate(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -165,6 +202,8 @@ def batch_translate(job_id: str):
 def retranslate_document(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -205,6 +244,8 @@ def retranslate_document(job_id: str):
 def batch_status(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -221,6 +262,8 @@ def batch_status(job_id: str):
 def batch_restore(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -272,6 +315,8 @@ def batch_restore(job_id: str):
 def save_system_prompt(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -357,12 +402,36 @@ def glossary_system_import_apply():
 
 @api_bp.route("/document-templates", methods=["GET", "POST"], endpoint="document_templates")
 def manage_document_templates():
+    owner_work_id, include_all = _current_access_scope()
     if request.method == "GET":
-        return jsonify({"ok": True, "templates": document_templates.load_document_templates()})
+        return jsonify(
+            {
+                "ok": True,
+                "templates": document_templates.load_document_templates(
+                    owner_work_id=owner_work_id,
+                    include_all=include_all,
+                ),
+            }
+        )
 
     payload = request.get_json(force=True) or {}
+    template_id = str(payload.get("id") or "").strip()
+    source_job_id = str(payload.get("source_job_id") or "").strip()
+    if template_id:
+        existing = document_templates.get_document_template(template_id, include_all=True)
+        if existing is not None and not authz_service.can_access_template(current_user, existing):
+            return _forbidden_json()
+    elif source_job_id:
+        existing = document_templates.get_document_template_by_job(source_job_id, include_all=True)
+        if existing is not None and not authz_service.can_access_template(current_user, existing):
+            return _forbidden_json()
+    if source_job_id and _job_access_denied(source_job_id):
+        return _forbidden_json()
     try:
-        template = document_templates.save_document_template(payload)
+        template = document_templates.save_document_template(
+            payload,
+            owner_work_id=owner_work_id,
+        )
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
     return jsonify({"ok": True, "template": template})
@@ -374,11 +443,13 @@ def manage_document_templates():
     endpoint="delete_document_template",
 )
 def delete_document_template(template_id: str):
-    template = document_templates.get_document_template(template_id)
+    template = _get_accessible_template(template_id)
     if template is None:
         return jsonify({"ok": False, "error": "Template not found."}), 404
     source_job_id = str(template.get("source_job_id") or "").strip()
     if source_job_id:
+        if _job_access_denied(source_job_id):
+            return _forbidden_json()
         deleted_job, error = jobs.delete_job_dir(source_job_id)
         if not deleted_job and error:
             return jsonify({"ok": False, "error": error}), 500
@@ -430,7 +501,7 @@ def _build_page_boxes_for_save(
     endpoint="apply_document_template",
 )
 def apply_document_template(template_id: str):
-    template = document_templates.get_document_template(template_id)
+    template = _get_accessible_template(template_id)
     if template is None:
         return jsonify({"ok": False, "error": "Template not found."}), 404
 
@@ -438,6 +509,8 @@ def apply_document_template(template_id: str):
     job_id = str(payload.get("job_id") or "").strip()
     if not jobs.safe_job_id(job_id):
         return jsonify({"ok": False, "error": "Invalid job id."}), 400
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -546,25 +619,45 @@ def apply_document_template(template_id: str):
 
 @api_bp.route("/jobs", methods=["GET"], endpoint="list_jobs")
 def list_jobs():
-    jobs_list = jobs.build_jobs_list(job_type="ocr_overlay")
+    owner_work_id, include_all = _current_access_scope()
+    jobs_list = jobs.build_jobs_list(
+        job_type="ocr_overlay",
+        owner_work_id=owner_work_id,
+        include_all=include_all,
+    )
     return jsonify({"jobs": jobs_list})
 
 
 @api_bp.route("/template-jobs", methods=["GET"], endpoint="list_template_jobs")
 def list_template_jobs():
-    jobs_list = jobs.build_jobs_list(job_type="template_source")
+    owner_work_id, include_all = _current_access_scope()
+    jobs_list = jobs.build_jobs_list(
+        job_type="template_source",
+        owner_work_id=owner_work_id,
+        include_all=include_all,
+    )
     return jsonify({"jobs": jobs_list})
 
 
 @api_bp.route("/doc-jobs", methods=["GET"], endpoint="list_doc_jobs")
 def list_doc_jobs():
-    jobs_list = jobs.build_jobs_list(job_type="doc_workspace")
+    owner_work_id, include_all = _current_access_scope()
+    jobs_list = jobs.build_jobs_list(
+        job_type="doc_workspace",
+        owner_work_id=owner_work_id,
+        include_all=include_all,
+    )
     return jsonify({"jobs": jobs_list})
 
 
 @api_bp.route("/word-jobs", methods=["GET"], endpoint="list_word_jobs")
 def list_word_jobs():
-    jobs_list = jobs.build_jobs_list(job_type="word_translate")
+    owner_work_id, include_all = _current_access_scope()
+    jobs_list = jobs.build_jobs_list(
+        job_type="word_translate",
+        owner_work_id=owner_work_id,
+        include_all=include_all,
+    )
     return jsonify({"jobs": jobs_list})
 
 
@@ -572,6 +665,8 @@ def list_word_jobs():
 def cancel_word_job(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists() or jobs.get_job_type(job_dir) != "word_translate":
         abort(404)
@@ -584,6 +679,8 @@ def cancel_word_job(job_id: str):
 def cancel_job(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     record = jobs.job_store.get_job(job_id)
     if record is None:
         abort(404)
@@ -599,6 +696,8 @@ def cancel_job(job_id: str):
 def retry_job(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     retried, error = jobs.retry_job(job_id)
     if not retried:
         return jsonify({"ok": False, "error": error}), 400
@@ -609,6 +708,8 @@ def retry_job(job_id: str):
 def doc_job_data(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists() or jobs.get_job_type(job_dir) != "doc_workspace":
         abort(404)
@@ -650,15 +751,27 @@ def doc_job_data(job_id: str):
 
 @api_bp.route("/jobs/download-translated", methods=["GET", "POST"], endpoint="download_translated_batch")
 def download_translated_batch():
+    owner_work_id, include_all = _current_access_scope()
+    accessible_job_ids = jobs.list_accessible_job_ids(
+        job_type="ocr_overlay",
+        owner_work_id=owner_work_id,
+        include_all=include_all,
+    )
     job_ids: set[str] | None = None
     if request.method == "POST":
         payload = request.get_json(force=True, silent=True) or {}
         raw_ids = payload.get("job_ids")
         if not isinstance(raw_ids, list):
             return jsonify({"ok": False, "error": "Invalid job_ids payload."}), 400
-        job_ids = {str(item) for item in raw_ids if isinstance(item, str) and jobs.safe_job_id(item)}
+        job_ids = {
+            str(item)
+            for item in raw_ids
+            if isinstance(item, str) and jobs.safe_job_id(item) and str(item) in accessible_job_ids
+        }
         if not job_ids:
-            return jsonify({"ok": False, "error": "No valid job IDs selected."}), 400
+            return jsonify({"ok": False, "error": "No authorized job IDs selected."}), 403
+    else:
+        job_ids = accessible_job_ids
 
     buf, count = jobs.build_translated_zip(job_ids)
     if count == 0:
@@ -684,9 +797,18 @@ def _selected_job_ids_from_request() -> set[str] | tuple[Response, int]:
 
 
 def _download_docx_batch(job_type: str, empty_message: str, download_name: str):
+    owner_work_id, include_all = _current_access_scope()
+    accessible_job_ids = jobs.list_accessible_job_ids(
+        job_type=job_type,
+        owner_work_id=owner_work_id,
+        include_all=include_all,
+    )
     selected = _selected_job_ids_from_request()
     if isinstance(selected, tuple):
         return selected
+    selected = {job_id for job_id in selected if job_id in accessible_job_ids}
+    if not selected:
+        return jsonify({"ok": False, "error": "No authorized job IDs selected."}), 403
     buf, count = jobs.build_docx_zip(selected, job_type)
     if count == 0:
         return jsonify({"ok": False, "error": empty_message}), 400
@@ -716,13 +838,19 @@ def download_word_jobs_docx():
     )
 
 
-@api_bp.route("/jobs/stream", methods=["GET"], endpoint="jobs_stream")
-def jobs_stream():
+def _jobs_stream_response(job_type: str):
+    owner_work_id, include_all = _current_access_scope()
     @stream_with_context
     def generate():
         last_payload = None
         while True:
-            payload = {"jobs": jobs.build_jobs_list(job_type="ocr_overlay")}
+            payload = {
+                "jobs": jobs.build_jobs_list(
+                    job_type=job_type,
+                    owner_work_id=owner_work_id,
+                    include_all=include_all,
+                )
+            }
             data = json.dumps(payload, ensure_ascii=False)
             if data != last_payload:
                 last_payload = data
@@ -735,33 +863,34 @@ def jobs_stream():
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["X-Accel-Buffering"] = "no"
     return resp
+
+
+@api_bp.route("/jobs/stream", methods=["GET"], endpoint="jobs_stream")
+def jobs_stream():
+    return _jobs_stream_response("ocr_overlay")
+
+
+@api_bp.route("/doc-jobs/stream", methods=["GET"], endpoint="doc_jobs_stream")
+def doc_jobs_stream():
+    return _jobs_stream_response("doc_workspace")
+
+
+@api_bp.route("/word-jobs/stream", methods=["GET"], endpoint="word_jobs_stream")
+def word_jobs_stream():
+    return _jobs_stream_response("word_translate")
 
 
 @api_bp.route("/template-jobs/stream", methods=["GET"], endpoint="template_jobs_stream")
 def template_jobs_stream():
-    @stream_with_context
-    def generate():
-        last_payload = None
-        while True:
-            payload = {"jobs": jobs.build_jobs_list(job_type="template_source")}
-            data = json.dumps(payload, ensure_ascii=False)
-            if data != last_payload:
-                last_payload = data
-                yield f"event: jobs\ndata: {data}\n\n"
-            else:
-                yield ": ping\n\n"
-            time.sleep(3)
-
-    resp = Response(generate(), mimetype="text/event-stream")
-    resp.headers["Cache-Control"] = "no-cache"
-    resp.headers["X-Accel-Buffering"] = "no"
-    return resp
+    return _jobs_stream_response("template_source")
 
 
 @api_bp.route("/job/<job_id>", methods=["DELETE"], endpoint="delete_job")
 def delete_job(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     record = jobs.job_store.get_job(job_id)
     if not job_dir.exists() and record is None:
@@ -776,6 +905,8 @@ def delete_job(job_id: str):
 def save_job(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -847,6 +978,8 @@ def save_job(job_id: str):
 def apply_consistency(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -939,6 +1072,8 @@ def apply_consistency(job_id: str):
 def apply_paragraph_term(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -1028,6 +1163,8 @@ def apply_paragraph_term(job_id: str):
 def region_ocr_preview(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -1215,6 +1352,8 @@ def _retranslate_boxes(
 def retranslate_box(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -1259,6 +1398,8 @@ def retranslate_box(job_id: str):
 def retranslate_boxes(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -1283,6 +1424,8 @@ def retranslate_boxes(job_id: str):
 def retranslate_region(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -1439,6 +1582,8 @@ def retranslate_region(job_id: str):
 def glossary_retranslate(job_id: str):
     if not jobs.safe_job_id(job_id):
         abort(404)
+    if _job_access_denied(job_id):
+        return _forbidden_json()
     job_dir = jobs.job_dir(job_id)
     if not job_dir.exists():
         abort(404)
@@ -1536,7 +1681,10 @@ def glossary_retranslate(job_id: str):
 def cancel_upload():
     active = jobs.get_active_upload()
     if not active:
+        owner_work_id, include_all = _current_access_scope()
         for item in jobs.job_store.list_jobs(job_type="ocr_overlay"):
+            if not include_all and jobs.get_job_owner_work_id(item.job_id) != owner_work_id:
+                continue
             if item.status in {"queued", "running", "cancel_requested"}:
                 cancelled = jobs.job_store.request_cancel(item.job_id)
                 updated = jobs.job_store.get_job(item.job_id)
@@ -1549,9 +1697,12 @@ def cancel_upload():
                 )
         return jsonify({"ok": False, "status": "idle"})
     event = active.get("event")
+    active_job_id = str(active.get("job_id") or "")
+    if jobs.safe_job_id(active_job_id) and _job_access_denied(active_job_id):
+        return _forbidden_json()
     if event is not None:
         event.set()
-    job_id = str(active.get("job_id") or "")
+    job_id = active_job_id
     if jobs.safe_job_id(job_id):
         jobs.job_store.request_cancel(job_id)
     jobs.notify_jobs_update()

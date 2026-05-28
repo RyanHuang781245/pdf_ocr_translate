@@ -48,6 +48,9 @@
         </button>
       </div>
       <div class="topbar-actions">
+        {% if auth_enabled and current_user %}
+        <a class="ghost" href="{{ url_for('auth.logout') }}">登出</a>
+        {% endif %}
         <div class="dropdown">
           <button id="saveBtn" class="primary">儲存編輯</button>
           <button id="menuBtn" class="ghost" type="button" aria-label="更多操作">

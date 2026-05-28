@@ -7,8 +7,11 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
-  <body class="home">
-    <main class="shell">
+  <body class="home has-global-nav">
+    {% set nav_section = 'doc' %}
+    {% set nav_title = '法規文件轉換平台' %}
+    {% include "_global_nav.html" %}
+    <main class="shell shell--wide">
       <header class="hero">
         <div class="hero-title-split">
           <h1>PDF 翻譯重建</h1>
@@ -17,7 +20,6 @@
             <a class="ghost back-link" href="{{ url_for('.index') }}">返回功能入口</a>
           </div>
         </div>
-        <!-- <p class="eyebrow">PDF -> PP-StructureV3 -> Markdown -> HTML -> Translate -> Word</p> -->
       </header>
       <section class="upload-card upload-card-doc">
         <form method="post" enctype="multipart/form-data" action="{{ url_for('.upload_doc_workspace') }}">
@@ -47,12 +49,6 @@
                 <option value="en" selected>English (en)</option>
                 <option value="zh">繁體中文 (zh)</option>
               </select>
-            </label>
-          </div>
-          <div class="form-grid">
-            <label>
-              <span>使用者名稱</span>
-              <input type="text" name="creator_name" maxlength="60" placeholder="請輸入姓名或工號" />
             </label>
           </div>
           <div class="form-note">
@@ -91,6 +87,7 @@
       const docJobsDownload = document.getElementById("docJobsDownload");
       const selectedDocJobs = new Set();
       let docJobsLoading = false;
+      let docJobsSource = null;
 
       function formatDate(ts) {
         if (!ts) return "Unknown";
@@ -391,6 +388,24 @@
         }
       }
 
+      function connectDocJobsStream() {
+        if (!window.EventSource) return;
+        if (docJobsSource) docJobsSource.close();
+        docJobsSource = new EventSource("/api/doc-jobs/stream");
+        docJobsSource.addEventListener("jobs", (event) => {
+          try {
+            renderDocJobs((JSON.parse(event.data) || {}).jobs || []);
+          } catch (error) {}
+        });
+        docJobsSource.onerror = () => {
+          if (docJobsSource) {
+            docJobsSource.close();
+            docJobsSource = null;
+          }
+          setTimeout(connectDocJobsStream, 5000);
+        };
+      }
+
       docJobsRefresh.addEventListener("click", loadDocJobs);
       docJobsSelectAll.addEventListener("click", () => setAllDocSelections(true));
       docJobsSelectNone.addEventListener("click", () => setAllDocSelections(false));
@@ -403,7 +418,7 @@
         listId: "docUploadFilesList",
       });
       loadDocJobs();
-      setInterval(loadDocJobs, 10000);
+      connectDocJobsStream();
     </script>
   </body>
 </html>
