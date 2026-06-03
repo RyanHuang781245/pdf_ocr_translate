@@ -6,6 +6,8 @@ import threading
 import zipfile
 from pathlib import Path
 
+import fitz
+
 from app.services import jobs, pipeline, state, translation_memory
 
 
@@ -232,6 +234,68 @@ def test_apply_document_template_to_job(client, tmp_path, monkeypatch):
 def test_upload_missing_pdf(client):
     resp = client.post("/upload", data={})
     assert resp.status_code == 400
+
+
+def test_upload_pdf_overlay_accepts_explicit_page_numbers(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(state, "UPLOAD_ROOT", tmp_path / "uploads")
+    captured: list[dict[str, object]] = []
+
+    def fake_enqueue(
+        source_pdf,
+        display_name,
+        dpi,
+        start_page,
+        end_page,
+        translate_source_lang,
+        translate_target_lang,
+        translate_model,
+        translate_mode,
+        keep_lang,
+        enable_translate,
+        document_mode,
+        creator_name="",
+        **kwargs,
+    ):
+        captured.append(
+            {
+                "display_name": display_name,
+                "start_page": start_page,
+                "end_page": end_page,
+                "page_numbers": kwargs.get("page_numbers"),
+            }
+        )
+        return "e" * 32
+
+    monkeypatch.setattr(
+        "app.blueprints.main.routes.pipeline.enqueue_job_from_upload",
+        fake_enqueue,
+    )
+
+    resp = client.post(
+        "/upload",
+        data={
+            "translate": "on",
+            "source_lang": "auto",
+            "target_lang": "en",
+            "document_mode": "form",
+            "start": "2",
+            "end": "9",
+            "pages": "1,3,5-7,3",
+            "pdf": (io.BytesIO(b"%PDF-1.4"), "sample.pdf"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 302
+    assert captured == [
+        {
+            "display_name": "sample",
+            "start_page": 2,
+            "end_page": 9,
+            "page_numbers": [1, 3, 5, 6, 7],
+        }
+    ]
 
 
 def test_upload_pdf_overlay_accepts_realtime_mode(client, tmp_path, monkeypatch):
@@ -518,6 +582,51 @@ def test_api_jobs_returns_json(client):
     payload = resp.get_json()
     assert isinstance(payload, dict)
     assert "jobs" in payload
+
+
+def test_api_job_data_includes_unprocessed_pdf_pages(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr("app.blueprints.api.routes.authz_service.can_access_job", lambda user, job_id: True)
+    job_id = "f" * 32
+    job_dir = tmp_path / "jobs" / job_id
+    ocr_dir = job_dir / "ocr_json"
+    ocr_dir.mkdir(parents=True)
+
+    doc = fitz.open()
+    for _ in range(3):
+        doc.new_page(width=200, height=300)
+    doc.save((job_dir / f"{job_id}.pdf").as_posix())
+    doc.close()
+
+    (ocr_dir / "page_0002_res_with_pdf_coords.json").write_text(
+        json.dumps(
+            {
+                "page_index_0based": 1,
+                "input_path": "page2.png",
+                "coord_transform": {"image_size_px": [1000, 1500]},
+                "rec_polys": [[[10, 20], [110, 20], [110, 60], [10, 60]]],
+                "rec_texts": ["translated page"],
+                "edit_texts": ["translated page"],
+                "rec_scores": [0.99],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    resp = client.get(f"/api/job/{job_id}")
+
+    assert resp.status_code == 200
+    pages = resp.get_json()["pages"]
+    assert [page["page_index_0based"] for page in pages] == [0, 1, 2]
+    assert pages[0]["rec_polys"] == []
+    assert pages[0]["image_url"]
+    assert pages[1]["rec_texts"] == ["translated page"]
+    assert pages[2]["rec_polys"] == []
+    assert pages[2]["image_url"]
+    assert (job_dir / "images" / "editor_page_0001.png").exists()
+    assert (job_dir / "images" / "editor_page_0003.png").exists()
 
 
 def test_doc_jobs_download_docx_returns_zip(client, monkeypatch):

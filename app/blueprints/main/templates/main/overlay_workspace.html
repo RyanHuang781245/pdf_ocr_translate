@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PDF 原版面翻譯</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" data-local-href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}" onerror="this.onerror=null;this.href=this.dataset.localHref;" />
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
   <body class="home has-global-nav">
@@ -43,6 +43,10 @@
             <label>
               <span>結束頁</span>
               <input id="overlayEndPageInput" type="number" name="end" placeholder="可留空" min="1" />
+            </label>
+            <label>
+              <span>指定頁面</span>
+              <input id="overlayPagesInput" type="text" name="pages" placeholder="例如 1,3,5-7" />
             </label>
           </div>
           <div class="form-grid">
@@ -94,6 +98,7 @@
           <div class="form-note">
             <h4><i class="bi bi-info-circle"></i> 注意事項</h4>
             <p>單一文件可指定開始與結束頁，多個文件會自動翻譯整份文件</p>
+            <p>指定頁面可輸入多個頁碼或範圍，例如 <code>1,3,5-7</code>；填寫後會優先使用指定頁面。</p>
             <p>此模式翻譯時間較久，翻譯完成後請檢查輸出結果</p>
             <p><code>表單文件</code><br>適用頁面以表格為主的文件<br>(Q-2001, Q-2010, Q-2014, Q-2013, Q-2011, Q-2156, Q-2001, Q-2473, Q-2006, Q-2007, Q-2300, Q-2285, Q-2286<br>Q-2027, Q-2039, Q-2088, Q-2404, Q-2531, Q-2530, Q-2439, Q-2005, Q-2497, Q-2305)</p>
             <p><code>一般文件</code><br>中英文翻譯對照檢查，如果已經有英文翻譯就不翻譯<br>適用 Q-2305, Q-2005 格式的文件</p>
@@ -104,7 +109,7 @@
           <button class="primary" type="submit">開始翻譯</button>
         </form>
       </section>
-      <section class="upload-card jobs-board">
+      <section class="upload-card jobs-board jobs-board--sticky">
         <div class="jobs-header">
           <div>
             <p class="eyebrow">Manage</p>
@@ -149,6 +154,7 @@
         </div>
         <div id="jobsEmpty" class="hint">No processed files yet.</div>
         <div id="jobsList" class="jobs-list"></div>
+        <div id="jobsPagination" class="jobs-pagination"></div>
       </section>
     </main>
     <script src="{{ url_for('static', filename='upload_files.js') }}"></script>
@@ -170,10 +176,12 @@
       const jobsSearch = document.getElementById("jobsSearch");
       const jobsStatusFilter = document.getElementById("jobsStatusFilter");
       const jobsModeFilter = document.getElementById("jobsModeFilter");
+      const jobsPagination = document.getElementById("jobsPagination");
       let translateModeSelect = document.getElementById("translateModeSelect");
       const translateModelSelect = document.getElementById("translateModelSelect");
       const selectedJobs = new Set();
       let allJobs = [];
+      const jobsPageState = { page: 1, pageSize: 3 };
       let jobsLoading = false;
       let jobsSource = null;
 
@@ -474,7 +482,9 @@
         if (jobsFilterCount) {
           jobsFilterCount.textContent = `顯示 ${filtered.length} / ${allJobs.length} 個任務`;
         }
-        renderJobs(filtered);
+        const pageInfo = JobFilters.paginate(filtered, jobsPageState);
+        renderJobs(pageInfo.items);
+        JobFilters.renderPagination(jobsPagination, pageInfo, jobsPageState, applyJobsFilters);
       }
 
       async function loadJobs() {
@@ -606,7 +616,10 @@
         statusId: "jobsStatusFilter",
         modeId: "jobsModeFilter",
         resetId: "jobsFiltersReset",
-        onChange: applyJobsFilters,
+        onChange: () => {
+          jobsPageState.page = 1;
+          applyJobsFilters();
+        },
       });
       ensureTranslateModeControl();
       translateModeSelect?.addEventListener("change", syncTranslateModelSelection);

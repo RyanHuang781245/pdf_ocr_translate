@@ -51,6 +51,34 @@ def _current_owner_work_id() -> str:
     return ""
 
 
+def _parse_page_numbers(value: str) -> list[int]:
+    page_numbers: list[int] = []
+    seen: set[int] = set()
+    for part in str(value or "").replace("，", ",").split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if "-" in token:
+            start_raw, end_raw = [item.strip() for item in token.split("-", 1)]
+            if not start_raw or not end_raw:
+                raise ValueError("Invalid page range.")
+            start = int(start_raw)
+            end = int(end_raw)
+            if start < 1 or end < start:
+                raise ValueError("Invalid page range.")
+            values = range(start, end + 1)
+        else:
+            page = int(token)
+            if page < 1:
+                raise ValueError("Invalid page number.")
+            values = [page]
+        for page in values:
+            if page not in seen:
+                page_numbers.append(page)
+                seen.add(page)
+    return page_numbers
+
+
 def _enforce_submit_quota(creator_name: str = "") -> None:
     allowed, limit, retry_after = submit_quota.check_and_record_submission(
         creator_name,
@@ -139,9 +167,15 @@ def upload() -> str:
     start_page = int(request.form.get("start", 1))
     end_page_raw = request.form.get("end", "").strip()
     end_page = int(end_page_raw) if end_page_raw else None
+    pages_raw = request.form.get("pages", "").strip()
+    try:
+        page_numbers = _parse_page_numbers(pages_raw) if pages_raw else []
+    except ValueError:
+        abort(400, "Invalid page selection. Use comma-separated pages or ranges, for example 1,3,5-7.")
     if len(upload_files) > 1:
         start_page = 1
         end_page = None
+        page_numbers = []
     enable_translate = request.form.get("translate") == "on"
     translate_source_lang = request.form.get("source_lang", "auto").strip() or "auto"
     translate_target_lang = request.form.get("target_lang", "en").strip() or "en"
@@ -171,6 +205,11 @@ def upload() -> str:
         tmp_path = state.UPLOAD_ROOT / _safe_upload_name(file.filename or "", ".pdf")
         file.save(tmp_path)
         display_name = _display_name_from_filename(file.filename or "", "job")
+        enqueue_options = {}
+        if owner_work_id:
+            enqueue_options["owner_work_id"] = owner_work_id
+        if page_numbers:
+            enqueue_options["page_numbers"] = page_numbers
         pipeline.enqueue_job_from_upload(
             tmp_path,
             display_name,
@@ -185,7 +224,7 @@ def upload() -> str:
             enable_translate,
             document_mode,
             creator_name,
-            owner_work_id,
+            **enqueue_options,
         )
         try:
             tmp_path.unlink(missing_ok=True)

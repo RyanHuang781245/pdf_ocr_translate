@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PDF 翻譯重建</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" data-local-href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}" onerror="this.onerror=null;this.href=this.dataset.localHref;" />
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
   <body class="home has-global-nav">
@@ -58,7 +58,7 @@
           <button class="primary" type="submit">開始文件轉檔</button>
         </form>
       </section>
-      <section class="upload-card jobs-board">
+      <section class="upload-card jobs-board jobs-board--sticky">
         <div class="jobs-header">
           <div>
             <p class="eyebrow">Manage</p>
@@ -92,6 +92,7 @@
         </div>
         <div id="docJobsEmpty" class="hint">No document jobs yet.</div>
         <div id="docJobsList" class="jobs-list"></div>
+        <div id="docJobsPagination" class="jobs-pagination"></div>
       </section>
     </main>
     <script src="{{ url_for('static', filename='upload_files.js') }}"></script>
@@ -107,8 +108,10 @@
       const docJobsFilterCount = document.getElementById("docJobsFilterCount");
       const docJobsSearch = document.getElementById("docJobsSearch");
       const docJobsStatusFilter = document.getElementById("docJobsStatusFilter");
+      const docJobsPagination = document.getElementById("docJobsPagination");
       const selectedDocJobs = new Set();
       let allDocJobs = [];
+      const docJobsPageState = { page: 1, pageSize: 3 };
       let docJobsLoading = false;
       let docJobsSource = null;
 
@@ -326,7 +329,9 @@
         if (docJobsFilterCount) {
           docJobsFilterCount.textContent = `顯示 ${filtered.length} / ${allDocJobs.length} 個任務`;
         }
-        renderDocJobs(filtered);
+        const pageInfo = JobFilters.paginate(filtered, docJobsPageState);
+        renderDocJobs(pageInfo.items);
+        JobFilters.renderPagination(docJobsPagination, pageInfo, docJobsPageState, applyDocJobsFilters);
       }
 
       function setAllDocSelections(checked) {
@@ -455,7 +460,10 @@
         searchId: "docJobsSearch",
         statusId: "docJobsStatusFilter",
         resetId: "docJobsFiltersReset",
-        onChange: applyDocJobsFilters,
+        onChange: () => {
+          docJobsPageState.page = 1;
+          applyDocJobsFilters();
+        },
       });
       bindUploadFiles({
         inputId: "docUploadInput",

@@ -58,6 +58,7 @@ def process_job(job_id: str) -> None:
             dpi=int(payload.get("dpi") or 200),
             start_page=int(payload.get("start_page") or 1),
             end_page=payload.get("end_page"),
+            page_numbers=list(payload.get("page_numbers") or []),
             translate_source_lang=str(payload.get("translate_source_lang") or "auto"),
             translate_target_lang=str(payload.get("translate_target_lang") or "en"),
             translate_model=str(payload.get("translate_model") or state.AZURE_BATCH_MODEL),

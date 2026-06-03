@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PDF 原版面翻譯 / 欄位翻譯模板</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" data-local-href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}" onerror="this.onerror=null;this.href=this.dataset.localHref;" />
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
   <body class="home has-global-nav">
@@ -68,6 +68,7 @@
         </div>
         <div id="templatesEmpty" class="hint">尚未建立模板。</div>
         <div id="templatesList" class="jobs-list"></div>
+        <div id="templatesPagination" class="jobs-pagination"></div>
       </section>
     </main>
 
@@ -79,8 +80,10 @@
       const templatesFilterCount = document.getElementById("templatesFilterCount");
       const templatesSearch = document.getElementById("templatesSearch");
       const templatesStatusFilter = document.getElementById("templatesStatusFilter");
+      const templatesPagination = document.getElementById("templatesPagination");
       let jobMap = new Map();
       let allTemplates = [];
+      const templatesPageState = { page: 1, pageSize: 10 };
       let templatesSource = null;
 
       function formatDate(ts) {
@@ -207,7 +210,9 @@
         if (templatesFilterCount) {
           templatesFilterCount.textContent = `顯示 ${filtered.length} / ${allTemplates.length} 個模板`;
         }
-        renderTemplates(filtered);
+        const pageInfo = JobFilters.paginate(filtered, templatesPageState);
+        renderTemplates(pageInfo.items);
+        JobFilters.renderPagination(templatesPagination, pageInfo, templatesPageState, applyTemplateFilters);
       }
 
       async function loadTemplates() {
@@ -277,7 +282,10 @@
         searchId: "templatesSearch",
         statusId: "templatesStatusFilter",
         resetId: "templatesFiltersReset",
-        onChange: applyTemplateFilters,
+        onChange: () => {
+          templatesPageState.page = 1;
+          applyTemplateFilters();
+        },
       });
       loadTemplates();
       connectTemplatesStream();

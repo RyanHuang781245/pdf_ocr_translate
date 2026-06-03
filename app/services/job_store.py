@@ -91,6 +91,17 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid %s=%r; using default %s.", name, raw, default)
+        return default
+
+
 def init_app(app) -> None:
     global _engine, _session_factory
     database_url = app.config["DATABASE_URL"]
@@ -98,7 +109,16 @@ def init_app(app) -> None:
         raise RuntimeError("DATABASE_URL is required and must point to SQL Server.")
     if not database_url.lower().startswith("mssql"):
         raise RuntimeError("Only SQL Server DATABASE_URL values are supported.")
-    _engine = create_engine(database_url, future=True, pool_pre_ping=True)
+    _engine = create_engine(
+        database_url,
+        future=True,
+        pool_pre_ping=True,
+        pool_size=max(1, _int_env("DB_POOL_SIZE", 3)),
+        max_overflow=max(0, _int_env("DB_MAX_OVERFLOW", 2)),
+        pool_timeout=max(1, _int_env("DB_POOL_TIMEOUT_SECONDS", 10)),
+        pool_recycle=max(60, _int_env("DB_POOL_RECYCLE_SECONDS", 1800)),
+        connect_args={"timeout": max(1, _int_env("DB_CONNECT_TIMEOUT_SECONDS", 10))},
+    )
     _session_factory = sessionmaker(bind=_engine, future=True, expire_on_commit=False)
     if bool(app.config.get("AUTO_SCHEMA_MANAGEMENT", True)):
         Base.metadata.create_all(bind=_engine, checkfirst=True)

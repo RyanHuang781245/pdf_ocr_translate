@@ -179,6 +179,7 @@ def pdf_to_pngs(
     dpi: int,
     start_page: int,
     end_page: int | None,
+    page_numbers: list[int] | None = None,
     progress_cb: Callable[[str, int, int, str], None] | None = None,
     cancel_event: Any | None = None,
 ) -> List[Path]:
@@ -187,13 +188,20 @@ def pdf_to_pngs(
     doc = fitz.open(pdf_path)
     total = doc.page_count
 
-    if start_page < 1 or start_page > total:
-        raise ValueError(f"start_page out of range: 1~{total}")
+    if page_numbers:
+        pages = [int(page) for page in page_numbers]
+        invalid_pages = [page for page in pages if page < 1 or page > total]
+        if invalid_pages:
+            raise ValueError(f"page number out of range: 1~{total}")
+    else:
+        if start_page < 1 or start_page > total:
+            raise ValueError(f"start_page out of range: 1~{total}")
 
-    if end_page is None:
-        end_page = total
-    if end_page < start_page or end_page > total:
-        raise ValueError(f"end_page out of range: {start_page}~{total}")
+        if end_page is None:
+            end_page = total
+        if end_page < start_page or end_page > total:
+            raise ValueError(f"end_page out of range: {start_page}~{total}")
+        pages = list(range(start_page, end_page + 1))
 
     scale = dpi / 72.0
     mat = fitz.Matrix(scale, scale)
@@ -201,8 +209,8 @@ def pdf_to_pngs(
     outputs: List[Path] = []
     stem = pdf_path.stem
 
-    total_pages = end_page - start_page + 1
-    for idx, page_no in enumerate(range(start_page, end_page + 1), start=1):
+    total_pages = len(pages)
+    for idx, page_no in enumerate(pages, start=1):
         if cancel_event is not None and cancel_event.is_set():
             doc.close()
             raise PipelineCancelled("Cancelled during PDF render.")
@@ -1209,6 +1217,7 @@ def run_pipeline(
     dpi: int = 300,
     start_page: int = 1,
     end_page: int | None = None,
+    page_numbers: list[int] | None = None,
     min_score: float = DEFAULT_OCR_MIN_LINE_SCORE,
     draw_boxes: bool = True,
     draw_text: bool = True,
@@ -1249,6 +1258,7 @@ def run_pipeline(
         dpi,
         start_page,
         end_page,
+        page_numbers=page_numbers,
         progress_cb=progress_cb,
         cancel_event=cancel_event,
     )

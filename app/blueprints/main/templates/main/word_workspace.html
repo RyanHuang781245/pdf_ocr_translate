@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Word 原版面翻譯</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" data-local-href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}" onerror="this.onerror=null;this.href=this.dataset.localHref;" />
     <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
   </head>
   <body class="home has-global-nav">
@@ -62,7 +62,7 @@
           <button class="primary" type="submit">開始 Word 翻譯</button>
         </form>
       </section>
-      <section class="upload-card jobs-board">
+      <section class="upload-card jobs-board jobs-board--sticky">
         <div class="jobs-header">
           <div>
             <p class="eyebrow">Manage</p>
@@ -96,6 +96,7 @@
         </div>
         <div id="wordJobsEmpty" class="hint">No Word jobs yet.</div>
         <div id="wordJobsList" class="jobs-list"></div>
+        <div id="wordJobsPagination" class="jobs-pagination"></div>
       </section>
     </main>
     <script src="{{ url_for('static', filename='upload_files.js') }}"></script>
@@ -111,8 +112,10 @@
       const wordJobsFilterCount = document.getElementById("wordJobsFilterCount");
       const wordJobsSearch = document.getElementById("wordJobsSearch");
       const wordJobsStatusFilter = document.getElementById("wordJobsStatusFilter");
+      const wordJobsPagination = document.getElementById("wordJobsPagination");
       const selectedWordJobs = new Set();
       let allWordJobs = [];
+      const wordJobsPageState = { page: 1, pageSize: 3 };
       let wordJobsLoading = false;
       let wordJobsSource = null;
 
@@ -312,7 +315,9 @@
         if (wordJobsFilterCount) {
           wordJobsFilterCount.textContent = `顯示 ${filtered.length} / ${allWordJobs.length} 個任務`;
         }
-        renderWordJobs(filtered);
+        const pageInfo = JobFilters.paginate(filtered, wordJobsPageState);
+        renderWordJobs(pageInfo.items);
+        JobFilters.renderPagination(wordJobsPagination, pageInfo, wordJobsPageState, applyWordJobsFilters);
       }
 
       function setAllWordSelections(checked) {
@@ -441,7 +446,10 @@
         searchId: "wordJobsSearch",
         statusId: "wordJobsStatusFilter",
         resetId: "wordJobsFiltersReset",
-        onChange: applyWordJobsFilters,
+        onChange: () => {
+          wordJobsPageState.page = 1;
+          applyWordJobsFilters();
+        },
       });
       bindUploadFiles({
         inputId: "wordUploadInput",

@@ -64,6 +64,10 @@
     "en": "thread on center hole"
   },
   {
+    "cn": "中心方孔",
+    "en": "Center Box"
+  },
+  {
     "cn": "中心方孔寬度",
     "en": "Center Box Width"
   },
@@ -434,6 +438,10 @@
   {
     "cn": "封矽膠環(託外加工)",
     "en": "Silicon Sealing (Outsourcing)"
+  },
+  {
+    "cn": "專案編號",
+    "en": "Project No."
   },
   {
     "cn": "工具箱組裝(託外加工)",
@@ -836,6 +844,10 @@
     "en": "Spherical Grinding"
   },
   {
+    "cn": "產品編號",
+    "en": "Product No."
+  },
+  {
     "cn": "百分表",
     "en": "Indicator"
   },
@@ -853,7 +865,7 @@
   },
   {
     "cn": "真圓度",
-    "en": "roundness"
+    "en": "roundness2"
   },
   {
     "cn": "真圓度(赤道、45°×2)",

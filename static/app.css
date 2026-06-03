@@ -9,6 +9,7 @@
   --shadow: 0 20px 40px rgba(20, 20, 20, 0.12);
   --radius: 18px;
   --font-main: "Bahnschrift", "Trebuchet MS", "Gill Sans", sans-serif;
+  --global-nav-height: 52px;
   --editor-nav-height: 56px;
 }
 
@@ -313,6 +314,10 @@ body.has-global-nav:not(.home-hub) .shell {
 }
 
 @media (max-width: 960px) {
+  :root {
+    --global-nav-height: 84px;
+  }
+
   .auth-shell {
     min-height: calc(100vh - 84px);
   }
@@ -744,6 +749,14 @@ body.has-global-nav:not(.home-hub) .shell {
   gap: 1.2rem;
 }
 
+.jobs-board--sticky {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  position: sticky;
+  top: calc(var(--global-nav-height) + 1rem);
+  max-height: calc(100dvh - var(--global-nav-height) - 2rem);
+  overflow: hidden;
+}
+
 .jobs-header {
   display: flex;
   align-items: center;
@@ -785,6 +798,34 @@ body.has-global-nav:not(.home-hub) .shell {
 .jobs-list {
   display: grid;
   gap: 0.8rem;
+  align-content: start;
+}
+
+.jobs-board--sticky .jobs-list {
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 0.1rem;
+}
+
+.jobs-pagination {
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.jobs-pagination__summary {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.jobs-pagination__button {
+  min-height: 2.3rem;
+}
+
+.jobs-pagination__select {
+  width: auto;
+  min-width: 8.5rem;
 }
 
 .job-card {
@@ -894,6 +935,16 @@ body.has-global-nav:not(.home-hub) .shell {
   .jobs-filterbar,
   .jobs-filterbar--compact {
     grid-template-columns: 1fr;
+  }
+
+  .jobs-pagination {
+    justify-content: stretch;
+  }
+
+  .jobs-pagination__summary,
+  .jobs-pagination__button,
+  .jobs-pagination__select {
+    width: 100%;
   }
 
   .job-header {

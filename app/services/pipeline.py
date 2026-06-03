@@ -24,6 +24,7 @@ def run_ocr_pipeline_job(
     dpi: int,
     start_page: int,
     end_page: int | None,
+    page_numbers: list[int] | None,
     translate_source_lang: str,
     translate_target_lang: str,
     translate_model: str,
@@ -44,6 +45,7 @@ def run_ocr_pipeline_job(
             dpi=dpi,
             start_page=start_page,
             end_page=end_page,
+            page_numbers=page_numbers,
             min_score=0.0,
             draw_boxes=True,
             draw_text=True,
@@ -147,6 +149,7 @@ def enqueue_job_from_upload(
     owner_work_id: str = "",
     job_root: Path | None = None,
     job_type: str = "ocr_overlay",
+    page_numbers: list[int] | None = None,
 ) -> str:
     job_id = uuid.uuid4().hex
     job_dir = jobs.job_dir(job_id, job_root=job_root)
@@ -179,6 +182,7 @@ def enqueue_job_from_upload(
             "dpi": dpi,
             "start_page": start_page,
             "end_page": end_page,
+            "page_numbers": page_numbers or None,
             "translate_source_lang": translate_source_lang,
             "translate_target_lang": translate_target_lang,
             "translate_model": translate_model,

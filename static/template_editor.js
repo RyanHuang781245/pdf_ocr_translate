@@ -162,6 +162,18 @@ if (window.pdfjsLib) {
     "/static/pdfjs/pdf.worker.min.mjs";
 }
 
+async function ensurePdfJsLib() {
+  if (window.pdfjsLib) return window.pdfjsLib;
+  if (window.pdfjsLibReady) {
+    try {
+      return await window.pdfjsLibReady;
+    } catch (error) {
+      return null;
+    }
+  }
+  return null;
+}
+
 document.addEventListener("dragstart", (event) => {
   if (event.target.closest(".page-wrap, .overlay, .text-box, .text")) {
     event.preventDefault();
@@ -3008,11 +3020,13 @@ function updatePageLayout(page) {
 }
 
 async function loadPdfDocument(pdfUrl) {
-  if (!pdfUrl || !window.pdfjsLib) return;
+  const pdfjsLib = await ensurePdfJsLib();
+  if (!pdfUrl || !pdfjsLib) return;
   state.pdfUrl = pdfUrl;
   try {
-    const task = window.pdfjsLib.getDocument(pdfUrl);
+    const task = pdfjsLib.getDocument(pdfUrl);
     state.pdfDoc = await task.promise;
+    renderPages();
     await renderAllPdfPages();
   } catch (error) {
     state.pdfDoc = null;
@@ -3627,16 +3641,22 @@ function renderContinuousPages() {
     wrap.draggable = false;
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
 
-    const img = document.createElement("img");
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.src = page.imageUrl;
-    img.alt = `Page ${page.pageIndex + 1}`;
-    img.draggable = false;
-    img.addEventListener("dragstart", (event) => event.preventDefault());
-    img.addEventListener("load", () => {
-      applyZoomToPage(page);
-    });
+    let img;
+    if (state.pdfDoc && window.pdfjsLib) {
+      img = document.createElement("canvas");
+      img.className = "pdf-canvas";
+    } else {
+      img = document.createElement("img");
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.src = page.imageUrl;
+      img.alt = `Page ${page.pageIndex + 1}`;
+      img.draggable = false;
+      img.addEventListener("dragstart", (event) => event.preventDefault());
+      img.addEventListener("load", () => {
+        applyZoomToPage(page);
+      });
+    }
 
     const overlay = document.createElement("div");
     overlay.className = "overlay";
@@ -3962,6 +3982,9 @@ async function loadJobData(jobId, options = {}) {
   const targetPageIdx = preserveActivePage ? (state.activePageIdx ?? 0) : 0;
   buildState(data, { activePageIdx: targetPageIdx });
   renderPages();
+  if (data.pdf_url) {
+    await loadPdfDocument(data.pdf_url);
+  }
   refreshAllConsistencyPanels();
   if (preserveActivePage) {
     setActivePage(targetPageIdx, { scroll: false });

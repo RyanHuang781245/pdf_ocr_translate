@@ -7,6 +7,7 @@ import re
 import time
 from typing import Any
 
+import fitz
 from flask import Blueprint, Response, abort, jsonify, request, send_file, stream_with_context, url_for
 from flask_login import current_user
 
@@ -78,6 +79,73 @@ def _load_job_translation_context(job_dir, payload: dict[str, Any] | None = None
     return document_mode, target_lang
 
 
+def _empty_editor_page(
+    page_index_0based: int,
+    *,
+    image_url: str | None = None,
+    image_size_px: list[int] | None = None,
+) -> dict[str, Any]:
+    return {
+        "page_index_0based": page_index_0based,
+        "input_image": "",
+        "image_url": image_url,
+        "image_size_px": image_size_px,
+        "rec_polys": [],
+        "rec_texts": [],
+        "edit_texts": [],
+        "rec_scores": [],
+        "font_sizes": [],
+        "colors": [],
+        "alignments": [],
+        "rotations": [],
+        "box_ids": [],
+        "no_clips": [],
+        "auto_generated_flags": [],
+        "tm_source_texts": [],
+        "tm_source_normalizeds": [],
+        "tm_target_langs": [],
+        "tm_document_modes": [],
+    }
+
+
+def _pdf_page_count(pdf_path) -> int:
+    try:
+        doc = fitz.open(pdf_path)
+        try:
+            return int(doc.page_count)
+        finally:
+            doc.close()
+    except Exception:
+        return 0
+
+
+def _ensure_editor_page_image(pdf_path, images_dir, page_index_0based: int, dpi: int = 200) -> tuple[str, list[int]] | None:
+    out_name = f"editor_page_{page_index_0based + 1:04d}.png"
+    out_path = images_dir / out_name
+    if out_path.exists():
+        try:
+            pix = fitz.Pixmap(out_path.as_posix())
+            try:
+                return out_name, [int(pix.width), int(pix.height)]
+            finally:
+                pix = None
+        except Exception:
+            pass
+    try:
+        images_dir.mkdir(parents=True, exist_ok=True)
+        doc = fitz.open(pdf_path)
+        try:
+            page = doc.load_page(page_index_0based)
+            mat = fitz.Matrix(dpi / 72.0, dpi / 72.0)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            pix.save(out_path.as_posix())
+            return out_name, [int(pix.width), int(pix.height)]
+        finally:
+            doc.close()
+    except Exception:
+        return None
+
+
 @api_bp.route("/job/<job_id>", methods=["GET"], endpoint="job_data")
 def job_data(job_id: str):
     if not jobs.safe_job_id(job_id):
@@ -91,7 +159,7 @@ def job_data(job_id: str):
 
     edits_map = jobs.load_edits_map(job_dir)
     json_paths = sorted(json_dir.glob("*_res_with_pdf_coords.json"))
-    pages = []
+    pages_by_index: dict[int, dict[str, Any]] = {}
     for path in json_paths:
         data = json.loads(path.read_text(encoding="utf-8"))
         page_idx_guess = int(data.get("page_index_0based", 0))
@@ -102,7 +170,26 @@ def job_data(job_id: str):
         page["image_url"] = url_for(
             "jobs.job_file", job_id=job_id, filename=f"images/{page['input_image']}"
         )
-        pages.append(page)
+        pages_by_index[int(page["page_index_0based"])] = page
+
+    source_pdf_path = job_dir / f"{job_id}.pdf"
+    page_count = _pdf_page_count(source_pdf_path)
+    if page_count > 0:
+        pages = []
+        images_dir = job_dir / "images"
+        for page_idx in range(page_count):
+            if page_idx in pages_by_index:
+                pages.append(pages_by_index[page_idx])
+                continue
+            image_info = _ensure_editor_page_image(source_pdf_path, images_dir, page_idx)
+            image_url = None
+            image_size_px = None
+            if image_info:
+                image_name, image_size_px = image_info
+                image_url = url_for("jobs.job_file", job_id=job_id, filename=f"images/{image_name}")
+            pages.append(_empty_editor_page(page_idx, image_url=image_url, image_size_px=image_size_px))
+    else:
+        pages = [pages_by_index[page_idx] for page_idx in sorted(pages_by_index)]
 
     edited_pdf_path = job_dir / "edited.pdf"
     config = jobs.load_batch_config(job_dir) or {}
