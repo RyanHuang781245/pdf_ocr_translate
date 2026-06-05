@@ -5,6 +5,7 @@
 ## 部署流程
 
 1. 確認 `.env` 至少包含 `DATABASE_URL`、必要 OpenAI/Azure/LDAP 設定。
+   若使用內建 SQL Server schema/migration，請設定 `DATABASE_SCHEMA=translation`。
 2. 第一次導入既有資料庫時，如果 schema 已存在且完整，先執行 `alembic stamp head`。空資料庫或要由 migration 建表時，執行 `alembic upgrade head`。
 3. 執行 `flask --app app.py schema-preflight` 確認必要 tables/columns 完整。
 4. 執行 `flask --app app.py seed-bootstrap` 初始化 auth roles 與 bootstrap admins。

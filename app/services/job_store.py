@@ -176,6 +176,8 @@ def init_app(app) -> None:
         Base.metadata.create_all(bind=_engine, checkfirst=True)
         _ensure_compatible_columns()
         _assert_required_tables()
+    else:
+        _assert_required_tables()
 
 
 def _ensure_compatible_columns() -> None:
@@ -455,18 +457,19 @@ def claim_next_job(
         bind = session.get_bind()
         if bind is None or bind.dialect.name != "mssql":
             raise RuntimeError("claim_next_job requires a SQL Server engine.")
+        jobs_table = qualified_table_name("jobs", bind)
         result = session.execute(
             text(
-                """
+                f"""
                 ;WITH next_job AS (
                     SELECT TOP (1) job_id
-                    FROM jobs WITH (UPDLOCK, READPAST, ROWLOCK)
+                    FROM {jobs_table} WITH (UPDLOCK, READPAST, ROWLOCK)
                     WHERE status = :queued_status
                       AND cancel_requested = 0
                       AND (
                         (job_type IN ('ocr_overlay', 'template_source') AND ISNULL(stage, '') <> 'translate' AND :ocr_limit > 0 AND (
                             SELECT COUNT(*)
-                            FROM jobs AS active
+                            FROM {jobs_table} AS active
                             WHERE active.job_type IN ('ocr_overlay', 'template_source')
                               AND active.status IN ('running', 'cancel_requested')
                               AND active.worker_id IS NOT NULL
@@ -475,7 +478,7 @@ def claim_next_job(
                         OR
                         (job_type IN ('ocr_overlay', 'template_source') AND ISNULL(stage, '') = 'translate' AND :pdf_translate_limit > 0 AND (
                             SELECT COUNT(*)
-                            FROM jobs AS active
+                            FROM {jobs_table} AS active
                             WHERE active.job_type IN ('ocr_overlay', 'template_source')
                               AND active.status IN ('running', 'cancel_requested')
                               AND active.worker_id IS NOT NULL
@@ -484,7 +487,7 @@ def claim_next_job(
                         OR
                         (job_type = 'doc_workspace' AND :doc_limit > 0 AND (
                             SELECT COUNT(*)
-                            FROM jobs AS active
+                            FROM {jobs_table} AS active
                             WHERE active.job_type = 'doc_workspace'
                               AND active.status IN ('running', 'cancel_requested')
                               AND active.worker_id IS NOT NULL
@@ -492,7 +495,7 @@ def claim_next_job(
                         OR
                         (job_type = 'word_translate' AND :word_limit > 0 AND (
                             SELECT COUNT(*)
-                            FROM jobs AS active
+                            FROM {jobs_table} AS active
                             WHERE active.job_type = 'word_translate'
                               AND active.status IN ('running', 'cancel_requested')
                               AND active.worker_id IS NOT NULL
@@ -500,14 +503,14 @@ def claim_next_job(
                       )
                     ORDER BY created_at ASC
                 )
-                UPDATE jobs
+                UPDATE target
                 SET status = :running_status,
                     worker_id = :worker_id,
                     started_at = COALESCE(started_at, SYSUTCDATETIME()),
                     updated_at = SYSUTCDATETIME()
                 OUTPUT inserted.job_id
-                FROM jobs
-                INNER JOIN next_job ON jobs.job_id = next_job.job_id;
+                FROM {jobs_table} AS target
+                INNER JOIN next_job ON target.job_id = next_job.job_id;
                 """
             ),
             {

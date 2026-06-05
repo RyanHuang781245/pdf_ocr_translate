@@ -26,6 +26,7 @@ def test_production_does_not_run_startup_schema_mutations(monkeypatch):
 
         scoped.setattr(job_store.Base.metadata, "create_all", fail_if_called)
         scoped.setattr(job_store, "_ensure_compatible_columns", fail_if_called)
+        scoped.setattr(job_store, "_assert_required_tables", lambda: None)
         scoped.setattr(auth_service.auth_store, "bootstrap_auth_store", fail_if_called)
 
         app = create_app("production")

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import contextlib
+from pathlib import Path
+import re
+
 import pytest
 from flask import Flask
 from sqlalchemy import create_engine, text
@@ -7,6 +11,22 @@ from sqlalchemy.orm import sessionmaker
 
 from app.services import auth_store, job_store, operations_service
 from app.services.operations_service import register_operations_cli
+
+APP_ROOT = Path(__file__).resolve().parents[1] / "app"
+SCHEMA_TABLE_NAMES = (
+    "jobs",
+    "job_artifacts",
+    "job_events",
+    "document_templates",
+    "users",
+    "roles",
+    "user_roles",
+)
+RAW_SQL_TABLE_PATTERN = re.compile(
+    r"\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO|ALTER\s+TABLE)\s+"
+    rf"(?:{'|'.join(SCHEMA_TABLE_NAMES)})\b",
+    re.IGNORECASE,
+)
 
 
 @pytest.fixture
@@ -84,3 +104,55 @@ def test_schema_preflight_reports_current_schema(ops_app):
 
     assert result.exit_code == 0
     assert "schema=translation" in result.output
+
+
+def test_claim_next_job_uses_configured_schema(monkeypatch):
+    original_schema = job_store.current_database_schema()
+    captured: dict[str, str] = {}
+
+    class FakeDialect:
+        name = "mssql"
+
+    class FakeBind:
+        dialect = FakeDialect()
+
+    class FakeResult:
+        def first(self):
+            return None
+
+    class FakeSession:
+        def get_bind(self):
+            return FakeBind()
+
+        def execute(self, statement, parameters):
+            captured["sql"] = str(statement)
+            captured["worker_id"] = parameters["worker_id"]
+            return FakeResult()
+
+    @contextlib.contextmanager
+    def fake_session_scope():
+        yield FakeSession()
+
+    try:
+        job_store.configure_database_schema("translation")
+        monkeypatch.setattr(job_store, "session_scope", fake_session_scope)
+
+        assert job_store.claim_next_job("worker-test") is None
+    finally:
+        job_store.configure_database_schema(original_schema)
+
+    assert captured["worker_id"] == "worker-test"
+    assert "[translation].[jobs]" in captured["sql"]
+    assert "FROM jobs" not in captured["sql"]
+    assert "UPDATE jobs" not in captured["sql"]
+
+
+def test_app_raw_sql_does_not_reference_schema_tables_unqualified():
+    offenders: list[str] = []
+    for path in sorted(APP_ROOT.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        for match in RAW_SQL_TABLE_PATTERN.finditer(text):
+            line_no = text.count("\n", 0, match.start()) + 1
+            offenders.append(f"{path.relative_to(APP_ROOT.parent)}:{line_no}: {match.group(0)}")
+
+    assert offenders == []
