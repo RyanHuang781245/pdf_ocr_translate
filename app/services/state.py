@@ -8,13 +8,15 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from . import openai_config
 
+BASE_DIR = Path(__file__).resolve().parents[2]
+
 try:
     from dotenv import load_dotenv
 except Exception:  # pragma: no cover - optional import guard
     load_dotenv = None
 
 if callable(load_dotenv):
-    load_dotenv()
+    load_dotenv(BASE_DIR / ".env")
 
 
 def normalize_database_url(database_url: str) -> str:
@@ -45,7 +47,6 @@ def normalize_database_schema(database_schema: str) -> str:
     return cleaned
 
 
-BASE_DIR = Path(__file__).resolve().parents[2]
 OUT_ROOT = BASE_DIR / "out"
 DEFAULT_JOB_ROOT = OUT_ROOT / "jobs"
 JOB_ROOT = DEFAULT_JOB_ROOT
