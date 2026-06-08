@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 APP_NAME="uo_regulations_translate"
 WORKER_SERVICE="uo_regulations_translate_worker"
 WORKER_SERVICES=("$WORKER_SERVICE")
-APP_DIR="${APP_DIR:-$SCRIPT_DIR}"
+APP_DIR="${APP_DIR:-/home/NE025/pdf_ocr_translate}"
 APP_ROOT="${APP_ROOT:-$APP_DIR}"
 ENV_FILE="${ENV_FILE:-$APP_ROOT/.env}"
 APP_USER="${APP_USER:-}"
@@ -20,7 +20,7 @@ NGINX_TEMPLATE="${NGINX_TEMPLATE:-$APP_ROOT/deploy/nginx-site.conf.template}"
 NGINX_SITE_NAME="${NGINX_SITE_NAME:-$APP_NAME}"
 NGINX_LISTEN_PORT="${NGINX_LISTEN_PORT:-81}"
 NGINX_FILE="${NGINX_FILE:-$APP_ROOT/build/nginx/$NGINX_SITE_NAME}"
-ENABLE_NGINX="${ENABLE_NGINX:-0}"
+ENABLE_NGINX="${ENABLE_NGINX:-1}"
 UV_BIN="${UV_BIN:-uv}"
 UV_SYNC_ARGS="${UV_SYNC_ARGS:---frozen}"
 VENV_PYTHON="$APP_ROOT/.venv/bin/python"
