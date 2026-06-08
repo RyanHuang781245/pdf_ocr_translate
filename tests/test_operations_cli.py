@@ -98,6 +98,30 @@ def test_configure_database_schema_updates_metadata_schema():
         job_store.configure_database_schema(original_schema)
 
 
+def test_ensure_database_schema_accepts_active_connection():
+    original_schema = job_store.current_database_schema()
+    executed: list[str] = []
+
+    class FakeDialect:
+        name = "mssql"
+
+    class FakeConnection:
+        dialect = FakeDialect()
+
+        def execute(self, statement):
+            executed.append(str(statement))
+
+        def begin(self):
+            raise AssertionError("active Alembic connections must not begin a nested transaction")
+
+    try:
+        job_store.configure_database_schema("translation")
+        job_store.ensure_database_schema(FakeConnection())
+    finally:
+        job_store.configure_database_schema(original_schema)
+
+    assert executed == ["IF SCHEMA_ID(N'translation') IS NULL EXEC(N'CREATE SCHEMA [translation]');"]
+
 def test_schema_preflight_reports_current_schema(ops_app):
     runner = ops_app.test_cli_runner()
     result = runner.invoke(args=["schema-preflight"])

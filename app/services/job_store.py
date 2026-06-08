@@ -53,16 +53,20 @@ def qualified_table_name(table_name: str, engine=None) -> str:
     return _quote_identifier(table_name)
 
 
-def ensure_database_schema(engine) -> None:
-    if getattr(engine.dialect, "name", "") != "mssql":
+def ensure_database_schema(bind) -> None:
+    if getattr(bind.dialect, "name", "") != "mssql":
         return
     schema = _DATABASE_SCHEMA
     if schema.lower() == "dbo":
         return
     schema_literal = schema.replace("'", "''")
     schema_identifier = _quote_identifier(schema)
-    with engine.begin() as conn:
-        conn.execute(text(f"IF SCHEMA_ID(N'{schema_literal}') IS NULL EXEC(N'CREATE SCHEMA {schema_identifier}');"))
+    statement = text(f"IF SCHEMA_ID(N'{schema_literal}') IS NULL EXEC(N'CREATE SCHEMA {schema_identifier}');")
+    if hasattr(bind, "execute"):
+        bind.execute(statement)
+        return
+    with bind.begin() as conn:
+        conn.execute(statement)
 
 
 class Base(DeclarativeBase):
