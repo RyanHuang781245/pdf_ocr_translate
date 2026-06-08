@@ -20,6 +20,7 @@ APP_DIR=/path/to/pdf_ocr_translate
 ENV_FILE=/path/to/pdf_ocr_translate/.env
 RUN_GIT_PULL=0
 INSTALL_SYSTEMD_UNITS=1
+ENABLE_SYSTEMD_UNITS=0
 MANAGE_SYSTEMD_SERVICES=auto
 UV_SYNC_ARGS=--frozen
 WEB_WORKERS=4
@@ -42,8 +43,12 @@ bash scripts/install_systemd_units.sh --output-dir /tmp/translate-systemd
 
 ```bash
 sudo bash scripts/install_systemd_units.sh --install
-sudo systemctl enable uo_regulations_translate uo_regulations_translate_worker
-sudo systemctl start uo_regulations_translate uo_regulations_translate_worker
+```
+
+透過 deploy 安裝 unit files 並啟用開機自動啟動：
+
+```bash
+ENABLE_SYSTEMD_UNITS=1 bash deploy.sh
 ```
 
 ## Nginx

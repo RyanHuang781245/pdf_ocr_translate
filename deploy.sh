@@ -13,6 +13,7 @@ APP_USER="${APP_USER:-}"
 BRANCH="${DEPLOY_BRANCH:-main}"
 RUN_GIT_PULL="${RUN_GIT_PULL:-0}"
 INSTALL_SYSTEMD_UNITS="${INSTALL_SYSTEMD_UNITS:-1}"
+ENABLE_SYSTEMD_UNITS="${ENABLE_SYSTEMD_UNITS:-1}"
 MANAGE_SYSTEMD_SERVICES="${MANAGE_SYSTEMD_SERVICES:-auto}"
 WEB_WORKERS="${WEB_WORKERS:-2}"
 WEB_BIND="${WEB_BIND:-unix:$APP_ROOT/uo_regulations_translate.sock}"
@@ -140,6 +141,13 @@ if [[ "$INSTALL_SYSTEMD_UNITS" == "1" && "$SYSTEMD_ENABLED" == "1" ]]; then
   fi
   sudo bash "$APP_ROOT/scripts/install_systemd_units.sh" \
     "${systemd_args[@]}"
+
+  if [[ "$ENABLE_SYSTEMD_UNITS" == "1" ]]; then
+    log "啟用 systemd 服務開機自動啟動"
+    sudo systemctl enable "$APP_NAME" "${WORKER_SERVICES[@]}"
+  else
+    log "略過 systemd 服務 enable；如需開機自動啟動，請用 ENABLE_SYSTEMD_UNITS=1 bash deploy.sh"
+  fi
 elif [[ "$INSTALL_SYSTEMD_UNITS" == "1" ]]; then
   log "略過 systemd units 安裝；目前環境無可用 systemd"
 fi
