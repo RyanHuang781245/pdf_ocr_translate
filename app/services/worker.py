@@ -4,7 +4,7 @@ import logging
 import threading
 import time
 
-from . import batch, doc_workspace, job_store, jobs, pipeline, realtime_translate, state, word_translate
+from . import audit_service, batch, doc_workspace, job_store, jobs, pipeline, realtime_translate, state, word_translate
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +133,13 @@ def run_worker_loop(worker_id: str | None = None, poll_seconds: float | None = N
         except Exception as exc:
             job_id = record.job_id if record is not None else None
             logger.exception("Worker loop failure job_id=%s error=%s", job_id, exc)
+            audit_service.record_system_error(
+                "worker.loop",
+                "Worker loop failure",
+                exc=exc,
+                job_id=job_id,
+                detail={"worker_id": worker_name},
+            )
             if job_id:
                 job_store.update_job(
                     job_id,

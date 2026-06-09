@@ -9,7 +9,7 @@ from pathlib import Path
 
 from werkzeug.utils import secure_filename
 
-from . import docx_export, jobs, markdown_translate, pp_structure, state
+from . import audit_service, docx_export, jobs, markdown_translate, pp_structure, state
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +141,13 @@ def run_doc_workspace_job(
         write_doc_status(job_dir, "cancelled")
     except Exception as exc:
         logger.exception("Document workspace failed job_id=%s error=%s", job_id, exc)
+        audit_service.record_system_error(
+            "doc_workspace",
+            "Document workspace failed",
+            exc=exc,
+            job_id=job_id,
+            detail={"job_dir": str(job_dir)},
+        )
         jobs.set_job_state(
             job_dir,
             status="failed",

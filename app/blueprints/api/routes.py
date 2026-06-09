@@ -11,7 +11,7 @@ import fitz
 from flask import Blueprint, Response, abort, jsonify, request, send_file, stream_with_context, url_for
 from flask_login import current_user
 
-from ...services import authz_service, batch, doc_workspace, document_templates, glossary, jobs, ocr, state, translation_memory, word_translate
+from ...services import audit_service, authz_service, batch, doc_workspace, document_templates, glossary, jobs, ocr, state, translation_memory, word_translate
 
 logger = logging.getLogger(__name__)
 
@@ -758,6 +758,7 @@ def cancel_word_job(job_id: str):
     if not job_dir.exists() or jobs.get_job_type(job_dir) != "word_translate":
         abort(404)
     cancelled = word_translate.cancel_word_job(job_id) or jobs.job_store.request_cancel(job_id)
+    audit_service.record_audit("job_cancel", detail={"job_type": "word_translate", "cancelled": cancelled}, job_id=job_id)
     jobs.notify_jobs_update()
     return jsonify({"ok": True, "cancelled": cancelled})
 
@@ -775,6 +776,11 @@ def cancel_job(job_id: str):
     if record.job_type == "word_translate":
         cancelled = word_translate.cancel_word_job(job_id)
     cancelled = jobs.job_store.request_cancel(job_id) or cancelled
+    audit_service.record_audit(
+        "job_cancel",
+        detail={"job_type": record.job_type, "cancelled": cancelled},
+        job_id=job_id,
+    )
     jobs.notify_jobs_update()
     return jsonify({"ok": True, "cancelled": cancelled})
 
@@ -786,6 +792,7 @@ def retry_job(job_id: str):
     if _job_access_denied(job_id):
         return _forbidden_json()
     retried, error = jobs.retry_job(job_id)
+    audit_service.record_audit("job_retry", detail={"retried": retried, "error": error or ""}, job_id=job_id)
     if not retried:
         return jsonify({"ok": False, "error": error}), 400
     return jsonify({"ok": True, "job_id": job_id})
@@ -983,6 +990,15 @@ def delete_job(job_id: str):
     if not job_dir.exists() and record is None:
         return jsonify({"ok": True, "deleted": False})
     deleted, error = jobs.delete_job_dir(job_id)
+    audit_service.record_audit(
+        "job_delete",
+        detail={
+            "deleted": deleted,
+            "error": error or "",
+            "job_type": record.job_type if record is not None else "",
+        },
+        job_id=job_id,
+    )
     if not deleted:
         return jsonify({"ok": False, "error": error}), 500
     return jsonify({"ok": True, "deleted": True})

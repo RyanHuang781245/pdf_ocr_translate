@@ -7,7 +7,7 @@ from uuid import uuid4
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from ...services import authz_service, doc_workspace, document_templates, jobs, pipeline, state, submit_quota, word_translate
+from ...services import audit_service, authz_service, doc_workspace, document_templates, jobs, pipeline, state, submit_quota, word_translate
 
 main_bp = Blueprint(
     "main",
@@ -226,7 +226,7 @@ def upload() -> str:
             enqueue_options["owner_work_id"] = owner_work_id
         if page_numbers:
             enqueue_options["page_numbers"] = page_numbers
-        pipeline.enqueue_job_from_upload(
+        created_job_id = pipeline.enqueue_job_from_upload(
             tmp_path,
             display_name,
             dpi,
@@ -241,6 +241,18 @@ def upload() -> str:
             document_mode,
             creator_name,
             **enqueue_options,
+        )
+        audit_service.record_audit(
+            "job_upload",
+            detail={
+                "job_type": "ocr_overlay",
+                "job_name": display_name,
+                "filename": file.filename or "",
+                "enable_translate": enable_translate,
+                "target_lang": translate_target_lang if enable_translate else "",
+                "document_mode": document_mode,
+            },
+            job_id=created_job_id,
         )
         try:
             tmp_path.unlink(missing_ok=True)
@@ -307,6 +319,16 @@ def upload_template_source() -> str:
             display_name=display_name,
             owner_work_id=owner_work_id,
         )
+        audit_service.record_audit(
+            "job_upload",
+            detail={
+                "job_type": "template_source",
+                "job_name": display_name,
+                "filename": file.filename or "",
+                "template_page": template_page,
+            },
+            job_id=created_job_id,
+        )
         try:
             tmp_path.unlink(missing_ok=True)
         except Exception:
@@ -341,7 +363,7 @@ def upload_doc_workspace() -> str:
         tmp_path = state.UPLOAD_ROOT / _safe_upload_name(file.filename or "", ".pdf")
         file.save(tmp_path)
         display_name = _display_name_from_filename(file.filename or "", "document")
-        doc_workspace.enqueue_doc_job_from_upload(
+        created_job_id = doc_workspace.enqueue_doc_job_from_upload(
             tmp_path,
             display_name,
             source_lang,
@@ -349,6 +371,17 @@ def upload_doc_workspace() -> str:
             creator_name,
             owner_work_id,
             system_prompt=system_prompt,
+        )
+        audit_service.record_audit(
+            "job_upload",
+            detail={
+                "job_type": "doc_workspace",
+                "job_name": display_name,
+                "filename": file.filename or "",
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+            },
+            job_id=created_job_id,
         )
         try:
             tmp_path.unlink(missing_ok=True)
@@ -385,7 +418,7 @@ def upload_word_workspace() -> str:
         tmp_path = state.UPLOAD_ROOT / _safe_upload_name(file.filename or "", ".docx")
         file.save(tmp_path)
         display_name = _display_name_from_filename(file.filename or "", "document")
-        word_translate.enqueue_word_job_from_upload(
+        created_job_id = word_translate.enqueue_word_job_from_upload(
             tmp_path,
             display_name,
             source_lang,
@@ -394,6 +427,17 @@ def upload_word_workspace() -> str:
             owner_work_id=owner_work_id,
             retain_terms_raw=retain_terms,
             system_prompt=system_prompt,
+        )
+        audit_service.record_audit(
+            "job_upload",
+            detail={
+                "job_type": "word_translate",
+                "job_name": display_name,
+                "filename": file.filename or "",
+                "source_lang": source_lang,
+                "target_lang": target_lang,
+            },
+            job_id=created_job_id,
         )
         try:
             tmp_path.unlink(missing_ok=True)

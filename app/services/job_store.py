@@ -117,6 +117,34 @@ class JobEventRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class AuditLogRecord(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    action: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    work_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    job_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    request_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    remote_addr: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
+class SystemErrorLogRecord(Base):
+    __tablename__ = "system_error_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    level: Mapped[str] = mapped_column(String(20), nullable=False, default="ERROR", index=True)
+    component: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    error_type: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    job_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    request_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    remote_addr: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+
 class DocumentTemplateRecord(Base):
     __tablename__ = "document_templates"
 
@@ -137,6 +165,8 @@ REQUIRED_TABLES = (
     "jobs",
     "job_artifacts",
     "job_events",
+    "audit_logs",
+    "system_error_logs",
     "document_templates",
 )
 
@@ -213,6 +243,8 @@ def _assert_required_tables() -> None:
             'jobs',
             'job_artifacts',
             'job_events',
+            'audit_logs',
+            'system_error_logs',
             'document_templates'
           );
         """

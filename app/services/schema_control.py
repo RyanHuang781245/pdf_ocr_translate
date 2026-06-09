@@ -8,6 +8,7 @@ from . import auth_store, job_store
 
 SCHEMA_GROUPS: dict[str, tuple[str, ...]] = {
     "jobs": ("jobs", "job_artifacts", "job_events", "document_templates"),
+    "logs": ("audit_logs", "system_error_logs"),
     "auth": ("users", "roles", "user_roles"),
 }
 
@@ -34,6 +35,8 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
     ),
     "job_artifacts": ("id", "job_id", "artifact_type", "file_path", "created_at"),
     "job_events": ("id", "job_id", "event_type", "stage", "message", "created_at"),
+    "audit_logs": ("id", "created_at", "action", "work_id", "detail_json", "job_id", "request_path", "remote_addr"),
+    "system_error_logs": ("id", "created_at", "level", "component", "message", "error_type", "detail_json", "job_id", "request_path", "remote_addr"),
     "document_templates": (
         "template_id",
         "name",
@@ -74,7 +77,7 @@ def tables_exist(*table_names: str) -> bool:
 
 
 def required_schema_groups(app) -> dict[str, tuple[str, ...]]:
-    groups = {"jobs": SCHEMA_GROUPS["jobs"]}
+    groups = {"jobs": SCHEMA_GROUPS["jobs"], "logs": SCHEMA_GROUPS["logs"]}
     if app.config.get("AUTH_ENABLED", False):
         groups["auth"] = SCHEMA_GROUPS["auth"]
     return groups

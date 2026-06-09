@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set nav_section = 'admin' %}
+{% set nav_title = '法規文件轉換平台' %}
+
+{% block title %}系統錯誤{% endblock %}
+{% block body_class %}home has-global-nav{% endblock %}
+
+{% block content %}
+<main class="shell shell--wide">
+  <header class="hero">
+    <div class="hero-title-split">
+      <h1>系統錯誤</h1>
+      <div class="button-row--tight">
+        <a class="ghost back-link" href="{{ url_for('admin.audit_logs') }}">操作紀錄</a>
+        <a class="ghost back-link" href="{{ url_for('main.index') }}">返回入口</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="upload-card admin-stack">
+    <form method="get" class="admin-search-form admin-search-form--logs">
+      <input class="admin-input" type="search" name="q" value="{{ q }}" placeholder="搜尋元件、訊息、例外或內容" />
+      <input class="admin-input admin-input--compact" type="search" name="component" value="{{ component }}" placeholder="元件" />
+      <select class="admin-select admin-input--compact" name="level">
+        <option value="" {% if not level %}selected{% endif %}>全部等級</option>
+        {% for option in ['WARNING', 'ERROR', 'CRITICAL'] %}
+        <option value="{{ option }}" {% if level == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+      <input class="admin-input admin-input--compact" type="search" name="job_id" value="{{ job_id }}" placeholder="Job ID" />
+      <input class="admin-input admin-input--date" type="date" name="start_date" value="{{ start_date }}" />
+      <input class="admin-input admin-input--date" type="date" name="end_date" value="{{ end_date }}" />
+      <button type="submit" class="ghost">搜尋</button>
+      {% if q or component or level or job_id or start_date or end_date %}
+      <a class="ghost" href="{{ url_for('admin.system_error_logs') }}">清除</a>
+      {% endif %}
+    </form>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table admin-table--logs">
+        <thead>
+          <tr>
+            <th class="admin-col--log-time">時間</th>
+            <th class="admin-col--log-level">等級</th>
+            <th class="admin-col--log-action">元件</th>
+            <th class="admin-col--log-job">Job ID</th>
+            <th class="admin-col--log-path">路徑</th>
+            <th>訊息</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+          <tr>
+            <td>{{ format_dt(entry.created_at) }}</td>
+            <td><span class="admin-log-badge admin-log-badge--error">{{ entry.level }}</span></td>
+            <td class="admin-cell--ellipsis">{{ entry.component }}</td>
+            <td class="admin-cell--ellipsis" title="{{ entry.job_id or '' }}">{{ format_short_job_id(entry.job_id) }}</td>
+            <td class="admin-cell--ellipsis">{{ entry.request_path or '-' }}</td>
+            <td>
+              <div class="admin-log-message">{{ entry.message }}</div>
+              {% if entry.error_type %}<div class="admin-log-type">{{ entry.error_type }}</div>{% endif %}
+              <pre class="admin-log-detail">{{ format_detail(entry.detail) }}</pre>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="admin-empty">目前沒有符合條件的系統錯誤。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="admin-pagination-slot admin-pagination-slot--bottom">
+      {% include "admin/_log_pagination.html" %}
+    </div>
+  </section>
+</main>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% set nav_section = 'admin' %}
+{% set nav_title = '法規文件轉換平台' %}
+
+{% block title %}操作紀錄{% endblock %}
+{% block body_class %}home has-global-nav{% endblock %}
+
+{% block content %}
+<main class="shell shell--wide">
+  <header class="hero">
+    <div class="hero-title-split">
+      <h1>操作紀錄</h1>
+      <div class="button-row--tight">
+        <a class="ghost back-link" href="{{ url_for('admin.users') }}">使用者管理</a>
+        <a class="ghost back-link" href="{{ url_for('main.index') }}">返回入口</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="upload-card admin-stack">
+    <form method="get" class="admin-search-form admin-search-form--logs">
+      <input class="admin-input" type="search" name="q" value="{{ q }}" placeholder="搜尋動作、工號或內容" />
+      <input class="admin-input admin-input--compact" type="search" name="action" value="{{ action }}" placeholder="動作" />
+      <input class="admin-input admin-input--compact" type="search" name="job_id" value="{{ job_id }}" placeholder="Job ID" />
+      <input class="admin-input admin-input--date" type="date" name="start_date" value="{{ start_date }}" />
+      <input class="admin-input admin-input--date" type="date" name="end_date" value="{{ end_date }}" />
+      <button type="submit" class="ghost">搜尋</button>
+      {% if q or action or job_id or start_date or end_date %}
+      <a class="ghost" href="{{ url_for('admin.audit_logs') }}">清除</a>
+      {% endif %}
+    </form>
+
+    <div class="admin-table-wrap">
+      <table class="admin-table admin-table--logs">
+        <thead>
+          <tr>
+            <th class="admin-col--log-time">時間</th>
+            <th class="admin-col--log-action">動作</th>
+            <th class="admin-col--log-workid">工號</th>
+            <th class="admin-col--log-job">Job ID</th>
+            <th>內容</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+          <tr>
+            <td>{{ format_dt(entry.created_at) }}</td>
+            <td><span class="admin-log-badge">{{ entry.action }}</span></td>
+            <td class="admin-cell--ellipsis">{{ entry.work_id }}</td>
+            <td class="admin-cell--ellipsis" title="{{ entry.job_id or '' }}">{{ format_short_job_id(entry.job_id) }}</td>
+            <td>
+              <details class="admin-log-detail-toggle">
+                <summary>
+                  <span class="admin-log-summary">{{ format_detail_summary(entry.detail) }}</span>
+                </summary>
+                <pre class="admin-log-detail">{{ format_detail(entry.detail) }}</pre>
+              </details>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="admin-empty">目前沒有符合條件的操作紀錄。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="admin-pagination-slot admin-pagination-slot--bottom">
+      {% include "admin/_log_pagination.html" %}
+    </div>
+  </section>
+</main>
+{% endblock %}

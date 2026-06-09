@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_user, logout_user
 
-from ...services import auth_service
+from ...services import audit_service, auth_service
 from ...services import auth_policy
 from ...services.authz_service import sanitize_next_url
 from .blueprint import auth_bp
@@ -40,8 +40,18 @@ def login():
             )
         except auth_service.AuthenticationError as exc:
             error = str(exc)
+            audit_service.record_audit(
+                "auth_login_failed",
+                actor={"work_id": username, "label": display_name},
+                detail={"reason": error, "authz_mode": authz_mode},
+            )
         else:
             login_user(user)
+            audit_service.record_audit(
+                "auth_login",
+                actor={"work_id": user.work_id, "label": user.display_name},
+                detail={"authz_mode": authz_mode},
+            )
             flash(f"已登入 {user.display_name}", "info")
             return redirect(next_url or url_for("main.index"))
 
@@ -59,8 +69,14 @@ def login():
 @auth_bp.get("/logout", endpoint="logout")
 def logout():
     if current_user.is_authenticated:
+        work_id = getattr(current_user, "work_id", "")
+        display_name = getattr(current_user, "display_name", "")
+        audit_service.record_audit(
+            "auth_logout",
+            actor={"work_id": work_id, "label": display_name},
+        )
         flash(
-            f"已登出 {getattr(current_user, 'display_name', '') or getattr(current_user, 'work_id', '')}",
+            f"已登出 {display_name or work_id}",
             "info",
         )
     logout_user()

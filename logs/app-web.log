@@ -1,0 +1,455 @@
+2026-06-09 16:17:00,573 INFO [web pid=1127080] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:17:00,601 INFO [web pid=1127080] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:17:00,602 INFO [web pid=1127080] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:17:03,803 INFO [web pid=1127108] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:17:03,829 INFO [web pid=1127108] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:17:03,830 INFO [web pid=1127108] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:17:07,344 INFO [web pid=1127154] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:17:07,371 INFO [web pid=1127154] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:17:07,371 INFO [web pid=1127154] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:17:07,391 INFO [web pid=1127154] app.services.worker: Worker loop started worker_id=worker-1127154 poll_seconds=1.0
+2026-06-09 16:17:07,405 INFO [web pid=1127165] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:17:07,418 INFO [web pid=1127159] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:17:07,435 INFO [web pid=1127165] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:17:07,435 INFO [web pid=1127165] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:17:07,449 INFO [web pid=1127159] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:17:07,450 INFO [web pid=1127159] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:26:59,520 INFO [web pid=1132352] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:26:59,546 INFO [web pid=1132352] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:26:59,546 INFO [web pid=1132352] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:27:02,751 INFO [web pid=1132371] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:27:02,777 INFO [web pid=1132371] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:27:02,777 INFO [web pid=1132371] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:27:05,871 INFO [web pid=1132436] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:27:05,896 INFO [web pid=1132436] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:27:05,897 INFO [web pid=1132436] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:27:05,915 INFO [web pid=1132436] app.services.worker: Worker loop started worker_id=worker-1132436 poll_seconds=1.0
+2026-06-09 16:27:05,943 INFO [web pid=1132444] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:27:05,950 INFO [web pid=1132447] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:27:05,969 INFO [web pid=1132444] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:27:05,970 INFO [web pid=1132444] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:27:05,977 INFO [web pid=1132447] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:27:05,978 INFO [web pid=1132447] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:38:26,322 INFO [web pid=1138138] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:38:26,352 INFO [web pid=1138138] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:38:26,352 INFO [web pid=1138138] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:38:29,534 INFO [web pid=1138156] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:38:29,563 INFO [web pid=1138156] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:38:29,563 INFO [web pid=1138156] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:38:32,955 INFO [web pid=1138213] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:38:32,972 INFO [web pid=1138221] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:38:32,983 INFO [web pid=1138213] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:38:32,984 INFO [web pid=1138213] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:38:33,003 INFO [web pid=1138221] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:38:33,003 INFO [web pid=1138221] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:38:33,003 INFO [web pid=1138213] app.services.worker: Worker loop started worker_id=worker-1138213 poll_seconds=1.0
+2026-06-09 16:38:33,106 INFO [web pid=1138224] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:38:33,133 INFO [web pid=1138224] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:38:33,133 INFO [web pid=1138224] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:44:06,741 INFO [web pid=1142262] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:44:06,769 INFO [web pid=1142262] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:44:06,769 INFO [web pid=1142262] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:44:09,874 INFO [web pid=1142290] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:44:09,901 INFO [web pid=1142290] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:44:09,901 INFO [web pid=1142290] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:44:13,121 INFO [web pid=1142376] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:44:13,130 INFO [web pid=1142384] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:44:13,147 INFO [web pid=1142376] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:44:13,147 INFO [web pid=1142376] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:44:13,158 INFO [web pid=1142384] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:44:13,158 INFO [web pid=1142384] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:44:13,170 INFO [web pid=1142376] app.services.worker: Worker loop started worker_id=worker-1142376 poll_seconds=1.0
+2026-06-09 16:44:13,252 INFO [web pid=1142387] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:44:13,279 INFO [web pid=1142387] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:44:13,280 INFO [web pid=1142387] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:47:46,298 INFO [web pid=1144242] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:47:46,326 INFO [web pid=1144242] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:47:46,326 INFO [web pid=1144242] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:47:49,459 INFO [web pid=1144260] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:47:49,488 INFO [web pid=1144260] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:47:49,488 INFO [web pid=1144260] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:47:52,840 INFO [web pid=1144357] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:47:52,863 INFO [web pid=1144367] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:47:52,865 INFO [web pid=1144357] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:47:52,865 INFO [web pid=1144357] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:47:52,884 INFO [web pid=1144357] app.services.worker: Worker loop started worker_id=worker-1144357 poll_seconds=1.0
+2026-06-09 16:47:52,891 INFO [web pid=1144367] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:47:52,891 INFO [web pid=1144367] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:47:52,902 INFO [web pid=1144368] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:47:52,930 INFO [web pid=1144368] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:47:52,930 INFO [web pid=1144368] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:51:59,282 INFO [web pid=1146698] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:51:59,310 INFO [web pid=1146698] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:51:59,310 INFO [web pid=1146698] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:52:02,476 INFO [web pid=1146736] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:52:02,506 INFO [web pid=1146736] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:52:02,506 INFO [web pid=1146736] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:52:05,948 INFO [web pid=1146786] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:52:05,971 INFO [web pid=1146803] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:52:05,975 INFO [web pid=1146786] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:52:05,975 INFO [web pid=1146786] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:52:05,995 INFO [web pid=1146786] app.services.worker: Worker loop started worker_id=worker-1146786 poll_seconds=1.0
+2026-06-09 16:52:06,002 INFO [web pid=1146803] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:52:06,002 INFO [web pid=1146803] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:52:06,016 INFO [web pid=1146794] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:52:06,045 INFO [web pid=1146794] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:52:06,045 INFO [web pid=1146794] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:52:54,038 INFO [web pid=1147282] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:52:54,064 INFO [web pid=1147282] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:52:54,064 INFO [web pid=1147282] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:52:57,110 INFO [web pid=1147311] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:52:57,137 INFO [web pid=1147311] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:52:57,137 INFO [web pid=1147311] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:53:00,294 INFO [web pid=1147371] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:53:00,320 INFO [web pid=1147371] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:53:00,320 INFO [web pid=1147371] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:53:00,327 INFO [web pid=1147379] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:53:00,339 INFO [web pid=1147371] app.services.worker: Worker loop started worker_id=worker-1147371 poll_seconds=1.0
+2026-06-09 16:53:00,347 INFO [web pid=1147382] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:53:00,357 INFO [web pid=1147379] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:53:00,357 INFO [web pid=1147379] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:53:00,375 INFO [web pid=1147382] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:53:00,375 INFO [web pid=1147382] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:55:57,522 INFO [web pid=1149911] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:55:57,548 INFO [web pid=1149911] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:55:57,549 INFO [web pid=1149911] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:56:00,630 INFO [web pid=1149930] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:56:00,657 INFO [web pid=1149930] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:56:00,657 INFO [web pid=1149930] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:56:03,920 INFO [web pid=1149997] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:56:03,921 INFO [web pid=1149987] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:56:03,947 INFO [web pid=1149997] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:56:03,947 INFO [web pid=1149997] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:56:03,948 INFO [web pid=1149987] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:56:03,948 INFO [web pid=1149987] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:56:03,968 INFO [web pid=1149987] app.services.worker: Worker loop started worker_id=worker-1149987 poll_seconds=1.0
+2026-06-09 16:56:04,105 INFO [web pid=1149998] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:56:04,131 INFO [web pid=1149998] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:56:04,131 INFO [web pid=1149998] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:59:14,744 INFO [web pid=1151527] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:59:14,773 INFO [web pid=1151527] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:59:14,773 INFO [web pid=1151527] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:59:17,925 INFO [web pid=1151581] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:59:17,955 INFO [web pid=1151581] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:59:17,955 INFO [web pid=1151581] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:59:21,102 INFO [web pid=1151698] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:59:21,131 INFO [web pid=1151698] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:59:21,131 INFO [web pid=1151698] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:59:21,150 INFO [web pid=1151698] app.services.worker: Worker loop started worker_id=worker-1151698 poll_seconds=1.0
+2026-06-09 16:59:21,195 INFO [web pid=1151706] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:59:21,223 INFO [web pid=1151706] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:59:21,223 INFO [web pid=1151706] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 16:59:21,259 INFO [web pid=1151709] app.services.startup_warmup: Startup warmup started.
+2026-06-09 16:59:21,286 INFO [web pid=1151709] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 16:59:21,286 INFO [web pid=1151709] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:04:34,212 INFO [web pid=1154979] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:04:34,241 INFO [web pid=1154979] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:04:34,242 INFO [web pid=1154979] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:04:37,584 INFO [web pid=1155019] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:04:37,623 INFO [web pid=1155019] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:04:37,623 INFO [web pid=1155019] app.services.startup_warmup: Startup warmup finished in 0.04s.
+2026-06-09 17:04:41,080 INFO [web pid=1155127] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:04:41,098 INFO [web pid=1155116] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:04:41,103 INFO [web pid=1155124] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:04:41,112 INFO [web pid=1155127] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:04:41,112 INFO [web pid=1155127] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:04:41,127 INFO [web pid=1155116] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:04:41,127 INFO [web pid=1155116] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:04:41,134 INFO [web pid=1155124] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:04:41,135 INFO [web pid=1155124] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:04:41,147 INFO [web pid=1155116] app.services.worker: Worker loop started worker_id=worker-1155116 poll_seconds=1.0
+2026-06-09 17:11:11,317 INFO [web pid=1160219] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:11:11,347 INFO [web pid=1160219] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:11:11,347 INFO [web pid=1160219] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:11:14,764 INFO [web pid=1160257] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:11:14,793 INFO [web pid=1160257] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:11:14,793 INFO [web pid=1160257] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:11:18,149 INFO [web pid=1160331] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:11:18,177 INFO [web pid=1160331] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:11:18,177 INFO [web pid=1160331] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:11:18,197 INFO [web pid=1160323] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:11:18,230 INFO [web pid=1160323] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:11:18,230 INFO [web pid=1160323] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:11:18,249 INFO [web pid=1160323] app.services.worker: Worker loop started worker_id=worker-1160323 poll_seconds=1.0
+2026-06-09 17:11:18,256 INFO [web pid=1160334] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:11:18,290 INFO [web pid=1160334] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:11:18,290 INFO [web pid=1160334] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:16:10,340 INFO [web pid=1161552] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:16:10,344 INFO [web pid=1161529] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:16:10,371 INFO [web pid=1161552] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:16:10,372 INFO [web pid=1161529] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:16:10,372 INFO [web pid=1161552] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:16:10,372 INFO [web pid=1161529] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:16:17,121 INFO [web pid=1161710] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:16:17,147 INFO [web pid=1161710] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:16:17,147 INFO [web pid=1161710] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:16:17,167 INFO [web pid=1161710] app.services.worker: Worker loop started worker_id=worker-1161710 poll_seconds=1.0
+2026-06-09 17:19:10,112 INFO [web pid=1161710] app.services.worker: Worker processing job_id=df10de8c93964e71b537a0284460b17f job_type=ocr_overlay
+2026-06-09 17:19:10,113 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=df10de8c93964e71b537a0284460b17f
+2026-06-09 17:19:21,221 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=df10de8c93964e71b537a0284460b17f
+2026-06-09 17:19:23,240 INFO [web pid=1161710] sentence_transformers.SentenceTransformer: Load pretrained SentenceTransformer: BAAI/bge-m3
+2026-06-09 17:19:23,453 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:23,460 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:23,658 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:23,665 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:23,865 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:23,873 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:24,068 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:24,077 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/README.md "HTTP/1.1 200 OK"
+2026-06-09 17:19:24,275 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:24,283 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:24,479 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:24,487 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:24,685 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-06-09 17:19:24,885 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:24,894 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:25,128 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/model.safetensors "HTTP/1.1 404 Not Found"
+2026-06-09 17:19:25,333 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-09 17:19:25,514 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:25,520 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:25,556 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/main "HTTP/1.1 200 OK"
+2026-06-09 17:19:25,718 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:25,725 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:25,778 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/discussions?p=0 "HTTP/1.1 200 OK"
+2026-06-09 17:19:25,923 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-06-09 17:19:26,013 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/refs%2Fpr%2F130 "HTTP/1.1 200 OK"
+2026-06-09 17:19:26,128 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-06-09 17:19:26,524 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors.index.json "HTTP/1.1 404 Not Found"
+2026-06-09 17:19:27,407 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors "HTTP/1.1 302 Found"
+2026-06-09 17:19:28,867 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-09 17:19:29,077 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 17:19:29,085 INFO [web pid=1161710] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-06-09 17:19:29,288 INFO [web pid=1161710] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-09 17:19:30,484 INFO [web pid=1161710] app.services.worker: Worker processing job_id=df10de8c93964e71b537a0284460b17f job_type=ocr_overlay
+2026-06-09 17:19:34,489 INFO [web pid=1161710] httpx: HTTP Request: POST https://uocp-azure-openai.openai.azure.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-09 17:19:34,729 INFO [web pid=1161710] app.services.batch: Translation wrote edits.json=/home/NE025/pdf_ocr_translate/out/pdf_overlay/df10de8c93964e71b537a0284460b17f/edits.json
+2026-06-09 17:19:34,864 INFO [web pid=1161710] app.services.batch: Translation wrote edited.pdf job_id=df10de8c93964e71b537a0284460b17f backend=realtime
+2026-06-09 17:22:41,329 INFO [web pid=1165530] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:22:41,329 INFO [web pid=1165531] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:22:41,360 INFO [web pid=1165530] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:22:41,360 INFO [web pid=1165530] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:22:41,367 INFO [web pid=1165531] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:22:41,368 INFO [web pid=1165531] app.services.startup_warmup: Startup warmup finished in 0.04s.
+2026-06-09 17:26:09,978 INFO [web pid=1167372] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:26:09,983 INFO [web pid=1167371] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:26:10,007 INFO [web pid=1167372] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:26:10,007 INFO [web pid=1167372] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:26:10,011 INFO [web pid=1167371] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:26:10,011 INFO [web pid=1167371] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:30:25,491 INFO [web pid=1168914] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:30:25,518 INFO [web pid=1168914] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:30:25,519 INFO [web pid=1168914] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:30:25,692 INFO [web pid=1168925] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:30:25,722 INFO [web pid=1168925] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:30:25,722 INFO [web pid=1168925] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:31:26,653 INFO [web pid=1161710] app.services.worker: Worker processing job_id=1b8b555a7e764aaab0e375597ff47d85 job_type=ocr_overlay
+2026-06-09 17:31:26,654 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=1b8b555a7e764aaab0e375597ff47d85
+2026-06-09 17:31:31,667 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=1b8b555a7e764aaab0e375597ff47d85
+2026-06-09 17:31:32,838 INFO [web pid=1161710] app.services.worker: Worker processing job_id=1b8b555a7e764aaab0e375597ff47d85 job_type=ocr_overlay
+2026-06-09 17:31:32,899 INFO [web pid=1161710] openai._base_client: Retrying request to /chat/completions in 0.456627 seconds
+2026-06-09 17:31:36,555 INFO [web pid=1161710] httpx: HTTP Request: POST https://uocp-azure-openai.openai.azure.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-06-09 17:31:36,787 INFO [web pid=1161710] app.services.batch: Translation wrote edits.json=/home/NE025/pdf_ocr_translate/out/pdf_overlay/1b8b555a7e764aaab0e375597ff47d85/edits.json
+2026-06-09 17:31:36,928 INFO [web pid=1161710] app.services.batch: Translation wrote edited.pdf job_id=1b8b555a7e764aaab0e375597ff47d85 backend=realtime
+2026-06-09 17:36:42,402 INFO [web pid=1170949] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:36:42,432 INFO [web pid=1170949] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:36:42,433 INFO [web pid=1170949] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:36:42,461 INFO [web pid=1170963] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:36:42,493 INFO [web pid=1170963] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:36:42,493 INFO [web pid=1170963] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:38:47,544 INFO [web pid=1171649] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:38:47,545 INFO [web pid=1171625] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:38:47,572 INFO [web pid=1171649] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:38:47,572 INFO [web pid=1171649] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:38:47,573 INFO [web pid=1171625] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:38:47,573 INFO [web pid=1171625] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:40:58,057 INFO [web pid=1173098] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:40:58,085 INFO [web pid=1173098] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:40:58,086 INFO [web pid=1173098] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:40:58,098 INFO [web pid=1173125] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:40:58,126 INFO [web pid=1173125] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:40:58,126 INFO [web pid=1173125] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:42:47,655 INFO [web pid=1174175] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:42:47,686 INFO [web pid=1174175] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:42:47,687 INFO [web pid=1174175] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:42:47,711 INFO [web pid=1174176] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:42:47,742 INFO [web pid=1174176] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:42:47,742 INFO [web pid=1174176] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:50:31,670 INFO [web pid=1177050] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:50:31,674 INFO [web pid=1177052] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:50:31,697 INFO [web pid=1177050] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:50:31,697 INFO [web pid=1177050] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:50:31,703 INFO [web pid=1177052] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:50:31,703 INFO [web pid=1177052] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:51:47,241 INFO [web pid=1177679] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:51:47,258 INFO [web pid=1177680] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:51:47,270 INFO [web pid=1177679] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:51:47,270 INFO [web pid=1177679] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:51:47,284 INFO [web pid=1177680] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:51:47,284 INFO [web pid=1177680] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:53:44,878 INFO [web pid=1178394] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:53:44,910 INFO [web pid=1178405] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:53:44,920 INFO [web pid=1178394] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:53:44,920 INFO [web pid=1178394] app.services.startup_warmup: Startup warmup finished in 0.04s.
+2026-06-09 17:53:44,939 INFO [web pid=1178405] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:53:44,939 INFO [web pid=1178405] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:54:21,770 INFO [web pid=1161710] app.services.worker: Worker processing job_id=64ea690e6d2c4d32846a74493e293420 job_type=doc_workspace
+2026-06-09 17:54:22,427 INFO [web pid=1161710] app.services.pp_structure: PP-StructureV3 processing page=0 file=page_0001.png
+2026-06-09 17:54:22,449 ERROR [web pid=1161710] app.services.doc_workspace: Document workspace failed job_id=64ea690e6d2c4d32846a74493e293420 error=HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/.local/share/uv/python/cpython-3.11.4-linux-x86_64-gnu/lib/python3.11/socket.py", line 962, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -2] Name or service not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 535, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/app/services/doc_workspace.py", line 65, in run_doc_workspace_job
+    markdown_path, _ = pp_structure.extract_pdf_to_markdown(pdf_path, structure_dir)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 61, in extract_pdf_to_markdown
+    result = _request_layout_parsing(rendered_path).get("result", {}) or {}
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 40, in _request_layout_parsing
+    response = requests.post(state.PP_STRUCTURE_URL, json=payload, timeout=300)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+2026-06-09 17:57:48,917 INFO [web pid=1180304] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:57:48,944 INFO [web pid=1180304] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:57:48,944 INFO [web pid=1180304] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:57:49,021 INFO [web pid=1180305] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:57:49,052 INFO [web pid=1180305] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:57:49,052 INFO [web pid=1180305] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:59:47,634 INFO [web pid=1180826] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:59:47,661 INFO [web pid=1180826] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:59:47,661 INFO [web pid=1180826] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 17:59:47,681 INFO [web pid=1180845] app.services.startup_warmup: Startup warmup started.
+2026-06-09 17:59:47,712 INFO [web pid=1180845] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 17:59:47,712 INFO [web pid=1180845] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:00:13,532 INFO [web pid=1161710] app.services.worker: Worker processing job_id=f5d47606ac6342bbb4591b0ab89c0fdc job_type=ocr_overlay
+2026-06-09 18:00:13,533 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=f5d47606ac6342bbb4591b0ab89c0fdc
+2026-06-09 18:00:20,146 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=f5d47606ac6342bbb4591b0ab89c0fdc
+2026-06-09 18:00:21,619 INFO [web pid=1161710] app.services.worker: Worker processing job_id=ab426db9f41b428295b1c0201bcff0fc job_type=ocr_overlay
+2026-06-09 18:00:21,620 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=ab426db9f41b428295b1c0201bcff0fc
+2026-06-09 18:00:25,026 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=ab426db9f41b428295b1c0201bcff0fc
+2026-06-09 18:00:25,857 INFO [web pid=1161710] app.services.worker: Worker processing job_id=9dd80e9d020a478a83d62514c519ff19 job_type=ocr_overlay
+2026-06-09 18:00:25,858 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=9dd80e9d020a478a83d62514c519ff19
+2026-06-09 18:00:27,334 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=9dd80e9d020a478a83d62514c519ff19
+2026-06-09 18:00:27,677 INFO [web pid=1161710] app.services.worker: Worker processing job_id=9b3975f9794447079d7e963143f7ade9 job_type=ocr_overlay
+2026-06-09 18:00:27,678 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=9b3975f9794447079d7e963143f7ade9
+2026-06-09 18:00:30,101 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=9b3975f9794447079d7e963143f7ade9
+2026-06-09 18:00:30,142 INFO [web pid=1161710] app.services.worker: Worker processing job_id=3608afe9106744e9b058fdf05dd32a61 job_type=ocr_overlay
+2026-06-09 18:00:30,143 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=3608afe9106744e9b058fdf05dd32a61
+2026-06-09 18:00:32,176 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=3608afe9106744e9b058fdf05dd32a61
+2026-06-09 18:00:32,527 INFO [web pid=1161710] app.services.worker: Worker processing job_id=5c41b19092ab4c6fa8478f00229c20c1 job_type=ocr_overlay
+2026-06-09 18:00:32,528 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=5c41b19092ab4c6fa8478f00229c20c1
+2026-06-09 18:00:37,007 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=5c41b19092ab4c6fa8478f00229c20c1
+2026-06-09 18:02:42,546 INFO [web pid=1161710] app.services.worker: Worker processing job_id=43e345064c6743b0895458fbcaf2c973 job_type=ocr_overlay
+2026-06-09 18:02:42,546 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=43e345064c6743b0895458fbcaf2c973
+2026-06-09 18:02:48,986 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=43e345064c6743b0895458fbcaf2c973
+2026-06-09 18:02:50,481 INFO [web pid=1161710] app.services.worker: Worker processing job_id=ed91cd4282204f5eb46dd4e8261f8b42 job_type=ocr_overlay
+2026-06-09 18:02:50,482 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=ed91cd4282204f5eb46dd4e8261f8b42
+2026-06-09 18:02:53,965 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=ed91cd4282204f5eb46dd4e8261f8b42
+2026-06-09 18:02:54,755 INFO [web pid=1161710] app.services.worker: Worker processing job_id=fcc2156fa7244fab9f7d7cb2e0b6e15b job_type=ocr_overlay
+2026-06-09 18:02:54,756 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=fcc2156fa7244fab9f7d7cb2e0b6e15b
+2026-06-09 18:02:56,196 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=fcc2156fa7244fab9f7d7cb2e0b6e15b
+2026-06-09 18:02:56,655 INFO [web pid=1161710] app.services.worker: Worker processing job_id=7f61498e4de94b49a3b2d8f5bb8aecf9 job_type=ocr_overlay
+2026-06-09 18:02:56,656 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=7f61498e4de94b49a3b2d8f5bb8aecf9
+2026-06-09 18:02:59,051 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=7f61498e4de94b49a3b2d8f5bb8aecf9
+2026-06-09 18:02:59,090 INFO [web pid=1161710] app.services.worker: Worker processing job_id=0ac0fb5c84ee4ca689c0a28275dc8f56 job_type=ocr_overlay
+2026-06-09 18:02:59,091 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=0ac0fb5c84ee4ca689c0a28275dc8f56
+2026-06-09 18:03:01,127 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=0ac0fb5c84ee4ca689c0a28275dc8f56
+2026-06-09 18:03:01,668 INFO [web pid=1161710] app.services.worker: Worker processing job_id=68c4aa9291474a8f9ce12d80ed4a3397 job_type=ocr_overlay
+2026-06-09 18:03:01,669 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=68c4aa9291474a8f9ce12d80ed4a3397
+2026-06-09 18:03:06,239 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=68c4aa9291474a8f9ce12d80ed4a3397
+2026-06-09 18:03:43,681 INFO [web pid=1182685] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:03:43,712 INFO [web pid=1182685] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:03:43,712 INFO [web pid=1182685] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:03:43,713 INFO [web pid=1182692] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:03:43,743 INFO [web pid=1182692] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:03:43,743 INFO [web pid=1182692] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:06:09,392 INFO [web pid=1183594] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:06:09,420 INFO [web pid=1183594] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:06:09,421 INFO [web pid=1183594] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:06:09,485 INFO [web pid=1183599] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:06:09,512 INFO [web pid=1183599] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:06:09,512 INFO [web pid=1183599] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:06:44,857 INFO [web pid=1161710] app.services.worker: Worker processing job_id=07e22d1d243b4c92a43ad4bba51618d0 job_type=ocr_overlay
+2026-06-09 18:06:44,858 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=07e22d1d243b4c92a43ad4bba51618d0
+2026-06-09 18:06:51,062 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=07e22d1d243b4c92a43ad4bba51618d0
+2026-06-09 18:06:52,493 INFO [web pid=1161710] app.services.worker: Worker processing job_id=b7e8359c48d84a18bb12b69021933c59 job_type=ocr_overlay
+2026-06-09 18:06:52,494 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=b7e8359c48d84a18bb12b69021933c59
+2026-06-09 18:06:55,811 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=b7e8359c48d84a18bb12b69021933c59
+2026-06-09 18:06:56,545 INFO [web pid=1161710] app.services.worker: Worker processing job_id=ccc2eabce81a4bdc81da0e3c0b1d38c6 job_type=ocr_overlay
+2026-06-09 18:06:56,546 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=ccc2eabce81a4bdc81da0e3c0b1d38c6
+2026-06-09 18:06:57,961 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=ccc2eabce81a4bdc81da0e3c0b1d38c6
+2026-06-09 18:06:58,375 INFO [web pid=1161710] app.services.worker: Worker processing job_id=8a3f47db666a4a0585c5e775b21ac8be job_type=ocr_overlay
+2026-06-09 18:06:58,375 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=8a3f47db666a4a0585c5e775b21ac8be
+2026-06-09 18:07:00,753 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=8a3f47db666a4a0585c5e775b21ac8be
+2026-06-09 18:07:00,790 INFO [web pid=1161710] app.services.worker: Worker processing job_id=831ba227006447f7a5adb2571f8604df job_type=ocr_overlay
+2026-06-09 18:07:00,790 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=831ba227006447f7a5adb2571f8604df
+2026-06-09 18:07:02,809 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=831ba227006447f7a5adb2571f8604df
+2026-06-09 18:07:03,350 INFO [web pid=1161710] app.services.worker: Worker processing job_id=b3f55bac61e3424db6eebfdd2c66f7ed job_type=ocr_overlay
+2026-06-09 18:07:03,351 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=b3f55bac61e3424db6eebfdd2c66f7ed
+2026-06-09 18:07:07,858 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=b3f55bac61e3424db6eebfdd2c66f7ed
+2026-06-09 18:07:09,176 INFO [web pid=1161710] app.services.worker: Worker processing job_id=1879e97575774ee2a90b294726cbb0ae job_type=ocr_overlay
+2026-06-09 18:07:09,176 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=1879e97575774ee2a90b294726cbb0ae
+2026-06-09 18:07:37,554 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=1879e97575774ee2a90b294726cbb0ae
+2026-06-09 18:08:07,741 INFO [web pid=1161710] app.services.worker: Worker processing job_id=8f85b281d5c64f929e0e7d88ee53bf28 job_type=ocr_overlay
+2026-06-09 18:08:07,742 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=8f85b281d5c64f929e0e7d88ee53bf28
+2026-06-09 18:08:49,438 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=8f85b281d5c64f929e0e7d88ee53bf28
+2026-06-09 18:09:11,603 INFO [web pid=1161710] app.services.worker: Worker processing job_id=df838bb4021d45c889bed5bda03bd700 job_type=ocr_overlay
+2026-06-09 18:09:11,604 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=df838bb4021d45c889bed5bda03bd700

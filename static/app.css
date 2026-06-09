@@ -2971,3 +2971,181 @@ body.editor .thumbs {
     display: none;
   }
 }
+
+
+.admin-search-form--logs .admin-input {
+  flex: 1 1 260px;
+}
+
+.admin-input--compact,
+.admin-search-form--logs .admin-input--compact {
+  flex: 0 1 160px;
+}
+
+.admin-input--date,
+.admin-search-form--logs .admin-input--date {
+  flex: 0 0 148px;
+}
+
+.admin-table--logs {
+  min-width: 960px;
+}
+
+.admin-table--logs th {
+  text-align: center;
+}
+
+.admin-table--logs td {
+  vertical-align: top;
+  text-align: center;
+}
+
+.admin-table--logs td:last-child {
+  text-align: left;
+}
+
+.admin-col--log-time {
+  width: 13%;
+}
+
+.admin-col--log-level {
+  width: 8%;
+}
+
+.admin-col--log-action {
+  width: 16%;
+}
+
+.admin-col--log-workid {
+  width: 11%;
+}
+
+.admin-col--log-job {
+  width: 13%;
+}
+
+.admin-col--log-context {
+  width: 12%;
+}
+
+.admin-log-badge {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 0.84rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.admin-log-badge--error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.admin-log-message {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.admin-log-type {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.admin-log-detail-toggle {
+  max-width: 100%;
+}
+
+.admin-log-detail-toggle summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 28px;
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.admin-log-detail-toggle summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-log-detail-toggle summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #64748b;
+  flex: 0 0 auto;
+  transition: transform 0.16s ease;
+}
+
+.admin-log-detail-toggle[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.admin-log-detail-toggle summary:hover {
+  color: #0f172a;
+}
+
+.admin-log-summary {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-log-detail {
+  margin-top: 0.45rem;
+  max-height: 180px;
+  overflow: auto;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(21, 36, 43, 0.12);
+  border-radius: 8px;
+  background: #f9fafb;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #334155;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--muted);
+}
+
+.admin-pagination-slot--bottom {
+  margin-top: 0.25rem;
+}
+
+.admin-pagination .ghost,
+.admin-pagination__control {
+  min-height: 36px;
+  padding: 0 0.85rem;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.admin-pagination__control--disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.admin-pagination__status {
+  white-space: nowrap;
+}

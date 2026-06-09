@@ -22,7 +22,7 @@ from docx.text.paragraph import Paragraph
 from lang_utils import describe_target_language, traditional_chinese_instruction
 from werkzeug.utils import secure_filename
 
-from . import glossary, jobs, openai_config, state, translation_debug
+from . import audit_service, glossary, jobs, openai_config, state, translation_debug
 
 logger = logging.getLogger(__name__)
 WORD_JOB_EVENTS: dict[str, threading.Event] = {}
@@ -1021,6 +1021,13 @@ def _run_word_job(
             )
             return
         logger.exception("Word translation failed job_id=%s error=%s", job_id, exc)
+        audit_service.record_system_error(
+            "word_translate",
+            "Word translation failed",
+            exc=exc,
+            job_id=job_id,
+            detail={"job_dir": str(job_dir), "source_path": str(source_path)},
+        )
         jobs.set_job_state(
             job_dir,
             status="failed",

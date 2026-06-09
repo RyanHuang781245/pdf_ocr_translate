@@ -4,6 +4,10 @@ GO
 
 IF OBJECT_ID(N'translation.document_templates', N'U') IS NOT NULL
     DROP TABLE translation.document_templates;
+IF OBJECT_ID(N'translation.system_error_logs', N'U') IS NOT NULL
+    DROP TABLE translation.system_error_logs;
+IF OBJECT_ID(N'translation.audit_logs', N'U') IS NOT NULL
+    DROP TABLE translation.audit_logs;
 IF OBJECT_ID(N'translation.job_events', N'U') IS NOT NULL
     DROP TABLE translation.job_events;
 IF OBJECT_ID(N'translation.job_artifacts', N'U') IS NOT NULL
@@ -98,6 +102,34 @@ CREATE TABLE translation.job_events (
 );
 GO
 
+CREATE TABLE translation.audit_logs (
+    id bigint IDENTITY(1,1) NOT NULL,
+    created_at datetime2(6) NOT NULL CONSTRAINT DF_translation_audit_logs_created_at DEFAULT (SYSUTCDATETIME()),
+    action nvarchar(200) NOT NULL,
+    work_id nvarchar(100) NULL,
+    detail_json nvarchar(max) NULL,
+    job_id char(32) NULL,
+    request_path nvarchar(500) NULL,
+    remote_addr nvarchar(100) NULL,
+    CONSTRAINT PK_translation_audit_logs PRIMARY KEY CLUSTERED (id)
+);
+GO
+
+CREATE TABLE translation.system_error_logs (
+    id bigint IDENTITY(1,1) NOT NULL,
+    created_at datetime2(6) NOT NULL CONSTRAINT DF_translation_system_error_logs_created_at DEFAULT (SYSUTCDATETIME()),
+    level nvarchar(20) NOT NULL CONSTRAINT DF_translation_system_error_logs_level DEFAULT (N'ERROR'),
+    component nvarchar(200) NOT NULL,
+    message nvarchar(500) NOT NULL,
+    error_type nvarchar(200) NULL,
+    detail_json nvarchar(max) NULL,
+    job_id char(32) NULL,
+    request_path nvarchar(500) NULL,
+    remote_addr nvarchar(100) NULL,
+    CONSTRAINT PK_translation_system_error_logs PRIMARY KEY CLUSTERED (id)
+);
+GO
+
 CREATE TABLE translation.document_templates (
     template_id char(32) NOT NULL,
     name nvarchar(255) NOT NULL CONSTRAINT DF_translation_document_templates_name DEFAULT (N''),
@@ -134,6 +166,30 @@ GO
 
 CREATE INDEX IX_translation_job_events_job_id_created_at
 ON translation.job_events (job_id, created_at DESC);
+GO
+
+CREATE INDEX IX_translation_audit_logs_created_at
+ON translation.audit_logs (created_at DESC);
+GO
+
+CREATE INDEX IX_translation_audit_logs_work_id_created_at
+ON translation.audit_logs (work_id, created_at DESC);
+GO
+
+CREATE INDEX IX_translation_audit_logs_job_id_created_at
+ON translation.audit_logs (job_id, created_at DESC);
+GO
+
+CREATE INDEX IX_translation_system_error_logs_created_at
+ON translation.system_error_logs (created_at DESC);
+GO
+
+CREATE INDEX IX_translation_system_error_logs_component_created_at
+ON translation.system_error_logs (component, created_at DESC);
+GO
+
+CREATE INDEX IX_translation_system_error_logs_job_id_created_at
+ON translation.system_error_logs (job_id, created_at DESC);
 GO
 
 CREATE INDEX IX_translation_document_templates_source_job_id

@@ -11,7 +11,7 @@ from app.services.schema_control import SCHEMA_GROUPS
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_alembic_upgrade_head_creates_baseline_schema(monkeypatch, tmp_path):
+def test_alembic_upgrade_head_creates_current_schema(monkeypatch, tmp_path):
     db_path = tmp_path / "alembic.sqlite"
     db_url = f"sqlite:///{db_path}"
 
@@ -28,6 +28,6 @@ def test_alembic_upgrade_head_creates_baseline_schema(monkeypatch, tmp_path):
     assert required_tables.issubset(tables)
 
     with engine.connect() as conn:
-        revision = conn.execute(text("SELECT version_num FROM uo_regulations_translate_alembic_version")).scalar_one()
+        revision = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
 
-    assert revision == "0001_baseline_schema"
+    assert revision == "0002_audit_system_logs"

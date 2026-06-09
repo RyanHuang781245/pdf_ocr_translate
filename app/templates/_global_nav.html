@@ -21,6 +21,12 @@
           <a class="dropdown-item{% if current_section == 'admin' %} is-active{% endif %}" href="{{ url_for('admin.users') }}">
             <i class="bi bi-people"></i> 使用者管理
           </a>
+          <a class="dropdown-item{% if current_section == 'admin' %} is-active{% endif %}" href="{{ url_for('admin.audit_logs') }}">
+            <i class="bi bi-list-check"></i> 操作紀錄
+          </a>
+          <a class="dropdown-item{% if current_section == 'admin' %} is-active{% endif %}" href="{{ url_for('admin.system_error_logs') }}">
+            <i class="bi bi-exclamation-triangle"></i> 系統錯誤
+          </a>
           {% endif %}
           {% if current_user.is_admin %}<hr />{% endif %}
           <a class="dropdown-item" href="{{ url_for('auth.logout') }}">

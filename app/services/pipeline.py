@@ -12,7 +12,7 @@ from werkzeug.utils import secure_filename
 
 from ocr_pipeline.pipeline import PipelineCancelled, run_pipeline
 
-from . import batch, jobs, ocr, state
+from . import audit_service, batch, jobs, ocr, state
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,13 @@ def run_ocr_pipeline_job(
         return
     except Exception as exc:
         logger.exception("OCR pipeline failed job_id=%s error=%s", job_id, exc)
+        audit_service.record_system_error(
+            "ocr.pipeline",
+            "OCR pipeline failed",
+            exc=exc,
+            job_id=job_id,
+            detail={"stage": "ocr", "job_dir": str(job_dir)},
+        )
         now_ts = time.time()
         jobs.set_job_state(
             job_dir,

@@ -50,6 +50,15 @@ def normalize_database_schema(database_schema: str) -> str:
 OUT_ROOT = BASE_DIR / "out"
 DEFAULT_JOB_ROOT = OUT_ROOT / "jobs"
 JOB_ROOT = DEFAULT_JOB_ROOT
+APP_LOG_DIR = Path(os.getenv("APP_LOG_DIR", str(BASE_DIR / "logs"))).expanduser()
+APP_LOG_LEVEL = os.getenv("APP_LOG_LEVEL", "INFO").strip().upper() or "INFO"
+APP_LOG_TO_FILE = os.getenv("APP_LOG_TO_FILE", "1").strip().lower() not in {"0", "false", "no", "off"}
+APP_LOG_STDOUT = os.getenv("APP_LOG_STDOUT", "1").strip().lower() not in {"0", "false", "no", "off"}
+APP_LOG_MAX_BYTES = int(os.getenv("APP_LOG_MAX_BYTES", str(10 * 1024 * 1024)))
+APP_LOG_BACKUP_COUNT = int(os.getenv("APP_LOG_BACKUP_COUNT", "10"))
+AUDIT_LOG_RETENTION_DAYS = int(os.getenv("AUDIT_LOG_RETENTION_DAYS", "180"))
+SYSTEM_ERROR_LOG_RETENTION_DAYS = int(os.getenv("SYSTEM_ERROR_LOG_RETENTION_DAYS", "180"))
+SYSTEM_ERROR_DB_MIN_LEVEL = os.getenv("SYSTEM_ERROR_DB_MIN_LEVEL", "ERROR").strip().upper() or "ERROR"
 PDF_OVERLAY_JOB_ROOT = OUT_ROOT / "pdf_overlay"
 DOC_WORKSPACE_JOB_ROOT = OUT_ROOT / "pdf_rebuild"
 WORD_TRANSLATE_JOB_ROOT = OUT_ROOT / "word_overlay"

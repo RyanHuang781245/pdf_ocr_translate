@@ -1,0 +1,20 @@
+<nav class="admin-pagination" aria-label="分頁">
+  {% set args = request.args.to_dict() %}
+  {% if pagination.has_prev %}
+    {% set _ = args.update({'page': pagination.page - 1}) %}
+    <a class="ghost admin-pagination__control" href="?{{ args|urlencode }}">上一頁</a>
+  {% else %}
+    <span class="ghost admin-pagination__control admin-pagination__control--disabled">上一頁</span>
+  {% endif %}
+
+  <span class="admin-pagination__status">
+    第 {{ pagination.page }} / {{ pagination.total_pages or 1 }} 頁，共 {{ pagination.total_count }} 筆
+  </span>
+
+  {% if pagination.has_next %}
+    {% set _ = args.update({'page': pagination.page + 1}) %}
+    <a class="ghost admin-pagination__control" href="?{{ args|urlencode }}">下一頁</a>
+  {% else %}
+    <span class="ghost admin-pagination__control admin-pagination__control--disabled">下一頁</span>
+  {% endif %}
+</nav>
