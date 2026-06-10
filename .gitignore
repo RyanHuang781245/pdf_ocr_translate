@@ -12,9 +12,5 @@ test.ipynb
 test2.ipynb
 test.py
 jobs/
-UOC_Pdf_trans/
-AI-Document-Translator/
-output_clean_html/
-pdf/
-.env.staging
+logs/
 build/
