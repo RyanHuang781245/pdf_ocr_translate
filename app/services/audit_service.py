@@ -155,12 +155,13 @@ def list_audit_logs(
                     job_store.AuditLogRecord.action.ilike(search),
                     job_store.AuditLogRecord.work_id.ilike(search),
                     job_store.AuditLogRecord.detail_json.ilike(search),
+                    job_store.AuditLogRecord.job_id.startswith(q, autoescape=True),
                 )
             )
         if action:
             filters.append(job_store.AuditLogRecord.action.ilike(f"%{action}%"))
         if job_id:
-            filters.append(job_store.AuditLogRecord.job_id == job_id)
+            filters.append(job_store.AuditLogRecord.job_id.startswith(job_id, autoescape=True))
         filters.extend(_date_filters(job_store.AuditLogRecord.created_at, start_date, end_date))
         for item in filters:
             stmt = stmt.where(item)
@@ -199,6 +200,7 @@ def list_system_error_logs(
                     job_store.SystemErrorLogRecord.error_type.ilike(search),
                     job_store.SystemErrorLogRecord.detail_json.ilike(search),
                     job_store.SystemErrorLogRecord.request_path.ilike(search),
+                    job_store.SystemErrorLogRecord.job_id.startswith(q, autoescape=True),
                 )
             )
         if component:
@@ -206,7 +208,7 @@ def list_system_error_logs(
         if level:
             filters.append(job_store.SystemErrorLogRecord.level == _normalize_system_error_level(level))
         if job_id:
-            filters.append(job_store.SystemErrorLogRecord.job_id == job_id)
+            filters.append(job_store.SystemErrorLogRecord.job_id.startswith(job_id, autoescape=True))
         filters.extend(_date_filters(job_store.SystemErrorLogRecord.created_at, start_date, end_date))
         for item in filters:
             stmt = stmt.where(item)

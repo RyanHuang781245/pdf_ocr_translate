@@ -1,4 +1,5 @@
 {% set current_section = nav_section|default('') %}
+{% set current_admin_page = nav_admin_page|default('') %}
 {% set current_title = nav_title|default('法規文件轉換平台') %}
 {% set user_name = (current_user_display_name if current_user else '')|string|trim %}
 {% if auth_enabled and current_user %}
@@ -18,13 +19,13 @@
         </button>
         <div id="navMenuDropdown" class="dropdown-menu app-navbar-menu__panel" hidden>
           {% if current_user.is_admin %}
-          <a class="dropdown-item{% if current_section == 'admin' %} is-active{% endif %}" href="{{ url_for('admin.users') }}">
+          <a class="dropdown-item{% if current_admin_page == 'users' %} is-active{% endif %}" href="{{ url_for('admin.users') }}">
             <i class="bi bi-people"></i> 使用者管理
           </a>
-          <a class="dropdown-item{% if current_section == 'admin' %} is-active{% endif %}" href="{{ url_for('admin.audit_logs') }}">
+          <a class="dropdown-item{% if current_admin_page == 'audit' %} is-active{% endif %}" href="{{ url_for('admin.audit_logs') }}">
             <i class="bi bi-list-check"></i> 操作紀錄
           </a>
-          <a class="dropdown-item{% if current_section == 'admin' %} is-active{% endif %}" href="{{ url_for('admin.system_error_logs') }}">
+          <a class="dropdown-item{% if current_admin_page == 'errors' %} is-active{% endif %}" href="{{ url_for('admin.system_error_logs') }}">
             <i class="bi bi-exclamation-triangle"></i> 系統錯誤
           </a>
           {% endif %}

@@ -3134,10 +3134,14 @@ body.editor .thumbs {
 
 .admin-pagination .ghost,
 .admin-pagination__control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 36px;
   padding: 0 0.85rem;
   border-radius: 10px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .admin-pagination__control--disabled {

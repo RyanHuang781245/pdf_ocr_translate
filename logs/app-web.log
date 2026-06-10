@@ -453,3 +453,513 @@ requests.exceptions.ConnectionError: HTTPSConnectionPool(host='writing-coordinat
 2026-06-09 18:08:49,438 INFO [web pid=1161710] app.services.pipeline: OCR pipeline completed job_id=8f85b281d5c64f929e0e7d88ee53bf28
 2026-06-09 18:09:11,603 INFO [web pid=1161710] app.services.worker: Worker processing job_id=df838bb4021d45c889bed5bda03bd700 job_type=ocr_overlay
 2026-06-09 18:09:11,604 INFO [web pid=1161710] app.services.pipeline: OCR pipeline start job_id=df838bb4021d45c889bed5bda03bd700
+2026-06-09 18:13:33,766 INFO [web pid=1187057] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:13:33,792 INFO [web pid=1187057] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:13:33,792 INFO [web pid=1187057] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:13:33,810 INFO [web pid=1187057] app.services.worker: Worker loop started worker_id=worker-1187057 poll_seconds=1.0
+2026-06-09 18:13:33,835 WARNING [web pid=1187057] app.services.worker: Recovered orphaned active jobs count=1 job_ids=df838bb4021d45c889bed5bda03bd700
+2026-06-09 18:13:33,884 INFO [web pid=1187057] app.services.worker: Worker processing job_id=df838bb4021d45c889bed5bda03bd700 job_type=ocr_overlay
+2026-06-09 18:13:33,885 INFO [web pid=1187057] app.services.pipeline: OCR pipeline start job_id=df838bb4021d45c889bed5bda03bd700
+2026-06-09 18:14:09,540 INFO [web pid=1187484] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:14:09,569 INFO [web pid=1187484] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:14:09,569 INFO [web pid=1187484] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:14:09,572 INFO [web pid=1187459] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:14:09,600 INFO [web pid=1187459] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:14:09,600 INFO [web pid=1187459] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:18:33,509 INFO [web pid=1187057] app.services.pipeline: OCR pipeline completed job_id=df838bb4021d45c889bed5bda03bd700
+2026-06-09 18:18:35,659 INFO [web pid=1187057] sentence_transformers.SentenceTransformer: Load pretrained SentenceTransformer: BAAI/bge-m3
+2026-06-09 18:18:35,878 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:35,886 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:36,082 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:36,089 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:36,287 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:36,294 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:36,492 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:36,500 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/README.md "HTTP/1.1 200 OK"
+2026-06-09 18:18:36,696 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:36,703 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/modules.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:36,900 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:36,906 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:37,108 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-06-09 18:18:37,300 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:37,307 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:37,593 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/model.safetensors "HTTP/1.1 404 Not Found"
+2026-06-09 18:18:37,796 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-09 18:18:37,993 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:38,001 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/config.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:38,021 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/main "HTTP/1.1 200 OK"
+2026-06-09 18:18:38,196 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:38,203 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:38,282 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/discussions?p=0 "HTTP/1.1 200 OK"
+2026-06-09 18:18:38,408 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-06-09 18:18:38,509 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/commits/refs%2Fpr%2F130 "HTTP/1.1 200 OK"
+2026-06-09 18:18:38,607 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-06-09 18:18:39,218 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors.index.json "HTTP/1.1 404 Not Found"
+2026-06-09 18:18:40,590 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/refs%2Fpr%2F130/model.safetensors "HTTP/1.1 302 Found"
+2026-06-09 18:18:41,251 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-09 18:18:41,465 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/BAAI/bge-m3/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-06-09 18:18:41,472 INFO [web pid=1187057] httpx: HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/BAAI/bge-m3/5617a9f61b028005a4858fdac845db406aefb181/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-06-09 18:18:41,674 INFO [web pid=1187057] httpx: HTTP Request: GET https://huggingface.co/api/models/BAAI/bge-m3 "HTTP/1.1 200 OK"
+2026-06-09 18:18:59,159 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0019.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0019.json'
+2026-06-09 18:18:59,160 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0020.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0020.json'
+2026-06-09 18:18:59,160 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0021.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0021.json'
+2026-06-09 18:18:59,160 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0022.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0022.json'
+2026-06-09 18:18:59,160 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0023.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0023.json'
+2026-06-09 18:18:59,160 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0024.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0024.json'
+2026-06-09 18:18:59,160 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0025.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0025.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0026.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0026.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0027.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0027.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0028.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0028.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0029.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0029.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0030.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0030.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0031.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0031.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0032.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0032.json'
+2026-06-09 18:18:59,161 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0033.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0033.json'
+2026-06-09 18:18:59,162 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0034.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0034.json'
+2026-06-09 18:18:59,162 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0035.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0035.json'
+2026-06-09 18:18:59,162 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0036.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0036.json'
+2026-06-09 18:18:59,162 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0037.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0037.json'
+2026-06-09 18:18:59,162 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0038.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0038.json'
+2026-06-09 18:18:59,162 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0039.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0039.json'
+2026-06-09 18:18:59,163 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0040.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0040.json'
+2026-06-09 18:18:59,163 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0041.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0041.json'
+2026-06-09 18:18:59,163 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0042.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0042.json'
+2026-06-09 18:18:59,163 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0043.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0043.json'
+2026-06-09 18:18:59,163 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0044.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0044.json'
+2026-06-09 18:18:59,163 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0045.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0045.json'
+2026-06-09 18:18:59,163 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0046.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0046.json'
+2026-06-09 18:18:59,164 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0047.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0047.json'
+2026-06-09 18:18:59,164 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0048.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0048.json'
+2026-06-09 18:18:59,164 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0049.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0049.json'
+2026-06-09 18:18:59,164 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0050.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0050.json'
+2026-06-09 18:18:59,164 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0051.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0051.json'
+2026-06-09 18:18:59,164 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0052.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0052.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0053.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0053.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0054.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0054.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0055.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0055.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0056.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0056.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0057.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0057.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0058.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0058.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0059.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0059.json'
+2026-06-09 18:18:59,165 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0060.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0060.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0061.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0061.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0062.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0062.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0063.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0063.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0064.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0064.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0065.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0065.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0066.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0066.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0067.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0067.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0068.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0068.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0069.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0069.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0070.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0070.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0071.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0071.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0072.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0072.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0073.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0073.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0074.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0074.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0075.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0075.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0076.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0076.json'
+2026-06-09 18:18:59,166 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0077.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0077.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0078.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0078.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0079.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0079.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0080.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0080.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0081.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0081.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0082.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0082.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0083.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0083.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0084.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0084.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0085.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0085.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0086.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0086.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0087.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0087.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0088.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0088.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0089.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0089.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0090.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0090.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0091.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0091.json'
+2026-06-09 18:18:59,167 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0092.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0092.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0093.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0093.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0094.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0094.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0095.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0095.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0096.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0096.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0097.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0097.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0098.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0098.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0099.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0099.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0100.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0100.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0101.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0101.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0102.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0102.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0103.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0103.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0104.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0104.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0105.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0105.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0106.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0106.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0107.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0107.json'
+2026-06-09 18:18:59,168 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0108.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0108.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0109.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0109.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0110.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0110.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0111.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0111.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0112.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0112.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0113.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0113.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0114.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0114.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0115.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0115.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0116.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0116.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0117.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0117.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0118.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0118.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0119.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0119.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0120.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0120.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0121.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0121.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0122.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0122.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0123.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0123.json'
+2026-06-09 18:18:59,169 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0124.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0124.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0125.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0125.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0126.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0126.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0127.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0127.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0128.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0128.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0129.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0129.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0130.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0130.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0131.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0131.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0132.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0132.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0133.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0133.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0134.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0134.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0135.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0135.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0136.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0136.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0137.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0137.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0138.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0138.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0139.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0139.json'
+2026-06-09 18:18:59,170 WARNING [web pid=1187057] app.services.ocr: paragraph alignment update failed for df838bb4021d45c889bed5bda03bd700_p0140.json: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/pp_json/df838bb4021d45c889bed5bda03bd700_p0140.json'
+2026-06-09 18:18:59,171 ERROR [web pid=1187057] app.services.worker: Worker loop failure job_id=df838bb4021d45c889bed5bda03bd700 error=[Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/job_meta.json'
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/app/services/worker.py", line 131, in run_worker_loop
+    process_job(record.job_id)
+  File "/home/NE025/pdf_ocr_translate/app/services/worker.py", line 54, in process_job
+    pipeline.run_ocr_pipeline_job(
+  File "/home/NE025/pdf_ocr_translate/app/services/pipeline.py", line 97, in run_ocr_pipeline_job
+    jobs.set_job_state(
+  File "/home/NE025/pdf_ocr_translate/app/services/jobs.py", line 296, in set_job_state
+    job_meta_path(job_dir_path).write_text(
+  File "/home/NE025/.local/share/uv/python/cpython-3.11.4-linux-x86_64-gnu/lib/python3.11/pathlib.py", line 1078, in write_text
+    with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/.local/share/uv/python/cpython-3.11.4-linux-x86_64-gnu/lib/python3.11/pathlib.py", line 1044, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/NE025/pdf_ocr_translate/out/pdf_overlay/df838bb4021d45c889bed5bda03bd700/job_meta.json'
+2026-06-09 18:18:59,227 INFO [web pid=1187057] app.services.worker: Worker processing job_id=260fc9a995b24ac88547bc4892a35580 job_type=doc_workspace
+2026-06-09 18:18:59,866 INFO [web pid=1187057] app.services.pp_structure: PP-StructureV3 processing page=0 file=page_0001.png
+2026-06-09 18:18:59,883 ERROR [web pid=1187057] app.services.doc_workspace: Document workspace failed job_id=260fc9a995b24ac88547bc4892a35580 error=HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/.local/share/uv/python/cpython-3.11.4-linux-x86_64-gnu/lib/python3.11/socket.py", line 962, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -2] Name or service not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 535, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/app/services/doc_workspace.py", line 65, in run_doc_workspace_job
+    markdown_path, _ = pp_structure.extract_pdf_to_markdown(pdf_path, structure_dir)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 61, in extract_pdf_to_markdown
+    result = _request_layout_parsing(rendered_path).get("result", {}) or {}
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 40, in _request_layout_parsing
+    response = requests.post(state.PP_STRUCTURE_URL, json=payload, timeout=300)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+2026-06-09 18:19:54,463 INFO [web pid=1189807] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:19:54,467 INFO [web pid=1189808] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:19:54,491 INFO [web pid=1189807] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:19:54,492 INFO [web pid=1189807] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:19:54,496 INFO [web pid=1189808] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:19:54,497 INFO [web pid=1189808] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:22:03,410 INFO [web pid=1191091] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:22:03,436 INFO [web pid=1191091] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:22:03,437 INFO [web pid=1191091] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:22:03,516 INFO [web pid=1191092] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:22:03,548 INFO [web pid=1191092] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:22:03,548 INFO [web pid=1191092] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:23:54,551 INFO [web pid=1187057] app.services.worker: Worker processing job_id=1687412f3ed7411e88b96d16c8b406af job_type=doc_workspace
+2026-06-09 18:23:55,202 INFO [web pid=1187057] app.services.pp_structure: PP-StructureV3 processing page=0 file=page_0001.png
+2026-06-09 18:23:55,210 ERROR [web pid=1187057] app.services.doc_workspace: Document workspace failed job_id=1687412f3ed7411e88b96d16c8b406af error=HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/.local/share/uv/python/cpython-3.11.4-linux-x86_64-gnu/lib/python3.11/socket.py", line 962, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -2] Name or service not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 535, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/app/services/doc_workspace.py", line 65, in run_doc_workspace_job
+    markdown_path, _ = pp_structure.extract_pdf_to_markdown(pdf_path, structure_dir)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 61, in extract_pdf_to_markdown
+    result = _request_layout_parsing(rendered_path).get("result", {}) or {}
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 40, in _request_layout_parsing
+    response = requests.post(state.PP_STRUCTURE_URL, json=payload, timeout=300)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+2026-06-09 18:26:00,061 INFO [web pid=1192536] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:26:00,077 INFO [web pid=1192537] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:26:00,093 INFO [web pid=1192536] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:26:00,093 INFO [web pid=1192536] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:26:00,114 INFO [web pid=1192537] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:26:00,114 INFO [web pid=1192537] app.services.startup_warmup: Startup warmup finished in 0.04s.
+2026-06-09 18:26:09,865 INFO [web pid=1187057] app.services.worker: Worker processing job_id=1687412f3ed7411e88b96d16c8b406af job_type=doc_workspace
+2026-06-09 18:26:10,514 INFO [web pid=1187057] app.services.pp_structure: PP-StructureV3 processing page=0 file=page_0001.png
+2026-06-09 18:26:10,521 ERROR [web pid=1187057] app.services.doc_workspace: Document workspace failed job_id=1687412f3ed7411e88b96d16c8b406af error=HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/.local/share/uv/python/cpython-3.11.4-linux-x86_64-gnu/lib/python3.11/socket.py", line 962, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -2] Name or service not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 535, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/app/services/doc_workspace.py", line 65, in run_doc_workspace_job
+    markdown_path, _ = pp_structure.extract_pdf_to_markdown(pdf_path, structure_dir)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 61, in extract_pdf_to_markdown
+    result = _request_layout_parsing(rendered_path).get("result", {}) or {}
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 40, in _request_layout_parsing
+    response = requests.post(state.PP_STRUCTURE_URL, json=payload, timeout=300)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+2026-06-09 18:34:26,241 INFO [web pid=1196000] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:34:26,242 INFO [web pid=1196001] app.services.startup_warmup: Startup warmup started.
+2026-06-09 18:34:26,270 INFO [web pid=1196000] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:34:26,270 INFO [web pid=1196001] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-09 18:34:26,270 INFO [web pid=1196000] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:34:26,270 INFO [web pid=1196001] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-09 18:34:33,712 INFO [web pid=1187057] app.services.worker: Worker processing job_id=1687412f3ed7411e88b96d16c8b406af job_type=doc_workspace
+2026-06-09 18:34:34,411 INFO [web pid=1187057] app.services.pp_structure: PP-StructureV3 processing page=0 file=page_0001.png
+2026-06-09 18:34:34,436 ERROR [web pid=1187057] app.services.doc_workspace: Document workspace failed job_id=1687412f3ed7411e88b96d16c8b406af error=HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 204, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/.local/share/uv/python/cpython-3.11.4-linux-x86_64-gnu/lib/python3.11/socket.py", line 962, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -2] Name or service not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 759, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 211, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 535, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/NE025/pdf_ocr_translate/app/services/doc_workspace.py", line 65, in run_doc_workspace_job
+    markdown_path, _ = pp_structure.extract_pdf_to_markdown(pdf_path, structure_dir)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 61, in extract_pdf_to_markdown
+    result = _request_layout_parsing(rendered_path).get("result", {}) or {}
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/app/services/pp_structure.py", line 40, in _request_layout_parsing
+    response = requests.post(state.PP_STRUCTURE_URL, json=payload, timeout=300)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))

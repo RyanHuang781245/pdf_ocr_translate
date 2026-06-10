@@ -86,13 +86,14 @@ def _resolve_settings(base_dir: Path, *, role: str, config: Mapping[str, Any] | 
     testing = _as_bool(_get_setting(config, "TESTING", "TESTING", False), False)
     log_dir_value = _get_setting(config, "APP_LOG_DIR", "APP_LOG_DIR", str(base_dir / "logs"))
     level_name = str(_get_setting(config, "APP_LOG_LEVEL", "APP_LOG_LEVEL", _DEFAULT_LEVEL)).strip().upper()
+    max_mb = _as_int(_get_setting(config, "APP_LOG_MAX_MB", "APP_LOG_MAX_MB", _DEFAULT_MAX_BYTES // 1024 // 1024), 10)
     return {
         "role": "worker" if str(role).strip().lower() == "worker" else "web",
         "log_dir": Path(str(log_dir_value)).expanduser(),
         "level": getattr(logging, level_name, logging.INFO),
         "log_to_file": _as_bool(_get_setting(config, "APP_LOG_TO_FILE", "APP_LOG_TO_FILE", not testing), not testing),
         "stdout": _as_bool(_get_setting(config, "APP_LOG_STDOUT", "APP_LOG_STDOUT", not testing), not testing),
-        "max_bytes": max(1, _as_int(_get_setting(config, "APP_LOG_MAX_BYTES", "APP_LOG_MAX_BYTES", _DEFAULT_MAX_BYTES), _DEFAULT_MAX_BYTES)),
+        "max_bytes": max(1, max_mb) * 1024 * 1024,
         "backup_count": max(1, _as_int(_get_setting(config, "APP_LOG_BACKUP_COUNT", "APP_LOG_BACKUP_COUNT", _DEFAULT_BACKUP_COUNT), _DEFAULT_BACKUP_COUNT)),
     }
 

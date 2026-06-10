@@ -99,6 +99,35 @@ def test_admin_log_pages_render_for_admin(audit_app, audit_client, monkeypatch):
     assert "worker.loop" in error_resp.get_data(as_text=True)
 
 
+def test_log_job_id_filters_match_displayed_prefix(audit_app):
+    full_audit_job_id = "12345678abcdef12345678abcdefabcd"
+    full_error_job_id = "87654321abcdef12345678abcdefabcd"
+    with audit_app.app_context():
+        assert audit_service.record_audit(
+            "job_delete",
+            actor={"work_id": "admin1"},
+            detail={"deleted": True},
+            job_id=full_audit_job_id,
+        ) is True
+        assert audit_service.record_system_error(
+            "worker.loop",
+            "Worker loop failure",
+            detail={"worker_id": "worker-test"},
+            job_id=full_error_job_id,
+            level="ERROR",
+        ) is True
+
+    audit_rows, _ = audit_service.list_audit_logs(job_id=full_audit_job_id[:8])
+    audit_q_rows, _ = audit_service.list_audit_logs(q=full_audit_job_id[:8])
+    error_rows, _ = audit_service.list_system_error_logs(job_id=full_error_job_id[:8])
+    error_q_rows, _ = audit_service.list_system_error_logs(q=full_error_job_id[:8])
+
+    assert [row["job_id"] for row in audit_rows] == [full_audit_job_id]
+    assert [row["job_id"] for row in audit_q_rows] == [full_audit_job_id]
+    assert [row["job_id"] for row in error_rows] == [full_error_job_id]
+    assert [row["job_id"] for row in error_q_rows] == [full_error_job_id]
+
+
 def test_audit_cleanup_cli_removes_old_rows(audit_app):
     old_ts = job_store.utcnow() - timedelta(days=10)
     with job_store.session_scope() as session:
