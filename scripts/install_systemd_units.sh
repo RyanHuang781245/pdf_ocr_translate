@@ -13,6 +13,7 @@ ENV_FILE="$APP_ROOT/.env"
 ENV_FILE_EXPLICIT=0
 WEB_BIND="${WEB_BIND:-}"
 WEB_WORKERS="4"
+CLEANUP_ON_CALENDAR="*-*-* 03:30:00"
 SYSTEMCTL_BIN="${SYSTEMCTL_BIN:-systemctl}"
 
 usage() {
@@ -29,6 +30,8 @@ Options:
   --env-file PATH        EnvironmentFile=. Default: <app-root>/.env
   --web-bind TARGET      Gunicorn bind. Default: unix:<app-root>/uo_regulations_translate.sock
   --web-workers N        Gunicorn worker count. Default: 4
+  --cleanup-on-calendar EXPR
+                         systemd cleanup timer OnCalendar. Default: *-*-* 03:30:00
   --help                 Show this help
 
 Examples:
@@ -71,6 +74,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --web-workers)
       WEB_WORKERS="$2"
+      shift 2
+      ;;
+    --cleanup-on-calendar)
+      CLEANUP_ON_CALENDAR="$2"
       shift 2
       ;;
     --help|-h)
@@ -120,7 +127,7 @@ require_path "$ENV_FILE" "Environment file"
 
 mkdir -p "$OUTPUT_DIR"
 
-export APP_ROOT APP_USER ENV_FILE WEB_BIND WEB_WORKERS TEMPLATE_DIR OUTPUT_DIR
+export APP_ROOT APP_USER ENV_FILE WEB_BIND WEB_WORKERS CLEANUP_ON_CALENDAR TEMPLATE_DIR OUTPUT_DIR
 
 python3 - <<'PY_RENDER'
 from __future__ import annotations
@@ -136,6 +143,7 @@ mapping = {
     "ENV_FILE": os.environ["ENV_FILE"],
     "WEB_BIND": os.environ["WEB_BIND"],
     "WEB_WORKERS": os.environ["WEB_WORKERS"],
+    "CLEANUP_ON_CALENDAR": os.environ["CLEANUP_ON_CALENDAR"],
 }
 
 for template_path in sorted(template_dir.glob("*.template")):
@@ -151,6 +159,8 @@ if [[ "$INSTALL_MODE" -eq 1 ]]; then
   mkdir -p "$UNIT_TARGET_DIR"
   install -m 0644 "$OUTPUT_DIR"/uo_regulations_translate.service "$UNIT_TARGET_DIR"/uo_regulations_translate.service
   install -m 0644 "$OUTPUT_DIR"/uo_regulations_translate_worker.service "$UNIT_TARGET_DIR"/uo_regulations_translate_worker.service
+  install -m 0644 "$OUTPUT_DIR"/uo_regulations_translate_log_cleanup.service "$UNIT_TARGET_DIR"/uo_regulations_translate_log_cleanup.service
+  install -m 0644 "$OUTPUT_DIR"/uo_regulations_translate_log_cleanup.timer "$UNIT_TARGET_DIR"/uo_regulations_translate_log_cleanup.timer
   "$SYSTEMCTL_BIN" daemon-reload
   echo "Installed unit files into $UNIT_TARGET_DIR"
   echo "Rendered with:"
@@ -160,9 +170,13 @@ if [[ "$INSTALL_MODE" -eq 1 ]]; then
   echo "Installed units:"
   echo "  uo_regulations_translate.service"
   echo "  uo_regulations_translate_worker.service"
+  echo "  uo_regulations_translate_log_cleanup.service"
+  echo "  uo_regulations_translate_log_cleanup.timer"
   echo "Next:"
-  echo "  sudo systemctl enable uo_regulations_translate uo_regulations_translate_worker"
-  echo "  sudo systemctl start uo_regulations_translate uo_regulations_translate_worker"
+  echo "  sudo systemctl enable uo_regulations_translate uo_regulations_translate_worker uo_regulations_translate_log_cleanup.timer"
+  echo "  sudo systemctl start uo_regulations_translate uo_regulations_translate_worker uo_regulations_translate_log_cleanup.timer"
+  echo "Run log cleanup immediately only when needed:"
+  echo "  sudo systemctl start uo_regulations_translate_log_cleanup.service"
 else
   echo "Rendered unit files into $OUTPUT_DIR"
 fi

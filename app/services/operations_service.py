@@ -39,7 +39,7 @@ def run_seed_bootstrap(app, *, include_auth: bool | None = None) -> dict[str, ob
         result: dict[str, object] = {"auth_enabled": bool(include_auth)}
         if include_auth:
             auth_store.seed_roles()
-            auth_store.bootstrap_admins(app.config)
+            auth_store.seed_initial_admins(app.config)
             with job_store.session_scope() as session:
                 result["role_count"] = int(session.scalar(select(func.count()).select_from(auth_store.RoleRecord)) or 0)
             result["admin_count"] = auth_store.count_users_with_role(auth_store.ROLE_ADMIN)

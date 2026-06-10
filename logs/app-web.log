@@ -963,3 +963,12 @@ Traceback (most recent call last):
   File "/home/NE025/pdf_ocr_translate/.venv/lib/python3.11/site-packages/requests/adapters.py", line 677, in send
     raise ConnectionError(e, request=request)
 requests.exceptions.ConnectionError: HTTPSConnectionPool(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Max retries exceeded with url: /layout-parsing (Caused by NameResolutionError("HTTPSConnection(host='writing-coordination-farm-approximately.trycloudflare.com', port=443): Failed to resolve 'writing-coordination-farm-approximately.trycloudflare.com' ([Errno -2] Name or service not known)"))
+2026-06-10 08:18:57,653 INFO [web pid=1187057] app.services.worker: Worker processing job_id=ac440bb354124a3696594d8870133c39 job_type=ocr_overlay
+2026-06-10 08:18:57,654 INFO [web pid=1187057] app.services.pipeline: OCR pipeline start job_id=ac440bb354124a3696594d8870133c39
+2026-06-10 08:19:02,613 INFO [web pid=1187057] app.services.pipeline: OCR pipeline completed job_id=ac440bb354124a3696594d8870133c39
+2026-06-10 08:22:10,335 INFO [web pid=1363148] app.services.startup_warmup: Startup warmup started.
+2026-06-10 08:22:10,362 INFO [web pid=1363148] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-10 08:22:10,362 INFO [web pid=1363148] app.services.startup_warmup: Startup warmup finished in 0.03s.
+2026-06-10 08:22:10,421 INFO [web pid=1363149] app.services.startup_warmup: Startup warmup started.
+2026-06-10 08:22:10,451 INFO [web pid=1363149] app.services.startup_warmup: Startup warmup: OpenAI clients initialized.
+2026-06-10 08:22:10,451 INFO [web pid=1363149] app.services.startup_warmup: Startup warmup finished in 0.03s.

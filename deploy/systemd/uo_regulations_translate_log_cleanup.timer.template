@@ -1,0 +1,9 @@
+[Unit]
+Description=Run PDF OCR Translate Log Cleanup on schedule
+
+[Timer]
+OnCalendar={{CLEANUP_ON_CALENDAR}}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

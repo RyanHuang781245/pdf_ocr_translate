@@ -6,6 +6,7 @@ set -euo pipefail
 APP_NAME="uo_regulations_translate"
 WORKER_SERVICE="uo_regulations_translate_worker"
 WORKER_SERVICES=("$WORKER_SERVICE")
+CLEANUP_TIMER="uo_regulations_translate_log_cleanup.timer"
 APP_DIR="${APP_DIR:-/home/NE025/pdf_ocr_translate}"
 APP_ROOT="${APP_ROOT:-$APP_DIR}"
 ENV_FILE="${ENV_FILE:-$APP_ROOT/.env}"
@@ -17,6 +18,7 @@ ENABLE_SYSTEMD_UNITS="${ENABLE_SYSTEMD_UNITS:-1}"
 MANAGE_SYSTEMD_SERVICES="${MANAGE_SYSTEMD_SERVICES:-auto}"
 WEB_WORKERS="${WEB_WORKERS:-2}"
 WEB_BIND="${WEB_BIND:-unix:$APP_ROOT/uo_regulations_translate.sock}"
+CLEANUP_ON_CALENDAR="${CLEANUP_ON_CALENDAR:-*-*-* 03:30:00}"
 NGINX_TEMPLATE="${NGINX_TEMPLATE:-$APP_ROOT/deploy/nginx-site.conf.template}"
 NGINX_SITE_NAME="${NGINX_SITE_NAME:-$APP_NAME}"
 NGINX_LISTEN_PORT="${NGINX_LISTEN_PORT:-81}"
@@ -135,6 +137,7 @@ if [[ "$INSTALL_SYSTEMD_UNITS" == "1" && "$SYSTEMD_ENABLED" == "1" ]]; then
     --env-file "$ENV_FILE"
     --web-bind "$WEB_BIND"
     --web-workers "$WEB_WORKERS"
+    --cleanup-on-calendar "$CLEANUP_ON_CALENDAR"
   )
   if [[ -n "$APP_USER" ]]; then
     systemd_args+=(--app-user "$APP_USER")
@@ -144,7 +147,7 @@ if [[ "$INSTALL_SYSTEMD_UNITS" == "1" && "$SYSTEMD_ENABLED" == "1" ]]; then
 
   if [[ "$ENABLE_SYSTEMD_UNITS" == "1" ]]; then
     log "啟用 systemd 服務開機自動啟動"
-    sudo systemctl enable "$APP_NAME" "${WORKER_SERVICES[@]}"
+    sudo systemctl enable "$APP_NAME" "${WORKER_SERVICES[@]}" "$CLEANUP_TIMER"
   else
     log "略過 systemd 服務 enable；如需開機自動啟動，請用 ENABLE_SYSTEMD_UNITS=1 bash deploy.sh"
   fi
@@ -184,11 +187,19 @@ if [[ "$SYSTEMD_ENABLED" == "1" ]]; then
     sudo systemctl restart "$service"
   done
 
+  if [[ "$INSTALL_SYSTEMD_UNITS" == "1" ]]; then
+    log "啟動清理排程"
+    sudo systemctl restart "$CLEANUP_TIMER"
+  fi
+
   log "查看服務狀態"
   sudo systemctl status "$APP_NAME" --no-pager
   for service in "${WORKER_SERVICES[@]}"; do
     sudo systemctl status "$service" --no-pager
   done
+  if [[ "$INSTALL_SYSTEMD_UNITS" == "1" ]]; then
+    sudo systemctl status "$CLEANUP_TIMER" --no-pager
+  fi
 else
   log "略過服務啟動與狀態檢查；請在容器內手動執行 gunicorn/flask worker，或用外部 process manager 管理程序"
 fi

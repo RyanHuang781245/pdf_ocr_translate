@@ -251,8 +251,8 @@ def assign_role(work_id: str, role_name: str) -> None:
     upsert_user_role_for_work_id(work_id=work_id, role_name=role_name)
 
 
-def bootstrap_admins(config: Any) -> None:
-    raw = str(config.get('BOOTSTRAP_ADMIN') or '').strip()
+def seed_initial_admins(config: Any) -> None:
+    raw = str(config.get('INITIAL_ADMIN_WORK_IDS') or '').strip()
     work_ids = [_normalize_work_id(item) for item in raw.split(',') if _normalize_work_id(item)]
     if not work_ids:
         return
@@ -263,7 +263,7 @@ def bootstrap_admins(config: Any) -> None:
 def bootstrap_auth_store(config: Any) -> None:
     ensure_auth_schema()
     seed_roles()
-    bootstrap_admins(config)
+    seed_initial_admins(config)
 
 
 def get_local_user_snapshot(work_id: str) -> LocalUserSnapshot | None:
