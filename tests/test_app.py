@@ -1038,6 +1038,151 @@ def test_document_templates_payload_includes_creator(client, app, monkeypatch):
     assert payload["templates"][0]["creator_label"] == "Ryan Huang"
 
 
+def test_document_templates_export_payload(app):
+    with app.app_context():
+        created = document_templates.save_document_template(
+            {
+                "name": "備份模板",
+                "pages": [
+                    {
+                        "page_index_0based": 0,
+                        "boxes": [
+                            {
+                                "x_ratio": 0.1,
+                                "y_ratio": 0.2,
+                                "w_ratio": 0.3,
+                                "h_ratio": 0.04,
+                                "text": "Template Text",
+                            }
+                        ],
+                    }
+                ],
+            },
+            owner_work_id="NE025",
+        )
+        payload = document_templates.export_document_templates_payload()
+
+    assert payload["template_count"] == 1
+    assert payload["templates"][0]["id"] == created["id"]
+    assert payload["templates"][0]["owner_work_id"] == "NE025"
+
+
+def test_document_templates_restore_replace(app, tmp_path):
+    backup_path = tmp_path / "document_templates.json"
+    with app.app_context():
+        kept = document_templates.save_document_template(
+            {
+                "name": "還原模板",
+                "pages": [
+                    {
+                        "page_index_0based": 0,
+                        "boxes": [
+                            {
+                                "x_ratio": 0.1,
+                                "y_ratio": 0.2,
+                                "w_ratio": 0.3,
+                                "h_ratio": 0.04,
+                                "text": "Restore Text",
+                            }
+                        ],
+                    }
+                ],
+            },
+            owner_work_id="NE025",
+        )
+        document_templates.export_document_templates(backup_path)
+        extra = document_templates.save_document_template(
+            {
+                "name": "應被移除",
+                "pages": [
+                    {
+                        "page_index_0based": 0,
+                        "boxes": [
+                            {
+                                "x_ratio": 0.4,
+                                "y_ratio": 0.5,
+                                "w_ratio": 0.2,
+                                "h_ratio": 0.04,
+                                "text": "Remove Text",
+                            }
+                        ],
+                    }
+                ],
+            },
+            owner_work_id="NE026",
+        )
+
+        result = document_templates.restore_document_templates(backup_path, replace=True)
+        templates = document_templates.load_document_templates(include_all=True)
+
+    assert result["restored_count"] == 1
+    assert result["skipped_count"] == 0
+    assert [template["id"] for template in templates] == [kept["id"]]
+    assert extra["id"] not in {template["id"] for template in templates}
+
+
+def test_document_templates_restore_rebuilds_template_source_job(app, tmp_path, monkeypatch):
+    source_job_id = "6" * 32
+    backup_path = tmp_path / "document_templates.json"
+    template_root = tmp_path / "templates" / "jobs"
+    source_job_dir = template_root / source_job_id
+    source_job_dir.mkdir(parents=True)
+    (source_job_dir / "overlay_debug.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(state, "TEMPLATE_JOB_ROOT", template_root)
+    jobs.job_meta_path(source_job_dir).write_text(
+        json.dumps(
+            {
+                "job_name": "template-source",
+                "job_type": "template_source",
+                "owner_work_id": "NE025",
+                "document_mode": "scanned",
+                "ocr_completed_at": 1780000000.0,
+                "processing_started_at": 1779999900.0,
+                "processing_completed_at": 1780000000.0,
+                "progress": 1.0,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    with app.app_context():
+        created = document_templates.save_document_template(
+            {
+                "name": "來源狀態模板",
+                "source_job_id": source_job_id,
+                "pages": [
+                    {
+                        "page_index_0based": 0,
+                        "boxes": [
+                            {
+                                "x_ratio": 0.1,
+                                "y_ratio": 0.2,
+                                "w_ratio": 0.3,
+                                "h_ratio": 0.04,
+                                "text": "Template Text",
+                            }
+                        ],
+                    }
+                ],
+            },
+            owner_work_id="NE025",
+        )
+        document_templates.export_document_templates(backup_path)
+        job_store.delete_job(source_job_id)
+
+        result = document_templates.restore_document_templates(backup_path, replace=True)
+        record = job_store.get_job(source_job_id)
+
+    assert result["restored_count"] == 1
+    assert result["rebuilt_source_jobs"] == 1
+    assert record is not None
+    assert record.job_id == source_job_id
+    assert record.job_type == "template_source"
+    assert record.status == "completed"
+    assert record.owner_work_id == "NE025"
+    assert document_templates.get_document_template(created["id"], include_all=True) is not None
+
+
 def test_document_template_source_jobs_are_global_status_only(client, app):
     source_job_id = "8" * 32
     with job_store.session_scope() as session:

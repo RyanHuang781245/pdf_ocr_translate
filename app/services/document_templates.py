@@ -4,9 +4,12 @@ import json
 import time
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+import click
+from flask import current_app
+from sqlalchemy import delete, select
 
 from . import job_store, jobs, state
 
@@ -368,3 +371,129 @@ def delete_document_template(template_id: str) -> bool:
             return False
         session.delete(record)
         return True
+
+
+def export_document_templates_payload() -> dict[str, Any]:
+    templates = load_document_templates(include_all=True)
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "database_schema": job_store.current_database_schema(),
+        "template_count": len(templates),
+        "templates": templates,
+    }
+
+
+def export_document_templates(path: str | Path) -> dict[str, Any]:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = export_document_templates_payload()
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "output": str(output_path),
+        "template_count": payload["template_count"],
+        "exported_at": payload["exported_at"],
+    }
+
+
+def restore_document_templates(path: str | Path, *, replace: bool = False) -> dict[str, Any]:
+    input_path = Path(path)
+    raw_payload = json.loads(input_path.read_text(encoding="utf-8"))
+    if isinstance(raw_payload, dict):
+        raw_templates = raw_payload.get("templates", [])
+    elif isinstance(raw_payload, list):
+        raw_templates = raw_payload
+    else:
+        raise ValueError("Invalid document templates backup payload.")
+    if not isinstance(raw_templates, list):
+        raise ValueError("Invalid document templates backup payload.")
+
+    restored = 0
+    skipped = 0
+    if replace:
+        with job_store.session_scope() as session:
+            session.execute(delete(job_store.DocumentTemplateRecord))
+
+    for item in raw_templates:
+        normalized = _normalize_template(item)
+        if normalized is None:
+            skipped += 1
+            continue
+        _upsert_template(normalized)
+        restored += 1
+    rebuilt_jobs = restore_template_source_jobs()
+    return {
+        "input": str(input_path),
+        "restored_count": restored,
+        "skipped_count": skipped,
+        "rebuilt_source_jobs": rebuilt_jobs,
+        "replace": replace,
+    }
+
+
+def restore_template_source_jobs() -> int:
+    rebuilt = 0
+    templates = load_document_templates(include_all=True)
+    for template in templates:
+        source_job_id = str(template.get("source_job_id") or "").strip()
+        if not jobs.safe_job_id(source_job_id):
+            continue
+        if job_store.get_job(source_job_id) is not None:
+            continue
+        job_dir = jobs.job_dir(source_job_id, job_root=state.TEMPLATE_JOB_ROOT)
+        if not job_dir.exists():
+            continue
+        meta = jobs.load_job_meta(job_dir) or {}
+        if str(meta.get("job_type") or "template_source").strip() not in {"", "template_source"}:
+            continue
+        status, stage = jobs.infer_job_store_status(job_dir, {**meta, "job_type": "template_source"})
+        payload = {
+            "creator_name": meta.get("creator_name") or "",
+            "owner_work_id": template.get("owner_work_id") or meta.get("owner_work_id") or "",
+            "source_filename": meta.get("source_filename") or "",
+            "job_type": "template_source",
+        }
+        job_store.create_job(
+            job_id=source_job_id,
+            job_type="template_source",
+            status=status,
+            stage=stage,
+            progress=float(meta.get("progress") or (1.0 if status == "completed" else 0.0)),
+            job_name=jobs.normalize_job_name(meta.get("job_name")) or str(template.get("display_name") or ""),
+            owner_work_id=str(template.get("owner_work_id") or meta.get("owner_work_id") or "") or None,
+            target_lang=str(meta.get("target_lang") or "") or None,
+            document_mode=str(meta.get("document_mode") or "") or None,
+            payload=payload,
+            started_at=jobs.datetime_from_timestamp(meta.get("processing_started_at")),
+            completed_at=jobs.datetime_from_timestamp(meta.get("processing_completed_at")),
+        )
+        rebuilt += 1
+    return rebuilt
+
+
+def register_template_cli(app) -> None:
+    @app.cli.command("template-backup")
+    @click.option("--output", required=True, type=click.Path(dir_okay=False, path_type=Path), help="Path for exported document templates JSON.")
+    def template_backup_command(output: Path) -> None:
+        result = export_document_templates(output)
+        click.echo(
+            "template_backup "
+            f"output={result['output']} "
+            f"templates={result['template_count']} "
+            f"exported_at={result['exported_at']} "
+            f"schema={current_app.config.get('DATABASE_SCHEMA')}"
+        )
+
+    @app.cli.command("template-restore")
+    @click.option("--input", "input_path", required=True, type=click.Path(exists=True, dir_okay=False, path_type=Path), help="Path to exported document templates JSON.")
+    @click.option("--replace", is_flag=True, help="Replace all existing document templates with backup content.")
+    def template_restore_command(input_path: Path, replace: bool) -> None:
+        result = restore_document_templates(input_path, replace=replace)
+        click.echo(
+            "template_restore "
+            f"input={result['input']} "
+            f"restored={result['restored_count']} "
+            f"skipped={result['skipped_count']} "
+            f"rebuilt_source_jobs={result['rebuilt_source_jobs']} "
+            f"replace={'1' if result['replace'] else '0'} "
+            f"schema={current_app.config.get('DATABASE_SCHEMA')}"
+        )

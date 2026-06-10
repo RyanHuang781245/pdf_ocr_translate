@@ -1,0 +1,21 @@
+[Unit]
+Description=PDF OCR Translate Template Backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{APP_USER}}
+Group=www-data
+WorkingDirectory={{APP_ROOT}}
+EnvironmentFile={{ENV_FILE}}
+Environment="APP_ROOT={{APP_ROOT}}"
+Environment="ENV_FILE={{ENV_FILE}}"
+Environment="STARTUP_WARMUP_ENABLED=0"
+Environment="PATH={{APP_ROOT}}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+ExecStart=/usr/bin/env bash {{APP_ROOT}}/scripts/backup_templates.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
