@@ -111,9 +111,41 @@
 | `TEMPLATE_BACKUP_ROOT` | 模板備份檔輸出目錄。 |
 | `TEMPLATE_BACKUP_RETENTION_DAYS` | 模板備份保留天數，備份腳本會刪除更舊的 `.tar.gz` 與 `.sha256`。 |
 
+## 部署與維護腳本
+
+以下參數不一定需要寫在 `.env`，通常是在執行 `deploy.sh`、備份、還原或測試時臨時指定。
+
+| 參數 | 功能 |
+| --- | --- |
+| `APP_ROOT` | 應用程式根目錄。`deploy.sh`、systemd installer、備份還原腳本都會用它定位專案路徑。預設 `/home/NE025/pdf_ocr_translate`。 |
+| `APP_DIR` | `deploy.sh` 的舊式根目錄變數；若未指定 `APP_ROOT`，會以 `APP_DIR` 作為預設值。 |
+| `ENV_FILE` | 要載入的環境變數檔案。預設 `<APP_ROOT>/.env`。 |
+| `DEPLOY_BRANCH` | `RUN_GIT_PULL=1` 時要 pull 的 Git branch。預設 `main`。 |
+| `RUN_GIT_PULL` | 部署前是否執行 `git pull origin <DEPLOY_BRANCH>`。 |
+| `INSTALL_SYSTEMD_UNITS` | 是否安裝或更新 systemd unit。`0` 時不會覆蓋 `/etc/systemd/system` 內的 unit。 |
+| `ENABLE_SYSTEMD_UNITS` | 是否執行 `systemctl enable`，讓服務與 timer 開機自動啟動。 |
+| `MANAGE_SYSTEMD_SERVICES` | 是否由 `deploy.sh` 操作 systemd。可用 `auto`、`1`、`0`。 |
+| `APP_USER` | systemd `User=` 使用者。未指定時會用 `APP_ROOT` 目錄 owner。 |
+| `WEB_WORKERS` | Gunicorn worker 數量。 |
+| `WEB_BIND` | Gunicorn bind 位置，預設 Unix socket。 |
+| `ENABLE_NGINX` | 是否安裝或更新 Nginx site 設定。 |
+| `NGINX_LISTEN_PORT` | Nginx site listen port。預設 `81`。 |
+| `NGINX_TEMPLATE` | Nginx site template 路徑。 |
+| `NGINX_SITE_NAME` | Nginx site 名稱。 |
+| `NGINX_FILE` | Render 後的 Nginx site config 輸出路徑。 |
+| `UV_BIN` | `uv` 指令路徑。 |
+| `UV_SYNC_ARGS` | `uv sync` 額外參數。預設 `--frozen`。 |
+| `ALEMBIC_DATABASE_URL` | Alembic 使用的 DB URL。未指定時會使用 `DATABASE_URL`。 |
+| `ALEMBIC_CONFIG_NAME` | Alembic 執行環境名稱。部署預設 `production`。 |
+| `SKIP_PRE_RESTORE_BACKUP` | 還原模板前是否略過自動建立目前狀態備份。`1` 代表略過。 |
+| `RESTORE_ARCHIVE` | `restore_templates.sh` 使用的備份 tar.gz 路徑；也可直接用第一個命令列參數傳入。 |
+| `TEST_DATABASE_URL` | pytest 使用的測試 DB URL。未指定時使用 `DATABASE_URL`。 |
+| `TEST_DATABASE_SCHEMA` | pytest 使用的測試 schema。必須是獨立 schema，且名稱需以 `_test` 結尾，例如 `translation_test`。 |
+
 ## 補充
 
 - `APP_ENV=production` 且 `AUTO_SCHEMA_MANAGEMENT=0` 時，啟動 app 不會自動建立新表，應由 `alembic upgrade head` 或 `scripts/init_sqlserver_schema.sql` 管理 schema。
 - `OWNER_ACCESS_ENABLED=1` 目前仍會隔離一般 job，但模板已調整為全域列表與全域編輯。
 - 測試請使用 `TEST_DATABASE_SCHEMA` 指向獨立 schema，例如 `translation_test`，避免清到正式 schema。
 - 模板備份會匯出 `document_templates` DB 內容，並打包 `out/templates/jobs` 內的模板來源檔案。
+- 若要修改 log 清理或模板備份 timer 時間，請改 `.env` 內的 `CLEANUP_ON_CALENDAR` / `TEMPLATE_BACKUP_ON_CALENDAR`，再執行 `bash deploy.sh`。`scripts/install_systemd_units.sh` 內的預設值只有在沒有由 deploy 傳入參數時才會使用。
