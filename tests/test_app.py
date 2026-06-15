@@ -190,6 +190,8 @@ def test_template_editor_page_ok(client, tmp_path, monkeypatch):
     assert resp.status_code == 200
     assert "text/html" in resp.content_type
     body = resp.get_data(as_text=True)
+    assert 'data-template-name="template-source"' in body
+    assert 'data-template-display-name="template-source"' in body
     assert 'id="saveBtn"' not in body
     assert "batchRestoreBtn" not in body
     assert "sidebarConsistencySection" not in body
@@ -961,6 +963,24 @@ def test_document_templates_crud(client, tmp_path, monkeypatch):
     listed = list_resp.get_json()["templates"]
     assert len(listed) == 1
     assert listed[0]["id"] == created["id"]
+
+    rename_resp = client.patch(
+        f"/api/document-templates/{created['id']}/name",
+        json={"name": "表單 B"},
+    )
+    assert rename_resp.status_code == 200
+    renamed = rename_resp.get_json()["template"]
+    assert renamed["name"] == "表單 B"
+    assert renamed["pages"][0]["boxes"][0]["text"] == "Inspection Frequency"
+
+    empty_rename_resp = client.patch(
+        f"/api/document-templates/{created['id']}/name",
+        json={"name": "   "},
+    )
+    assert empty_rename_resp.status_code == 400
+
+    listed_after_rename = client.get("/api/document-templates").get_json()["templates"]
+    assert listed_after_rename[0]["name"] == "表單 B"
 
     delete_resp = client.delete(f"/api/document-templates/{created['id']}")
     assert delete_resp.status_code == 200

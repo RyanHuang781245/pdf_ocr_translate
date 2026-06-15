@@ -624,6 +624,27 @@ def delete_document_template(template_id: str):
     return jsonify({"ok": True, "deleted": True})
 
 
+@api_bp.route(
+    "/document-templates/<template_id>/name",
+    methods=["PATCH"],
+    endpoint="rename_document_template",
+)
+def rename_document_template(template_id: str):
+    template = _get_accessible_template(template_id)
+    if template is None:
+        return jsonify({"ok": False, "error": "Template not found."}), 404
+    if not _can_edit_template(template):
+        return _forbidden_json()
+    payload = request.get_json(force=True) or {}
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Template name is required."}), 400
+    renamed = document_templates.rename_document_template(template_id, name)
+    if renamed is None:
+        return jsonify({"ok": False, "error": "Template not found."}), 404
+    return jsonify({"ok": True, "template": _template_response_payload(renamed)})
+
+
 def _build_page_boxes_for_save(
     page_payload: dict[str, Any],
 ) -> list[dict[str, Any]]:

@@ -72,6 +72,24 @@
       </section>
     </main>
 
+    <div id="renameTemplateModal" class="modal" hidden>
+      <div class="modal-card modal-card--compact" role="dialog" aria-modal="true" aria-labelledby="renameTemplateTitle">
+        <div class="modal-header">
+          <h2 id="renameTemplateTitle">重新命名模板</h2>
+        </div>
+        <div class="modal-body">
+          <label>
+            <span>模板名稱</span>
+            <input id="renameTemplateName" type="text" />
+          </label>
+          <div class="modal-actions">
+            <button id="cancelRenameTemplate" class="ghost" type="button">取消</button>
+            <button id="confirmRenameTemplate" class="primary" type="button">儲存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script src="{{ url_for('static', filename='job_filters.js') }}"></script>
     <script>
       const templatesList = document.getElementById("templatesList");
@@ -81,10 +99,15 @@
       const templatesSearch = document.getElementById("templatesSearch");
       const templatesStatusFilter = document.getElementById("templatesStatusFilter");
       const templatesPagination = document.getElementById("templatesPagination");
+      const renameTemplateModal = document.getElementById("renameTemplateModal");
+      const renameTemplateName = document.getElementById("renameTemplateName");
+      const cancelRenameTemplate = document.getElementById("cancelRenameTemplate");
+      const confirmRenameTemplate = document.getElementById("confirmRenameTemplate");
       let jobMap = new Map();
       let allTemplates = [];
       const templatesPageState = { page: 1, pageSize: 10 };
       let templatesSource = null;
+      let pendingRenameTemplate = null;
 
       function formatDate(ts) {
         if (!ts) return "Unknown";
@@ -111,6 +134,70 @@
         } finally {
           if (triggerBtn) {
             triggerBtn.disabled = false;
+          }
+        }
+      }
+
+      function openRenameTemplateModal(template) {
+        if (!template?.id) return;
+        pendingRenameTemplate = template;
+        if (renameTemplateName) {
+          renameTemplateName.value = template.name || template.display_name || "";
+        }
+        if (renameTemplateModal) {
+          renameTemplateModal.hidden = false;
+        }
+        renameTemplateName?.focus();
+        renameTemplateName?.select();
+      }
+
+      function closeRenameTemplateModal() {
+        pendingRenameTemplate = null;
+        if (renameTemplateModal) {
+          renameTemplateModal.hidden = true;
+        }
+        if (renameTemplateName) {
+          renameTemplateName.value = "";
+        }
+      }
+
+      async function renameTemplate() {
+        const template = pendingRenameTemplate;
+        if (!template?.id) return;
+        const currentName = template.name || template.display_name || "";
+        const cleanedName = renameTemplateName?.value?.trim() || "";
+        if (!cleanedName) {
+          alert("模板名稱不可空白。");
+          renameTemplateName?.focus();
+          return;
+        }
+        if (cleanedName === currentName) {
+          closeRenameTemplateModal();
+          return;
+        }
+        if (confirmRenameTemplate) {
+          confirmRenameTemplate.disabled = true;
+          confirmRenameTemplate.textContent = "儲存中...";
+        }
+        try {
+          const res = await fetch(`/api/document-templates/${template.id}/name`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: cleanedName }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(payload.error || "重新命名模板失敗。");
+            return;
+          }
+          closeRenameTemplateModal();
+          await loadTemplates();
+        } catch (error) {
+          alert("重新命名模板失敗。");
+        } finally {
+          if (confirmRenameTemplate) {
+            confirmRenameTemplate.disabled = false;
+            confirmRenameTemplate.textContent = "儲存";
           }
         }
       }
@@ -193,6 +280,17 @@
             pendingLabel.className = "job-muted";
             pendingLabel.textContent = "等待 OCR 完成";
             actions.appendChild(pendingLabel);
+          }
+
+          if (template.can_edit_source) {
+            const renameBtn = document.createElement("button");
+            renameBtn.type = "button";
+            renameBtn.className = "ghost";
+            renameBtn.textContent = "重新命名";
+            renameBtn.addEventListener("click", () => {
+              openRenameTemplateModal(template);
+            });
+            actions.appendChild(renameBtn);
           }
 
           if (template.can_delete) {
@@ -288,6 +386,22 @@
           setTimeout(connectTemplatesStream, 5000);
         };
       }
+
+      cancelRenameTemplate?.addEventListener("click", closeRenameTemplateModal);
+      confirmRenameTemplate?.addEventListener("click", renameTemplate);
+      renameTemplateName?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          renameTemplate();
+        } else if (event.key === "Escape") {
+          closeRenameTemplateModal();
+        }
+      });
+      renameTemplateModal?.addEventListener("click", (event) => {
+        if (event.target === renameTemplateModal) {
+          closeRenameTemplateModal();
+        }
+      });
 
       templatesRefresh?.addEventListener("click", loadTemplates);
       JobFilters.bind({

@@ -32,13 +32,15 @@
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js" referrerpolicy="no-referrer"></script> -->
     <script src="/static/pdfjs/pdf.min.js" referrerpolicy="no-referrer"></script>
   </head>
+  {% set initial_template_name = template_record.name if template_record and template_record.name else (template_record.display_name if template_record and template_record.display_name else (job_name or '')) %}
+  {% set initial_template_display_name = template_record.display_name if template_record and template_record.display_name else (job_name or '') %}
   <body
     class="editor template-editor-page"
     data-job-id="{{ job_id }}"
     data-template-mode="true"
     data-template-id="{{ template_record.id if template_record else '' }}"
-    data-template-name="{{ template_record.name if template_record else '' }}"
-    data-template-display-name="{{ template_record.display_name if template_record else '' }}"
+    data-template-name="{{ initial_template_name }}"
+    data-template-display-name="{{ initial_template_display_name }}"
   >
     <header class="topbar">
       <div class="topbar-left">

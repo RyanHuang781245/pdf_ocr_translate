@@ -361,6 +361,21 @@ def save_document_template(payload: dict[str, Any], *, owner_work_id: str = "") 
     return _upsert_template(normalized)
 
 
+def rename_document_template(template_id: str, name: str) -> dict[str, Any] | None:
+    cleaned_id = str(template_id or "").strip()
+    cleaned_name = str(name or "").strip()
+    if not cleaned_id or not cleaned_name:
+        return None
+    with job_store.session_scope() as session:
+        record = session.get(job_store.DocumentTemplateRecord, cleaned_id)
+        if record is None:
+            return None
+        record.name = cleaned_name
+        record.updated_at = _to_datetime(time.time())
+        session.flush()
+        return _record_to_template(record)
+
+
 def delete_document_template(template_id: str) -> bool:
     cleaned_id = str(template_id or "").strip()
     if not cleaned_id:
