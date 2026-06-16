@@ -4,7 +4,7 @@ set -euo pipefail
 APP_ROOT="${APP_ROOT:-/home/NE025/pdf_ocr_translate}"
 ENV_FILE="${ENV_FILE:-$APP_ROOT/.env}"
 BACKUP_ROOT="${TEMPLATE_BACKUP_ROOT:-$APP_ROOT/backups/templates}"
-RETENTION_DAYS="${TEMPLATE_BACKUP_RETENTION_DAYS:-30}"
+MAX_BACKUP_FILES="${TEMPLATE_BACKUP_MAX_FILES:-3}"
 HOSTNAME_SHORT="${HOSTNAME_SHORT:-$(hostname -s)}"
 STAMP="$(date +%F_%H%M%S)"
 ARCHIVE_NAME="${ARCHIVE_NAME:-${HOSTNAME_SHORT}_templates_${STAMP}.tar.gz}"
@@ -65,7 +65,18 @@ sha256sum "$ARCHIVE_PATH" > "$CHECKSUM_PATH"
 log "Archive created"
 log "Checksum written: $CHECKSUM_PATH"
 
-find "$BACKUP_ROOT" -type f \( -name "*.tar.gz" -o -name "*.tar.gz.sha256" \) -mtime +"$RETENTION_DAYS" -delete
+if ! [[ "$MAX_BACKUP_FILES" =~ ^[0-9]+$ ]] || [[ "$MAX_BACKUP_FILES" -lt 1 ]]; then
+  echo "TEMPLATE_BACKUP_MAX_FILES must be a positive integer." >&2
+  exit 64
+fi
 
-log "Retention cleanup complete"
+mapfile -t old_archives < <(
+  find "$BACKUP_ROOT" -maxdepth 1 -type f -name "*.tar.gz" -printf '%T@ %p\n'     | sort -nr     | awk -v keep="$MAX_BACKUP_FILES" 'NR > keep {sub(/^[^ ]+ /, ""); print}'
+)
+
+for old_archive in "${old_archives[@]}"; do
+  rm -f "$old_archive" "$old_archive.sha256"
+done
+
+log "Retention cleanup complete: kept latest $MAX_BACKUP_FILES archive(s)"
 printf 'backup_file=%s\n' "$ARCHIVE_PATH"
