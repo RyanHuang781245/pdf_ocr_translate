@@ -939,7 +939,7 @@ def apply_edits_to_pdf(job_id: str, job_dir: Path, edits: dict[str, Any]) -> Pat
             dbg_shape.commit()
 
     out_path = job_dir / "edited.pdf"
-    doc.save(out_path.as_posix())
+    doc.save(out_path.as_posix(), garbage=4, deflate=True, clean=True)
     doc.close()
     job_store.register_artifact(job_id, "edited_pdf", "edited.pdf")
     return out_path

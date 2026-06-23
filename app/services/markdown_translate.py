@@ -144,9 +144,14 @@ def _build_system_prompt(
     zh_rule = traditional_chinese_instruction(target_lang)
     if zh_rule:
         prompt.append(zh_rule)
-    if glossary_entries:
+    glossary_pairs = glossary.glossary_pairs_for_translation(
+        glossary_entries,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
+    if glossary_pairs:
         glossary_lines = "\n".join(
-            f"- {src} => {dst}" for src, dst in glossary_entries[:50]
+            f"- {src} => {dst}" for src, dst in glossary_pairs[:50]
         )
         prompt.append(
             "If the input contains tokens in the form [[[GLOSSARY_TERM_0001::TERM]]], copy those tokens exactly unchanged and keep TERM verbatim."
@@ -223,13 +228,20 @@ def _translate_snippet(
     model: str,
     system_prompt: str,
     glossary_entries: list[tuple[str, str]] | None = None,
+    source_lang: str = "auto",
+    target_lang: str = "en",
     debug_job_dir: Path | None = None,
     debug_custom_id: str | None = None,
     warning_callback: Callable[[str], None] | None = None,
 ) -> str:
     if not snippet.strip():
         return snippet
-    protected_snippet = glossary.apply_glossary_with_protection(snippet, glossary_entries)
+    protected_snippet = glossary.apply_glossary_with_protection(
+        snippet,
+        glossary_entries,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
     if debug_job_dir is not None and debug_custom_id:
         translation_debug.record_request(
             job_dir=debug_job_dir,
@@ -267,13 +279,20 @@ def _translate_text(
     model: str,
     system_prompt: str,
     glossary_entries: list[tuple[str, str]] | None = None,
+    source_lang: str = "auto",
+    target_lang: str = "en",
     debug_job_dir: Path | None = None,
     debug_custom_id: str | None = None,
     warning_callback: Callable[[str], None] | None = None,
 ) -> str:
     if not text.strip():
         return text
-    protected_text = glossary.apply_glossary_with_protection(text, glossary_entries)
+    protected_text = glossary.apply_glossary_with_protection(
+        text,
+        glossary_entries,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
     payload = (
         "Translate the following source text from an HTML text node.\n"
         "Return only the translated text. Do not add tags or explanations.\n"
@@ -352,6 +371,8 @@ def _translate_pandoc_doc(
             model,
             final_system_prompt,
             glossary_entries=glossary_entries,
+            source_lang=source_lang,
+            target_lang=target_lang,
             debug_job_dir=debug_job_dir,
             debug_custom_id=chunk_label,
             warning_callback=warning_callback,
@@ -505,6 +526,8 @@ def _translate_html_text_nodes(
                 model,
                 final_system_prompt,
                 glossary_entries=glossary_entries,
+                source_lang=source_lang,
+                target_lang=target_lang,
                 debug_job_dir=debug_job_dir,
                 debug_custom_id=debug_custom_id,
                 warning_callback=warning_callback,

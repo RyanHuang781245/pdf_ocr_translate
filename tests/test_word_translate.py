@@ -257,6 +257,59 @@ def test_word_translation_applies_combined_glossary(tmp_path, monkeypatch):
     assert (tmp_path / "realtime_debug" / "chunks" / "chunk_0001" / "parsed_translations.json").exists()
 
 
+def test_word_translation_reverses_glossary_for_chinese_target(tmp_path, monkeypatch):
+    monkeypatch.setattr(state, "TRANSLATION_MEMORY_PATH", tmp_path / "translation_memory.json")
+    monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
+    monkeypatch.setattr(
+        "app.services.word_translate.glossary.load_combined_glossary",
+        lambda: [("批號", "Batch No.")],
+    )
+
+    class _EchoProtectedCompletions:
+        async def create(self, **kwargs):
+            payload = kwargs["messages"][-1]["content"]
+            protected_text = payload.split("<SOURCE_TEXT>\n", 1)[1].split("\n</SOURCE_TEXT>", 1)[0]
+            message = type("Message", (), {"content": protected_text})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    class _EchoProtectedChat:
+        completions = _EchoProtectedCompletions()
+
+    class _EchoProtectedClient:
+        chat = _EchoProtectedChat()
+
+    monkeypatch.setattr(
+        "app.services.word_translate.openai_config.create_async_client",
+        lambda: _EchoProtectedClient(),
+    )
+
+    source_path = tmp_path / "source.docx"
+    output_path = tmp_path / "output.docx"
+    source_doc = docx.Document()
+    source_doc.add_paragraph("Batch No.")
+    source_doc.save(source_path)
+
+    translator = EnhancedWordTranslator()
+
+    async def fake_validate_translation_quality(original, translated, target_lang):
+        return 40
+
+    monkeypatch.setattr(translator, "validate_translation_quality", fake_validate_translation_quality)
+    asyncio.run(
+        _consume_translation(
+            translator,
+            source_path,
+            output_path,
+            source_language="en",
+            target_language="zh",
+        )
+    )
+
+    translated_doc = docx.Document(output_path)
+    assert [paragraph.text for paragraph in translated_doc.paragraphs] == ["批號"]
+
+
 def test_enqueue_word_job_from_upload_stores_creator_name(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "JOB_ROOT", tmp_path / "jobs")
     captured: dict[str, object] = {}

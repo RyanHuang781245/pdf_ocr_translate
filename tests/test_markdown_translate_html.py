@@ -26,7 +26,10 @@ def _load_module():
     fake_services.__path__ = []
     fake_glossary = types.ModuleType("app.services.glossary")
     fake_glossary.load_combined_glossary = lambda: []
-    fake_glossary.apply_glossary_with_protection = lambda text, entries=None: text
+    fake_glossary.glossary_pairs_for_translation = (
+        lambda entries=None, **kwargs: list(entries or [])
+    )
+    fake_glossary.apply_glossary_with_protection = lambda text, entries=None, **kwargs: text
     fake_glossary.restore_protected_glossary_terms = lambda text: text
     fake_openai_config = types.ModuleType("app.services.openai_config")
     fake_openai_config.get_openai_timeout_seconds = lambda: max(
@@ -114,7 +117,7 @@ def test_translate_html_file_applies_glossary_protection(tmp_path: Path):
 
     module.glossary.load_combined_glossary = lambda: [("髖臼杯", "Acetabular Cup")]
     module.glossary.apply_glossary_with_protection = (
-        lambda text, entries=None: text.replace("髖臼杯", "[[[GLOSSARY_TERM_0001::Acetabular Cup]]]")
+        lambda text, entries=None, **kwargs: text.replace("髖臼杯", "[[[GLOSSARY_TERM_0001::Acetabular Cup]]]")
     )
     module.glossary.restore_protected_glossary_terms = (
         lambda text: text.replace("[[[GLOSSARY_TERM_0001::Acetabular Cup]]]", "Acetabular Cup")

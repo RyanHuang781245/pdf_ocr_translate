@@ -409,16 +409,22 @@ def get_azure_client():
     return openai_config.create_sync_client()
 
 
-def _build_inline_glossary_instructions(glossary_entries: list[tuple[str, str]] | None) -> str:
-    if not glossary_entries:
+def _build_inline_glossary_instructions(
+    glossary_entries: list[tuple[str, str]] | None,
+    *,
+    source_lang: str = "auto",
+    target_lang: str = "en",
+) -> str:
+    pairs = glossary.glossary_pairs_for_translation(
+        glossary_entries,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
+    if not pairs:
         return ""
     lines = ["Use the following terminology when applicable:"]
-    for src, dst in glossary_entries[:50]:
-        src_text = str(src or "").strip()
-        dst_text = str(dst or "").strip()
-        if not src_text or not dst_text:
-            continue
-        lines.append(f"- {src_text} -> {dst_text}")
+    for src, dst in pairs[:50]:
+        lines.append(f"- {src} -> {dst}")
     return "\n".join(lines)
 
 
@@ -434,7 +440,11 @@ def translate_texts_for_region(
     if not texts:
         return []
 
-    glossary_prompt = _build_inline_glossary_instructions(glossary_entries)
+    glossary_prompt = _build_inline_glossary_instructions(
+        glossary_entries,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
     protected_term_prompt = ""
     if glossary_entries:
         protected_term_prompt = (
@@ -473,6 +483,8 @@ def translate_texts_for_region(
         protected_source = glossary.apply_glossary_with_protection(
             source_text,
             glossary_entries,
+            source_lang=source_lang,
+            target_lang=target_lang,
         )
         response = client.responses.create(
             model=model_name,
@@ -623,6 +635,8 @@ def build_batch_items(
         clean = glossary.apply_glossary_with_protection(
             normalize_source_for_prompt(canonical_source_text),
             glossary_entries,
+            source_lang=source_lang,
+            target_lang=target_lang,
         )
         if not clean:
             return

@@ -1306,7 +1306,7 @@ def overlay_debug_pdf(
         )
 
     out_pdf_path.parent.mkdir(parents=True, exist_ok=True)
-    doc.save(out_pdf_path.as_posix())
+    doc.save(out_pdf_path.as_posix(), garbage=4, deflate=True, clean=True)
     doc.close()
 
 

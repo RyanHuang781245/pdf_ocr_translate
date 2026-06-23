@@ -42,3 +42,30 @@ def test_empty_glossary_entries_disable_default_loading(tmp_path, monkeypatch):
     assert glossary.apply_glossary_with_protection("中文說明", []) == "中文說明"
     assert glossary.apply_glossary("中文說明") == "Chinese說明"
     assert "[[[GLOSSARY_TERM_0001::Chinese]]]" in glossary.apply_glossary_with_protection("中文說明")
+
+
+def test_glossary_entries_reverse_for_english_to_chinese():
+    entries = [("批號", "Batch No."), ("批號格式", "Batch No. Format")]
+
+    assert glossary.glossary_pairs_for_translation(
+        entries,
+        source_lang="en",
+        target_lang="zh",
+    ) == [("Batch No. Format", "批號格式"), ("Batch No.", "批號")]
+    assert (
+        glossary.apply_glossary(
+            "Batch No. Format: Batch No.",
+            entries,
+            source_lang="en",
+            target_lang="zh",
+        )
+        == "批號格式: 批號"
+    )
+    protected = glossary.apply_glossary_with_protection(
+        "Batch No.",
+        entries,
+        source_lang="auto",
+        target_lang="zh-cn",
+    )
+    assert "[[[GLOSSARY_TERM_0001::批號]]]" in protected
+    assert glossary.restore_protected_glossary_terms(protected) == "批號"

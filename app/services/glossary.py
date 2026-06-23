@@ -8,6 +8,8 @@ from io import BytesIO
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from lang_utils import normalize_lang_code
+
 from . import state
 
 try:
@@ -207,6 +209,35 @@ def load_glossary_entries() -> list[tuple[str, str]]:
 
 def load_combined_glossary() -> list[tuple[str, str]]:
     return load_glossary_entries()
+
+
+def _uses_reverse_glossary_direction(source_lang: str, target_lang: str) -> bool:
+    normalized_source = normalize_lang_code(source_lang)
+    normalized_target = normalize_lang_code(target_lang)
+    return normalized_target in {"zh", "zh-cn"} and normalized_source in {"auto", "en"}
+
+
+def glossary_pairs_for_translation(
+    entries: list[tuple[str, str]] | None = None,
+    *,
+    source_lang: str = "auto",
+    target_lang: str = "en",
+) -> list[tuple[str, str]]:
+    if entries is None:
+        entries = load_glossary_entries()
+    if not entries:
+        return []
+    reverse = _uses_reverse_glossary_direction(source_lang, target_lang)
+    pairs: list[tuple[str, str]] = []
+    for cn, en in entries:
+        src = en if reverse else cn
+        dst = cn if reverse else en
+        src = str(src or "").strip()
+        dst = str(dst or "").strip()
+        if src and dst:
+            pairs.append((src, dst))
+    pairs.sort(key=lambda pair: len(pair[0]), reverse=True)
+    return pairs
 
 
 def build_glossary_management_payload() -> dict[str, list[dict[str, str | bool | None]]]:
@@ -528,21 +559,30 @@ def export_system_glossary_excel() -> bytes:
     return output.getvalue()
 
 
-def apply_glossary(text: str, entries: list[tuple[str, str]] | None = None) -> str:
+def apply_glossary(
+    text: str,
+    entries: list[tuple[str, str]] | None = None,
+    *,
+    source_lang: str = "auto",
+    target_lang: str = "en",
+) -> str:
     if not text:
         return text
-    if entries is None:
-        entries = load_glossary_entries()
-    if not entries:
+    pairs = glossary_pairs_for_translation(
+        entries,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
+    if not pairs:
         return text
     out = text
     hits: list[tuple[str, str]] = []
-    for cn, en in entries:
-        if cn in out:
-            out = out.replace(cn, en)
-            hits.append((cn, en))
+    for src, dst in pairs:
+        if src in out:
+            out = out.replace(src, dst)
+            hits.append((src, dst))
     if hits:
-        preview = ", ".join([f"{cn}->{en}" for cn, en in hits[:6]])
+        preview = ", ".join([f"{src}->{dst}" for src, dst in hits[:6]])
         more = f" (+{len(hits) - 6})" if len(hits) > 6 else ""
         print(f"[GLOSSARY] hits={len(hits)} {preview}{more}")
     return out
@@ -551,12 +591,18 @@ def apply_glossary(text: str, entries: list[tuple[str, str]] | None = None) -> s
 def apply_glossary_with_protection(
     text: str,
     entries: list[tuple[str, str]] | None = None,
+    *,
+    source_lang: str = "auto",
+    target_lang: str = "en",
 ) -> str:
     if not text:
         return text
-    if entries is None:
-        entries = load_glossary_entries()
-    if not entries:
+    pairs = glossary_pairs_for_translation(
+        entries,
+        source_lang=source_lang,
+        target_lang=target_lang,
+    )
+    if not pairs:
         return text
 
     out_parts: list[str] = []
@@ -565,14 +611,12 @@ def apply_glossary_with_protection(
     term_index = 1
     while i < len(text):
         matched = False
-        for cn, en in entries:
-            if not cn or not en:
-                continue
-            if text.startswith(cn, i):
-                protected = f"{_PROTECTED_TERM_PREFIX}{term_index:04d}::{en}]]]"
+        for src, dst in pairs:
+            if text.startswith(src, i):
+                protected = f"{_PROTECTED_TERM_PREFIX}{term_index:04d}::{dst}]]]"
                 out_parts.append(protected)
-                hits.append((cn, en))
-                i += len(cn)
+                hits.append((src, dst))
+                i += len(src)
                 term_index += 1
                 matched = True
                 break
@@ -582,7 +626,7 @@ def apply_glossary_with_protection(
         i += 1
 
     if hits:
-        preview = ", ".join([f"{cn}->{en}" for cn, en in hits[:6]])
+        preview = ", ".join([f"{src}->{dst}" for src, dst in hits[:6]])
         more = f" (+{len(hits) - 6})" if len(hits) > 6 else ""
         print(f"[GLOSSARY] protected_hits={len(hits)} {preview}{more}")
     return "".join(out_parts)

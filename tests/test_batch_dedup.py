@@ -1703,6 +1703,39 @@ def test_translate_texts_for_region_adds_glossary_and_protected_token_instructio
     assert "[[[GLOSSARY_TERM_" in captured["input"]
 
 
+def test_translate_texts_for_region_reverses_glossary_for_chinese_target(monkeypatch):
+    captured: dict[str, str] = {}
+
+    class FakeResponse:
+        output_text = "[[[GLOSSARY_TERM_0001::批號]]]"
+
+    class FakeResponses:
+        @staticmethod
+        def create(*, model, instructions, input):
+            captured["instructions"] = instructions
+            captured["input"] = input
+            return FakeResponse()
+
+    class FakeClient:
+        responses = FakeResponses()
+
+    monkeypatch.setattr("app.services.batch.get_azure_client", lambda: FakeClient())
+
+    outputs = translate_texts_for_region(
+        ["Batch No."],
+        target_lang="zh",
+        source_lang="en",
+        model_name="fake-model",
+        system_prompt="translate",
+        glossary_entries=[("批號", "Batch No.")],
+    )
+
+    assert outputs == ["批號"]
+    assert "Batch No. -> 批號" in captured["instructions"]
+    assert "批號 -> Batch No." not in captured["instructions"]
+    assert "[[[GLOSSARY_TERM_0001::批號]]]" in captured["input"]
+
+
 def test_translate_texts_for_region_auto_source_uses_english_for_simplified_chinese_target(monkeypatch):
     captured: dict[str, str] = {}
 

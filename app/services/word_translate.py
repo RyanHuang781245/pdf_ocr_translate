@@ -545,6 +545,8 @@ class EnhancedWordTranslator:
                 protected_text = glossary.apply_glossary_with_protection(
                     masked_text,
                     glossary_entries,
+                    source_lang=source_lang,
+                    target_lang=target_lang,
                 )
                 system_prompt = self._build_system_prompt(
                     source_lang,
@@ -691,6 +693,8 @@ class EnhancedWordTranslator:
             protected_text = glossary.apply_glossary_with_protection(
                 masked_text,
                 glossary_entries,
+                source_lang=source_lang,
+                target_lang=target_lang,
             )
             item_id = item_ids[text]
             token_maps[item_id] = token_map
